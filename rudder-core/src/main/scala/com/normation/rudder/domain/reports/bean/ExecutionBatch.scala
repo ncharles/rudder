@@ -188,6 +188,7 @@ class ConfigurationExecutionBatch(
           ComponentValueStatusReport(
               component
             , getNoAnswerOrPending()
+            , List("No reports received.")
             , nodeId
           ) 
         }
@@ -195,6 +196,7 @@ class ConfigurationExecutionBatch(
             expectedComponent.componentName
           , components
           , getNoAnswerOrPending()
+          , List("No reports received.")
           , Seq()
         )
       case _ => 
@@ -207,7 +209,7 @@ class ConfigurationExecutionBatch(
                                
         val components = for {
             componentValue <- expectedComponent.componentsValues
-            val status = checkExpectedComponentStatus(
+            val (status,message) = checkExpectedComponentStatus(
                               expectedComponent
                             , componentValue
                             , purgedReports)
@@ -215,6 +217,7 @@ class ConfigurationExecutionBatch(
           ComponentValueStatusReport(
                 componentValue
               , status
+              , message
               , nodeId)
         }
         
@@ -230,6 +233,7 @@ class ConfigurationExecutionBatch(
                 expectedComponent.componentName
               , components
               , ReportType.getWorseType(components.map(x => x.cptValueReportType))
+              , purgedReports.map(_.message).toList
               , Seq() 
             )
 
@@ -248,6 +252,7 @@ class ConfigurationExecutionBatch(
                 expectedComponent.componentName
               , components
               , UnknownReportType
+              , unexpectedReports.map(_.message).toList
               , Seq() // TODO : handle unexpected
             )
         }
@@ -292,18 +297,18 @@ class ConfigurationExecutionBatch(
       expectedComponent      : ReportComponent
     , currentValue           : String
     , filteredReports        : Seq[Reports]
-  ) : ReportType = {
+  ) : (ReportType,List[String]) = {
     currentValue match {
       case "None" =>
         filteredReports.filter( x => x.keyValue == currentValue)
                .filter( x => x.isInstanceOf[ResultErrorReport]).size match {
-          case i if i > 0 => ErrorReportType
+          case i if i > 0 => (ErrorReportType,filteredReports.map(_.message).toList)
           case _ => {
             filteredReports.size match {
-              case 0 => getNoAnswerOrPending()
+              case 0 => (getNoAnswerOrPending(),List("Report not received."))
               case x if x == expectedComponent.cardinality => 
-                returnWorseStatus(filteredReports)
-              case _ => UnknownReportType
+                (returnWorseStatus(filteredReports),filteredReports.map(_.message).toList)
+              case _ => (UnknownReportType,List("Unknown report received."))
             }
           }
         }
@@ -312,16 +317,15 @@ class ConfigurationExecutionBatch(
         // convert the entry to regexp, and match what can be matched
          val matchableExpected = currentValue.replaceAll(replaceCFEngineVars, ".*")
          val matchedReports = filteredReports.filter( x => x.keyValue.matches(matchableExpected))
-         
          matchedReports.filter( x => x.isInstanceOf[ResultErrorReport]).size match {
-           case i if i > 0 => ErrorReportType
+           case i if i > 0 => (ErrorReportType,matchedReports.map(_.message).toList)
            case _ => {
             matchedReports.size match {
-              case 0 => getNoAnswerOrPending()
+              case 0 => (getNoAnswerOrPending(),List("Report not received."))
               case x if x == expectedComponent.componentsValues.filter( x => x.matches(matchableExpected)).size => 
-                returnWorseStatus(filteredReports)
+              (returnWorseStatus(filteredReports),matchedReports.map(_.message).toList)
                 // all similar cfengine variable are undistinguable
-              case _ => UnknownReportType
+              case _ => (UnknownReportType,List("Unknown report received."))
             }
           }
          }
@@ -333,13 +337,13 @@ class ConfigurationExecutionBatch(
           // name collision, but it would be resolved by the total number
         val keyReports =  filteredReports.filter( x => x.keyValue == currentValue)
         keyReports.filter( x => x.isInstanceOf[ResultErrorReport]).size match {
-          case i if i > 0 => ErrorReportType
+          case i if i > 0 => (ErrorReportType,keyReports.map(_.message).toList)
           case _ => {
             keyReports.size match {
-              case 0 => getNoAnswerOrPending()
+              case 0 => (getNoAnswerOrPending(),List("Report not received."))
               case x if x == expectedComponent.componentsValues.filter( x => x == currentValue).size => 
-                returnWorseStatus(keyReports)
-              case _ => UnknownReportType
+                (returnWorseStatus(filteredReports),keyReports.map(_.message).toList)
+              case _ => (UnknownReportType,List("Unknown report received."))
             }
           }
         }
@@ -421,7 +425,7 @@ class ConfigurationExecutionBatch(
      values.map{
        value =>
          val componentValues = components.flatMap(_.componentValues.filter(_.componentValue==value))
-         val nodes = componentValues.map(value => (value.nodeId,value.cptValueReportType))
+         val nodes = componentValues.map(value => (value.nodeId,value.cptValueReportType,value.message))
          val reports = ReportType.getWorseType(nodes.map(_._2))
          ComponentValueRuleStatusReport(directiveid,component,value,reports,nodes)
      }
@@ -435,6 +439,7 @@ class ConfigurationExecutionBatch(
 case class ComponentValueStatusReport(
     componentValue 		: String
   , cptValueReportType: ReportType
+  , message           : List[String]
   , nodeId				    : NodeId
 )
 
@@ -446,6 +451,7 @@ case class ComponentStatusReport(
     component           : String
   , componentValues		  : Seq[ComponentValueStatusReport]
   , componentReportType : ReportType
+  , message             : List[String]
   , unexpectedCptValues : Seq[ComponentValueStatusReport]
 )
 
@@ -469,7 +475,7 @@ case class NodeStatusReport(
 
 sealed trait RuleStatusReport {
   
-  def nodesreport  : Seq[(NodeId,ReportType)] 
+  def nodesreport  : Seq[(NodeId,ReportType,List[String])]
 
   def computeCompliance : Option[Int] = {
     if (nodesreport.size>0){
@@ -491,7 +497,7 @@ case class ComponentValueRuleStatusReport(
   , component           : String
   , componentValue      : String
   , cptValueReportType  : ReportType
-  , reports             : Seq[(NodeId,ReportType)] 
+  , reports             : Seq[(NodeId,ReportType,List[String])]
 ) extends RuleStatusReport {
   
   override val nodesreport = reports  
