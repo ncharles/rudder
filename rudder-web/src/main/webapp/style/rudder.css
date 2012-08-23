@@ -2026,12 +2026,21 @@ div.tabInform {
 }
 
 .emptyTd {
-	border: 0pt none;
+	border: 0pt none !important;
 	background : #FFFFFF;
+}
+
+.reportTable {
+border : 2pt ridge;
+border-top : 0pt none;
 }
 
 .detailReport {
 	border: 0pt none;
+}
+.firstTd {
+		border: 0pt none;
+	border-left: 1px ridge !important;
 }
 .evlogviewpad li{
   list-style-type: disc;
@@ -2084,9 +2093,11 @@ tr.Repaired {
 tr.Warn {
   background-color:#FF9922;
 }
-
+tr.Unknown {
+    background-color: #FFBB44;
+}
 tr.Error {
-  background-color:#FF4411;
+  background-color:#FF4433;
 }
 
 tr.Noanswer {
