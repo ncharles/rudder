@@ -1032,7 +1032,7 @@ class RuleEditForm(
        "#severity *" #>  buildComplianceChart(component) ) (
       component.componentValues.forall( x => x.componentValue =="None") match {
         case true => // only None, we won't show the details
-          ( "#component *" #> SHtml.a({() => showPopup(component,true)}, Text(component.component)) &
+          ( "#component *" #> SHtml.a({() => showPopup(component)}, Text(component.component)) &
             "#component [class+]" #> "firstTd"
           )(componentDetails)
         case false => // standard  display that can be expanded
@@ -1051,7 +1051,7 @@ class RuleEditForm(
               "#valueLine [id]" #> id &
               "td [class+]" #> "detailReport" &
               "#componentValue [class+]" #> "firstTd" &
-              "#componentValue *" #>  SHtml.a({() => showPopup(value,true)}, Text(value.componentValue)) &
+              "#componentValue *" #>  SHtml.a({() => showPopup(value)}, Text(value.componentValue)) &
               "#keySeverity *" #> buildComplianceChart(value)
            )(componentValueDetails)
     }
@@ -1121,7 +1121,7 @@ class RuleEditForm(
 
   ///////////////// Compliance detail popup/////////////////////////
 
-  private[this] def createPopup(directivebynode: RuleStatusReport,messagepopup:Boolean = false) : NodeSeq = {
+  private[this] def createPopup(directivebynode: RuleStatusReport) : NodeSeq = {
       
    def templatePath = List("templates-hidden", "reports_grid")
    def template() =  Templates(templatePath) match {
@@ -1141,10 +1141,6 @@ class RuleEditForm(
      case nodeStatus :: rest =>
      val nodeReport = nodeInfoService.getNodeInfo(nodeStatus._1) match {
      case Full(nodeInfo)  => {
-       val text = if (messagepopup)
-           <ul>{nodeStatus._3.map(msg => <li>{msg}</li>)}</ul>
-         else
-           Text(ReportType.getSeverityFromStatus(nodeStatus._2))
        val tooltipid = Helpers.nextFuncName
                ("#node *" #>
                <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeStatus._1.value)}>
@@ -1152,7 +1148,8 @@ class RuleEditForm(
                {nodeInfo.hostname}
                </span>
                </a> &
-               "#severity *" #> text &
+               "#severity *" #> Text(ReportType.getSeverityFromStatus(nodeStatus._2)) &
+               "#message *" #>  <ul>{nodeStatus._3.map(msg => <li>{msg}</li>)}</ul> &
                ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(nodeStatus._2).replaceAll(" ", "")
                )(nodeLineXml)
        }
@@ -1174,7 +1171,8 @@ class RuleEditForm(
       <thead>
         <tr class="head">
           <th>Node<span/></th>
-          <th class="severityWidth">{if (messagepopup) "Message" else "Severity"}<span/></th>
+          <th>Severity<span/></th>
+          <th colspan="2">Message <span/></th>
         </tr>
       </thead>
       <tbody>
@@ -1186,7 +1184,8 @@ class RuleEditForm(
    def nodeLineXml : NodeSeq = {
     <tr class="unfoldable">
       <td id="node"></td>
-      <td name="severity" class="severityWidth"><div id="severity"/></td>
+      <td id="severity"></td>
+      <td id="message"></td>
     </tr>
   }
 
@@ -1266,8 +1265,8 @@ class RuleEditForm(
   val htmlId_reportsPopup = "popup_" + htmlId_rulesGridZone
   val htmlId_modalReportsPopup = "modal_" + htmlId_rulesGridZone
   
-  private[this] def showPopup(directiveStatus: RuleStatusReport,messagepopup:Boolean = false) : JsCmd = {
-    val popupHtml = createPopup(directiveStatus,messagepopup)
+  private[this] def showPopup(directiveStatus: RuleStatusReport) : JsCmd = {
+    val popupHtml = createPopup(directiveStatus)
     SetHtml(htmlId_reportsPopup, popupHtml) &
       JsRaw("""
         var #table_var#;
