@@ -1132,47 +1132,91 @@ class RuleEditForm(
    def reportTemplate = chooseTemplate("reports", "report", template)
     
     
+   
+   def aggregateReport(nodeid:NodeId,nodeReport:RuleStatusReport): NodeSeq = {
+     ("td [class+]" #> "detailReport"
+     ) ( nodeReport match  {
+       case component:ComponentRuleStatusReport =>
+       ("#component *" #> component.component &
+        "#details [class+]"   #> ReportType.getSeverityFromStatus(component.componentReportType).replaceAll(" ", "")
+        ) (component.componentValues.forall( x => x.componentValue =="None") match {
+         case true => 
+           val message = component.nodesreport.filter(_._1==nodeid).flatMap(_._3)
+           (   "#severity *" #> Text(ReportType.getSeverityFromStatus(component.componentReportType)) &
+               "#component [colspan]" #> 2 &
+               "#value" #> NodeSeq.Empty &
+               "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> )(messageLineXml)
+         case false =>
+          component.componentValues.flatMap(value => aggregateReport(nodeid,value))
+       } )
+       case value:ComponentValueRuleStatusReport =>
+       val message = value.nodesreport.filter(_._1==nodeid).flatMap(_._3)
+       ("#component *" #> value.component &
+        "#severity *" #> Text(ReportType.getSeverityFromStatus(value.cptValueReportType)) &
+        "#details [class+]"   #> ReportType.getSeverityFromStatus(value.cptValueReportType).replaceAll(" ", "")&
+        "#value *" #> value.componentValue &
+        "#value [class+]" #> ReportType.getSeverityFromStatus(value.cptValueReportType).replaceAll(" ", "") &
+        "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> &
+        "#message [class+]" #> ReportType.getSeverityFromStatus(value.cptValueReportType).replaceAll(" ", "")                   
+        ) (messageLineXml) 
+       case _ => NodeSeq.Empty
+     } )
+   }
     
-   def showNodeReports(nodeReports : Seq[(NodeId,ReportType,List[String])]) : NodeSeq= {
-     val nodes = nodeReports.map(_._1).distinct
-     val nodeStatuses = nodes.map(node => (node,ReportType.getWorseType(nodeReports.filter(_._1==node).map(stat => stat._2)),nodeReports.filter(_._1==node).flatMap(stat => stat._3).toList))
-     nodeStatuses.toList match {
-     case Nil =>  NodeSeq.Empty
-     case nodeStatus :: rest =>
-     val nodeReport = nodeInfoService.getNodeInfo(nodeStatus._1) match {
-     case Full(nodeInfo)  => {
-       val tooltipid = Helpers.nextFuncName
+   def showNodeReports(nodeReports : RuleStatusReport) : NodeSeq= {
+     def showNodeReport(nodeid:NodeId):NodeSeq = {
+         nodeInfoService.getNodeInfo(nodeid) match {
+         case Full(nodeInfo)  => {
                ("#node *" #>
-               <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeStatus._1.value)}>
+               <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeid)}>
                <span class="curspoint">
                {nodeInfo.hostname}
                </span>
-               </a> &
-               "#severity *" #> Text(ReportType.getSeverityFromStatus(nodeStatus._2)) &
-               "#message *" #>  <ul>{nodeStatus._3.map(msg => <li>{msg}</li>)}</ul> &
-               ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(nodeStatus._2).replaceAll(" ", "")
-               )(nodeLineXml)
+               </a>) ( nodeReports match {
+                 case directive:DirectiveRuleStatusReport =>
+                   ( "#details *" #> directive.components.map(aggregateReport(nodeid,_))  &
+                     ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(directive.directiveReportType).replaceAll(" ", "")
+                   ) ( nodeLineXml )
+                 case component:ComponentRuleStatusReport =>
+                   ( "#details *" #> aggregateReport(nodeid,component)  &
+                     ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(component.componentReportType).replaceAll(" ", "")
+                   ) ( nodeLineXml )
+                 case value:ComponentValueRuleStatusReport =>
+                   ( "#details *" #> aggregateReport(nodeid,value)  &
+                     ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(value.cptValueReportType).replaceAll(" ", "")
+                   ) ( nodeLineXml )
+               } )
        }
      case x:EmptyBox =>
-       logger.error( (x?~! "An error occured when trying to load node %s".format(nodeStatus._1.value)),x)
-       <div class="error">Node with ID "{nodeStatus._1.value}" is invalid</div>
+       logger.error( (x?~! "An error occured when trying to load node %s".format(nodeid)),x)
+       <div class="error">Node with ID "{nodeid}" is invalid</div>
      }
-     nodeReport ++ showNodeReports(rest)
+     }
+     val reports = nodeReports.nodesreport
+     val nodes = reports.map(_._1).distinct
+     val nodeStatuses = nodes.map(node => (node,ReportType.getWorseType(reports.filter(_._1==node).map(stat => stat._2)),reports.filter(_._1==node).flatMap(stat => stat._3).toList))
+     nodeStatuses.toList match {
+     case Nil =>  NodeSeq.Empty
+     case nodes => nodes.flatMap(node =>showNodeReport(node._1))
      }
     }
-    def showReportDetail(nodeReports : Seq[(NodeId,ReportType,List[String])]) : NodeSeq = {
+    def showReportDetail(nodeReport : RuleStatusReport) : NodeSeq = {
      ( "#reportLine" #>
-     {showNodeReports(nodeReports)}
+     { showNodeReports(nodeReport)}
      )(reportsGridXml)
     }
 
     def reportsGridXml : NodeSeq = {
-    <table id="reportsGrid" cellspacing="0">
+    <table id="reportsGrid"  cellspacing="0">
       <thead>
         <tr class="head">
           <th>Node<span/></th>
-          <th>Severity<span/></th>
-          <th colspan="2">Message <span/></th>
+          <th><table class="fixedlayout"><thead><tr>
+          <th width="20%">Component<span/></th>
+          <th width="20%">Value<span/></th>
+          <th width="40%">Message <span/></th>
+         <th width="20%">Severity<span/></th>
+         </tr></thead></table></th>
         </tr>
       </thead>
       <tbody>
@@ -1184,34 +1228,75 @@ class RuleEditForm(
    def nodeLineXml : NodeSeq = {
     <tr class="unfoldable">
       <td id="node"></td>
-      <td id="severity"></td>
-      <td id="message"></td>
+      <td colspan="5">
+      <table class="fixedlayout" cellspacing="0">
+        <thead><tr>
+          <th width="20%"></th>
+          <th width="20%"></th>
+          <th width="40%"></th>
+         <th width="20%"></th>
+         </tr></thead>
+      <tbody>
+      <div id="details"></div>
+      </tbody>
+      </table>
+      </td>
     </tr>
   }
 
+   def messageLineXml:NodeSeq = {
+   <tr id="details">
+      <td id="component"></td>
+      <td id="value"></td>
+      <td id="message"></td>
+      <td id="severity"></td>
+    </tr>
+   }
  
-  val batch = directivebynode.nodesreport
+  val batch = directivebynode
    <div class="simplemodal-title">
     <h1>Node compliance detail</h1>
     <hr/>
   </div>++{
-  directivebynode match {
-    case DirectiveRuleStatusReport(directiveId,_,_) =>
-      val directive = directiveRepository.getDirective(directiveId)
-      <div class="simplemodal-content"> { bind("lastReportGrid",reportTemplate,
+
+      <div class="simplemodal-content" style="height:300px;overflow-y:auto;" > { bind("lastReportGrid",reportTemplate,
         "crName" -> Text(rule.name),
-        "detail" -> <div>
+        "detail" ->{  directivebynode match {
+    case DirectiveRuleStatusReport(directiveId,_,_) =>
+      val directive = directiveRepository.getDirective(directiveId) 
+        <div>
                       <ul>
                         <li> <b>Rule:</b> {rule.name}</li>
                         <li><b>Directive:</b> {directive.map(_.name).getOrElse("can't find directive name")}</li>
                       </ul>
-                    </div>,
-        "lines" -> showReportDetail(batch)
+                    </div>
+     case ComponentRuleStatusReport(directiveId,component,_,_) =>
+      val directive = directiveRepository.getDirective(directiveId)
+       <div>
+                      <ul>
+                        <li> <b>Rule:</b> {rule.name}</li>
+                        <li><b>Directive:</b> {directive.map(_.name).getOrElse("can't find directive name")}</li>
+                        <li><b>Component:</b> {component}</li>
+                      </ul>
+                    </div>
+      case ComponentValueRuleStatusReport(directiveId,component,value,_,_) =>
+      val directive = directiveRepository.getDirective(directiveId)
+      <div>
+                      <ul>
+                        <li> <b>Rule:</b> {rule.name}</li>
+                        <li><b>Directive:</b> {directive.map(_.name).getOrElse("can't find directive name")}</li>
+                        <li><b>Component:</b> {component}</li>
+                        <li><b>Value:</b> {value}</li>
+                      </ul>
+                    </div> 
+                        } },
+      
+      "lines" -> showReportDetail(batch)
          )
       }
       <hr class="spacer" />
       </div>
-  
+ /* 
     case ComponentRuleStatusReport(directiveId,component,_,_) =>
       val directive = directiveRepository.getDirective(directiveId)
       <div class="simplemodal-content"> { bind("lastReportGrid",reportTemplate,
@@ -1245,8 +1330,8 @@ class RuleEditForm(
          )     
       }
       <hr class="spacer" />
-      </div>
-  }
+      </div>*/
+  
   } ++ <div class="simplemodal-bottom">
     <hr/>
     <div class="popupButton">
@@ -1288,13 +1373,13 @@ class RuleEditForm(
             "bJQueryUI": false,
             "aaSorting": [[ 3, "asc" ]],
             "aoColumns": [
-              { "sWidth": "200px" },
-              { "sWidth": "300px" },
+              { "sWidth": "150px" },
+              { "sWidth": "300px" }
             ]
           });moveFilterAndFullPaginateArea('#%1$s');""".format( tableId_reportsPopup).replaceAll("#table_var#",jsVarNameForId(tableId_reportsPopup))
         ) //&  initJsCallBack(tableId)
     ) &
-    JsRaw( """ createPopup("%s",300,500)
+    JsRaw( """ createPopup("%s",500,750)
      """.format(htmlId_modalReportsPopup))
   }
   
