@@ -1133,19 +1133,17 @@ class RuleEditForm(
     
     
    
-   def aggregateReport(nodeid:NodeId,nodeReport:RuleStatusReport): NodeSeq = {
-     ("td [class+]" #> "detailReport"
-     ) ( nodeReport match  {
+  /* def aggregateReport(nodeid:NodeId,nodeReport:RuleStatusReport): NodeSeq = {
+ nodeReport match  {
        case component:ComponentRuleStatusReport =>
-       ("#component *" #> component.component &
-        "#details [class+]"   #> ReportType.getSeverityFromStatus(component.componentReportType).replaceAll(" ", "")
+       ("#component *" #> component.component 
         ) (component.componentValues.forall( x => x.componentValue =="None") match {
          case true => 
            val message = component.nodesreport.filter(_._1==nodeid).flatMap(_._3)
            (   "#severity *" #> Text(ReportType.getSeverityFromStatus(component.componentReportType)) &
                "#component [colspan]" #> 2 &
                "#value" #> NodeSeq.Empty &
-               "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> )(messageLineXml)
+               "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> )(nodeLineXml)
          case false =>
           component.componentValues.flatMap(value => aggregateReport(nodeid,value))
        } )
@@ -1153,39 +1151,31 @@ class RuleEditForm(
        val message = value.nodesreport.filter(_._1==nodeid).flatMap(_._3)
        ("#component *" #> value.component &
         "#severity *" #> Text(ReportType.getSeverityFromStatus(value.cptValueReportType)) &
-        "#details [class+]"   #> ReportType.getSeverityFromStatus(value.cptValueReportType).replaceAll(" ", "")&
         "#value *" #> value.componentValue &
-        "#value [class+]" #> ReportType.getSeverityFromStatus(value.cptValueReportType).replaceAll(" ", "") &
-        "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> &
-        "#message [class+]" #> ReportType.getSeverityFromStatus(value.cptValueReportType).replaceAll(" ", "")                   
-        ) (messageLineXml) 
+        "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> 
+        ) (nodeLineXml) 
        case _ => NodeSeq.Empty
-     } )
-   }
+     } 
+   }*/
     
-   def showNodeReports(nodeReports : RuleStatusReport) : NodeSeq= {
+   def showReportDetail(nodeReports : ComponentValueRuleStatusReport) : NodeSeq= {
      def showNodeReport(nodeid:NodeId):NodeSeq = {
          nodeInfoService.getNodeInfo(nodeid) match {
          case Full(nodeInfo)  => {
-               ("#node *" #>
+             val message = nodeReports.nodesreport.filter(_._1==nodeid).flatMap(_._3)
+             ( "#node *" #>
                <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeid)}>
                <span class="curspoint">
                {nodeInfo.hostname}
                </span>
-               </a>) ( nodeReports match {
-                 case directive:DirectiveRuleStatusReport =>
-                   ( "#details *" #> directive.components.map(aggregateReport(nodeid,_))  &
-                     ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(directive.directiveReportType).replaceAll(" ", "")
-                   ) ( nodeLineXml )
-                 case component:ComponentRuleStatusReport =>
-                   ( "#details *" #> aggregateReport(nodeid,component)  &
-                     ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(component.componentReportType).replaceAll(" ", "")
-                   ) ( nodeLineXml )
-                 case value:ComponentValueRuleStatusReport =>
-                   ( "#details *" #> aggregateReport(nodeid,value)  &
-                     ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(value.cptValueReportType).replaceAll(" ", "")
-                   ) ( nodeLineXml )
-               } )
+               </a>  &
+               ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(nodeReports.cptValueReportType).replaceAll(" ", "")&
+               "#component *" #> nodeReports.component &
+               "#severity *" #> Text(ReportType.getSeverityFromStatus(nodeReports.cptValueReportType)) &
+               "#value *" #> nodeReports.componentValue &
+               "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> 
+             ) ( nodeLineXml )
+               
        }
      case x:EmptyBox =>
        logger.error( (x?~! "An error occured when trying to load node %s".format(nodeid)),x)
@@ -1200,23 +1190,33 @@ class RuleEditForm(
      case nodes => nodes.flatMap(node =>showNodeReport(node._1))
      }
     }
-    def showReportDetail(nodeReport : RuleStatusReport) : NodeSeq = {
+    def showReportDetails(nodeReport : Seq[ComponentValueRuleStatusReport], id:String = "reportsGrid" ) : NodeSeq = {
      ( "#reportLine" #>
-     { showNodeReports(nodeReport)}
-     )(reportsGridXml)
+     { nodeReport.map(showReportDetail(_))}
+     )(reportsGridXml(id))
     }
 
-    def reportsGridXml : NodeSeq = {
-    <table id="reportsGrid"  cellspacing="0">
+    def treatmissingreports(nodeReport : Seq[ComponentValueRuleStatusReport]) : NodeSeq = {
+      val missingreports = nodeReport.map(value => value.copy(reports =  value.reports.filter(report => report._3.contains("Report should have been received.")))).filter(_.reports.size!=0)
+      val unexpectedreports = nodeReport.map(value => value.copy(reports =  value.reports.filter(report => report._3.contains("Report should have not been received")))).filter(_.reports.size!=0)
+      (if (missingreports.size !=0)(<div><b>Those reports should have been received</b>{showReportDetails(missingreports,"missing")}</div>      <hr class="spacer" />    <div class="missing_pagination paginatescala">
+     <div id="missing_paginate_area"/>
+  
+     </div>           <hr class="spacer"/>  <br/>) else NodeSeq.Empty) ++ 
+      (if (unexpectedreports.size !=0)(<div><b>Those reports should have not been received</b>{showReportDetails(unexpectedreports,"unexpected")}</div>      <hr class="spacer" />    <div class="unexpected_pagination paginatescala">
+     <div id="unexpected_paginate_area"/>
+     
+     </div>           <hr class="spacer"/>  <br/>) else NodeSeq.Empty)
+    }
+    def reportsGridXml(id:String = "reportsGrid") : NodeSeq = {
+    <table id={id}  cellspacing="0">
       <thead>
         <tr class="head">
           <th>Node<span/></th>
-          <th><table class="fixedlayout"><thead><tr>
-          <th width="20%">Component<span/></th>
-          <th width="20%">Value<span/></th>
-          <th width="40%">Message <span/></th>
-         <th width="20%">Severity<span/></th>
-         </tr></thead></table></th>
+          <th >Component<span/></th>
+          <th >Value<span/></th>
+          <th >Message <span/></th>
+         <th >Severity<span/></th>
         </tr>
       </thead>
       <tbody>
@@ -1228,32 +1228,21 @@ class RuleEditForm(
    def nodeLineXml : NodeSeq = {
     <tr class="unfoldable">
       <td id="node"></td>
-      <td colspan="5">
-      <table class="fixedlayout" cellspacing="0">
-        <thead><tr>
-          <th width="20%"></th>
-          <th width="20%"></th>
-          <th width="40%"></th>
-         <th width="20%"></th>
-         </tr></thead>
-      <tbody>
-      <div id="details"></div>
-      </tbody>
-      </table>
-      </td>
-    </tr>
-  }
-
-   def messageLineXml:NodeSeq = {
-   <tr id="details">
       <td id="component"></td>
       <td id="value"></td>
       <td id="message"></td>
       <td id="severity"></td>
     </tr>
-   }
+  }
  
-  val batch = directivebynode
+  val batch = directivebynode match {
+       case DirectiveRuleStatusReport(directiveId,components,_) => 
+         components.flatMap(_.componentValues)
+       case ComponentRuleStatusReport(directiveId,component,values,_) =>
+         values
+       case value : ComponentValueRuleStatusReport =>
+         Seq(value)
+  }
    <div class="simplemodal-title">
     <h1>Node compliance detail</h1>
     <hr/>
@@ -1291,46 +1280,13 @@ class RuleEditForm(
                     </div> 
                         } },
       
-      "lines" -> showReportDetail(batch)
+      "lines"   -> showReportDetails(batch),
+      "missing" -> treatmissingreports(batch)
          )
       }
       <hr class="spacer" />
       </div>
- /* 
-    case ComponentRuleStatusReport(directiveId,component,_,_) =>
-      val directive = directiveRepository.getDirective(directiveId)
-      <div class="simplemodal-content"> { bind("lastReportGrid",reportTemplate,
-        "crName" -> Text(rule.name),
-        "detail" -> <div>
-                      <ul>
-                        <li> <b>Rule:</b> {rule.name}</li>
-                        <li><b>Directive:</b> {directive.map(_.name).getOrElse("can't find directive name")}</li>
-                        <li><b>Component:</b> {component}</li>
-                      </ul>
-                    </div>,
-        "lines" -> showReportDetail(batch)
-         )     
-      }
-      <hr class="spacer" />
-      </div>
-  
-    case ComponentValueRuleStatusReport(directiveId,component,value,_,_) =>
-      val directive = directiveRepository.getDirective(directiveId)
-      <div class="simplemodal-content"> { bind("lastReportGrid",reportTemplate,
-        "crName" -> Text(rule.name),
-        "detail" -> <div>
-                      <ul>
-                        <li> <b>Rule:</b> {rule.name}</li>
-                        <li><b>Directive:</b> {directive.map(_.name).getOrElse("can't find directive name")}</li>
-                        <li><b>Component:</b> {component}</li>
-                        <li><b>Value:</b> {value}</li>
-                      </ul>
-                    </div>,
-        "lines" -> showReportDetail(batch)
-         )     
-      }
-      <hr class="spacer" />
-      </div>*/
+
   
   } ++ <div class="simplemodal-bottom">
     <hr/>
@@ -1366,20 +1322,57 @@ class RuleEditForm(
           /* Event handler function */
           #table_var# = $('#%1$s').dataTable({
             "bAutoWidth": false,
+            "bFilter" : true,
+            "bPaginate" : true,
+            "bLengthChange": false,
+            "sPaginationType": "full_numbers",
+            "bJQueryUI": false,
+            "aaSorting": [[ 5, "asc" ]],
+            "aoColumns": [
+              { "sWidth": "150px" },
+              { "sWidth": "150px" },
+              { "sWidth": "150px" },
+              { "sWidth": "250px" },
+              { "sWidth": "50px" }
+            ]
+          });
+          $('#missing').dataTable({
+            "bAutoWidth": false,
             "bFilter" : false,
             "bPaginate" : true,
             "bLengthChange": false,
             "sPaginationType": "full_numbers",
             "bJQueryUI": false,
-            "aaSorting": [[ 3, "asc" ]],
+            "aaSorting": [[ 5, "asc" ]],
             "aoColumns": [
               { "sWidth": "150px" },
-              { "sWidth": "300px" }
+              { "sWidth": "150px" },
+              { "sWidth": "150px" },
+              { "sWidth": "250px" },
+              { "sWidth": "50px" }
             ]
-          });moveFilterAndFullPaginateArea('#%1$s');""".format( tableId_reportsPopup).replaceAll("#table_var#",jsVarNameForId(tableId_reportsPopup))
+          });
+                      $('#unexpected').dataTable({
+            "bAutoWidth": false,
+            "bFilter" : false,
+            "bPaginate" : true,
+            "bLengthChange": false,
+            "sPaginationType": "full_numbers",
+            "bJQueryUI": false,
+            "aaSorting": [[ 5, "asc" ]],
+            "aoColumns": [
+              { "sWidth": "150px" },
+              { "sWidth": "150px" },
+              { "sWidth": "150px" },
+              { "sWidth": "250px" },
+              { "sWidth": "50px" }
+            ]
+          });moveFilterAndFullPaginateArea('#%1$s');
+            moveFilterAndFullPaginateArea('#missing');
+            moveFilterAndFullPaginateArea('#unexpected');""".format( tableId_reportsPopup).replaceAll("#table_var#",jsVarNameForId(tableId_reportsPopup))
         ) //&  initJsCallBack(tableId)
     ) &
-    JsRaw( """ createPopup("%s",500,750)
+    JsRaw( """ createPopup("%s",600,750)
      """.format(htmlId_modalReportsPopup))
   }
   
