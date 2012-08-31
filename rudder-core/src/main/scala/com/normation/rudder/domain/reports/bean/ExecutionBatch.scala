@@ -359,7 +359,7 @@ class ConfigurationExecutionBatch(
               case 0 if unexepectedReports.size==0 =>  (getNoAnswerOrPending(),List("Report not received."))
               case 0 =>  (UnknownReportType,List("Report should have been received."))
               case x if x == expectedComponent.componentsValues.filter( x => x == currentValue).size => 
-                (returnWorseStatus(purgedReports),keyReports.map(_.message).toList)
+                (returnWorseStatus(keyReports),keyReports.map(_.message).toList)
               case _ => (UnknownReportType,List("Unknown report received."))
             }
           }
