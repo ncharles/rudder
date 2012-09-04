@@ -1985,7 +1985,13 @@ div.tabInform {
   border-color: red; 	
 }
 
-
+.reportLine {
+    background: url("../images/tableau/fdTaboHead.jpg") repeat-x scroll left top transparent;
+    color: #FFFFFF;
+    float: left;
+    margin-top: 4px;
+    padding: 5px;
+}
 /***********************************
  *Directive display
 ************************************/

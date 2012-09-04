@@ -1133,31 +1133,32 @@ class RuleEditForm(
     
     
    
-  /* def aggregateReport(nodeid:NodeId,nodeReport:RuleStatusReport): NodeSeq = {
- nodeReport match  {
-       case component:ComponentRuleStatusReport =>
-       ("#component *" #> component.component 
-        ) (component.componentValues.forall( x => x.componentValue =="None") match {
-         case true => 
-           val message = component.nodesreport.filter(_._1==nodeid).flatMap(_._3)
-           (   "#severity *" #> Text(ReportType.getSeverityFromStatus(component.componentReportType)) &
-               "#component [colspan]" #> 2 &
-               "#value" #> NodeSeq.Empty &
-               "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> )(nodeLineXml)
-         case false =>
-          component.componentValues.flatMap(value => aggregateReport(nodeid,value))
-       } )
-       case value:ComponentValueRuleStatusReport =>
-       val message = value.nodesreport.filter(_._1==nodeid).flatMap(_._3)
-       ("#component *" #> value.component &
-        "#severity *" #> Text(ReportType.getSeverityFromStatus(value.cptValueReportType)) &
-        "#value *" #> value.componentValue &
-        "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> 
-        ) (nodeLineXml) 
-       case _ => NodeSeq.Empty
-     } 
-   }*/
-    
+  def showNodeReports(nodeReports : Seq[(NodeId,ReportType,List[String])]) : NodeSeq= {
+     val nodes = nodeReports.map(_._1).distinct
+     val nodeStatuses = nodes.map(node => (node,ReportType.getWorseType(nodeReports.filter(_._1==node).map(stat => stat._2)),nodeReports.filter(_._1==node).flatMap(stat => stat._3).toList))
+     nodeStatuses.toList match {
+     case Nil => NodeSeq.Empty
+     case nodeStatus :: rest =>
+     val nodeReport = nodeInfoService.getNodeInfo(nodeStatus._1) match {
+     case Full(nodeInfo) => {
+       val tooltipid = Helpers.nextFuncName
+               ("#node *" #>
+               <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeStatus._1.value)}>
+               <span class="curspoint">
+               {nodeInfo.hostname}
+               </span>
+               </a> &
+               "#severity *" #> ReportType.getSeverityFromStatus(nodeStatus._2) &
+               ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(nodeStatus._2).replaceAll(" ", "")
+               )(nodeLineXml)
+       }
+     case x:EmptyBox =>
+       logger.error( (x?~! "An error occured when trying to load node %s".format(nodeStatus._1.value)),x)
+       <div class="error">Node with ID "{nodeStatus._1.value}" is invalid</div>
+     }
+     nodeReport ++ showNodeReports(rest)
+     }
+    }
    def showReportDetail(nodeReports : ComponentValueRuleStatusReport) : NodeSeq= {
      def showNodeReport(nodeid:NodeId):NodeSeq = {
          nodeInfoService.getNodeInfo(nodeid) match {
@@ -1174,7 +1175,7 @@ class RuleEditForm(
                "#severity *" #> Text(ReportType.getSeverityFromStatus(nodeReports.cptValueReportType)) &
                "#value *" #> nodeReports.componentValue &
                "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> 
-             ) ( nodeLineXml )
+             ) ( reportLineXml )
                
        }
      case x:EmptyBox =>
@@ -1190,26 +1191,36 @@ class RuleEditForm(
      case nodes => nodes.flatMap(node =>showNodeReport(node._1))
      }
     }
-    def showReportDetails(nodeReport : Seq[ComponentValueRuleStatusReport], id:String = "reportsGrid" ) : NodeSeq = {
+    def showReportDetails(nodeReport : Seq[ComponentValueRuleStatusReport], message:String, id:String = "reportsGrid" ) : NodeSeq = {
+ val report =      nodeReport.filterNot(_.cptValueReportType == SuccessReportType)
+     if (report.size>0)
      ( "#reportLine" #>
-     { nodeReport.map(showReportDetail(_))}
-     )(reportsGridXml(id))
+            <div class="reportLine ui-corner-top"><b> {message} </b>{report.map(showReportDetail(_))}</div>
+     )(reportsGridXml(id)) 
+     else 
+      ( "#reportLine" #>
+      <div class="reportLine ui-corner-top"><b> All reports message are </b>{nodeReport.map(showReportDetail(_))}</div>
+     )(reportsGridXml(id)) 
     }
 
     def treatmissingreports(nodeReport : Seq[ComponentValueRuleStatusReport]) : NodeSeq = {
       val missingreports = nodeReport.map(value => value.copy(reports =  value.reports.filter(report => report._3.contains("Report should have been received.")))).filter(_.reports.size!=0)
       val unexpectedreports = nodeReport.map(value => value.copy(reports =  value.reports.filter(report => report._3.contains("Report should have not been received")))).filter(_.reports.size!=0)
-      (if (missingreports.size !=0)(<div><b>Those reports should have been received</b>{showReportDetails(missingreports,"missing")}</div>      <hr class="spacer" />    <div class="missing_pagination paginatescala">
-     <div id="missing_paginate_area"/>
-  
-     </div>           <hr class="spacer"/>  <br/>) else NodeSeq.Empty) ++ 
-      (if (unexpectedreports.size !=0)(<div><b>Those reports should have not been received</b>{showReportDetails(unexpectedreports,"unexpected")}</div>      <hr class="spacer" />    <div class="unexpected_pagination paginatescala">
-     <div id="unexpected_paginate_area"/>
-     
-     </div>           <hr class="spacer"/>  <br/>) else NodeSeq.Empty)
+      (if (missingreports.size !=0)(
+          <div>{showReportDetails(missingreports,"Those reports should have been received","missing")}</div>      <hr class="spacer" />    <div class="missing_pagination paginatescala">
+            <div id="missing_paginate_area"/>
+          </div>
+          <hr class="spacer"/>
+          <br/>) else NodeSeq.Empty) ++ 
+      (if (unexpectedreports.size !=0)(
+          <div>{showReportDetails(unexpectedreports,"Those reports should have not been received","unexpected")}</div>      <hr class="spacer" />    <div class="unexpected_pagination paginatescala">
+            <div id="unexpected_paginate_area"/>
+          </div> 
+          <hr class="spacer"/>
+          <br/>) else NodeSeq.Empty)
     }
     def reportsGridXml(id:String = "reportsGrid") : NodeSeq = {
-    <table id={id}  cellspacing="0">
+    <table id={id}  cellspacing="0" style="clear:both">
       <thead>
         <tr class="head">
           <th>Node<span/></th>
@@ -1225,12 +1236,32 @@ class RuleEditForm(
     </table>
   }
 
-   def nodeLineXml : NodeSeq = {
+  def nodeGridXml : NodeSeq = {
+    <table id="nodeReportGrid"  cellspacing="0">
+      <thead>
+        <tr class="head">
+          <th>Node<span/></th>
+         <th >Severity<span/></th>
+        </tr>
+      </thead>
+      <tbody>
+        <div id="reportLine"/>
+      </tbody>
+    </table>
+  }
+   def reportLineXml : NodeSeq = {
     <tr class="unfoldable">
       <td id="node"></td>
       <td id="component"></td>
       <td id="value"></td>
       <td id="message"></td>
+      <td id="severity"></td>
+    </tr>
+  }
+   
+  def nodeLineXml : NodeSeq = {
+    <tr class="unfoldable">
+      <td id="node"></td>
       <td id="severity"></td>
     </tr>
   }
@@ -1249,25 +1280,26 @@ class RuleEditForm(
   </div>++{
 
       <div class="simplemodal-content" style="height:300px;overflow-y:auto;" > { bind("lastReportGrid",reportTemplate,
-        "crName" -> Text(rule.name),
         "detail" ->{  directivebynode match {
-    case DirectiveRuleStatusReport(directiveId,_,_) =>
-      val directive = directiveRepository.getDirective(directiveId) 
+    case d:DirectiveRuleStatusReport =>
+      val directive = directiveRepository.getDirective(d.directiveId) 
         <div>
                       <ul>
                         <li> <b>Rule:</b> {rule.name}</li>
                         <li><b>Directive:</b> {directive.map(_.name).getOrElse("can't find directive name")}</li>
                       </ul>
-                    </div>
-     case ComponentRuleStatusReport(directiveId,component,_,_) =>
-      val directive = directiveRepository.getDirective(directiveId)
+                    </div>   
+     case c:ComponentRuleStatusReport =>
+      val directive = directiveRepository.getDirective(c.directiveid)
        <div>
                       <ul>
                         <li> <b>Rule:</b> {rule.name}</li>
                         <li><b>Directive:</b> {directive.map(_.name).getOrElse("can't find directive name")}</li>
-                        <li><b>Component:</b> {component}</li>
+                        <li><b>Component:</b> {c.component}</li>
                       </ul>
-                    </div>
+                    </div>++  ( "#reportLine" #>
+     { showNodeReports(c.nodesreport)}
+     )(nodeGridXml)
       case ComponentValueRuleStatusReport(directiveId,component,value,_,_) =>
       val directive = directiveRepository.getDirective(directiveId)
       <div>
@@ -1279,16 +1311,24 @@ class RuleEditForm(
                       </ul>
                     </div> 
                         } },
-      
-      "lines"   -> showReportDetails(batch),
+      "lines"   -> showReportDetails(batch,"You shoud look for all this reports message"),
       "missing" -> treatmissingreports(batch)
          )
       }
       <hr class="spacer" />
+ { ( "#reportLine" #>
+     { showNodeReports(directivebynode.nodesreport)}
+     )(nodeGridXml)}
+       <div class="nodeReportGrid_pagination paginatescala">
+     <div id="nodeReportGrid_paginate_area"/>
+     </div>
+           <hr class="spacer"/>
+           <br/>
       </div>
 
   
-  } ++ <div class="simplemodal-bottom">
+  } ++
+     <div class="simplemodal-bottom">
     <hr/>
     <div class="popupButton">
       <span>
@@ -1310,7 +1350,6 @@ class RuleEditForm(
     val popupHtml = createPopup(directiveStatus)
     SetHtml(htmlId_reportsPopup, popupHtml) &
       JsRaw("""
-        var #table_var#;
         /* Formating function for row details */
         function fnFormatDetails ( id ) {
           var sOut = '<div id="'+id+'" class="reportDetailsGroup"/>';
@@ -1320,7 +1359,21 @@ class RuleEditForm(
     ) & OnLoad(
         JsRaw("""
           /* Event handler function */
-          #table_var# = $('#%1$s').dataTable({
+         $('#nodeReportGrid').dataTable({
+            "bAutoWidth": false,
+            "bFilter" : false,
+            "bPaginate" : true,
+            "bLengthChange": false,
+            "sPaginationType": "full_numbers",
+            "bJQueryUI": false,
+            "aaSorting": [[ 3, "asc" ]],
+            "iDisplayLength" : 5,
+            "aoColumns": [
+              { "sWidth": "150px" },
+              { "sWidth": "150px" }
+            ]
+          });
+            $('#%1$s').dataTable({
             "bAutoWidth": false,
             "bFilter" : true,
             "bPaginate" : true,
@@ -1352,7 +1405,7 @@ class RuleEditForm(
               { "sWidth": "50px" }
             ]
           });
-                      $('#unexpected').dataTable({
+            $('#unexpected').dataTable({
             "bAutoWidth": false,
             "bFilter" : false,
             "bPaginate" : true,
@@ -1368,8 +1421,9 @@ class RuleEditForm(
               { "sWidth": "50px" }
             ]
           });moveFilterAndFullPaginateArea('#%1$s');
+            moveFilterAndFullPaginateArea('#nodeReportGrid');
             moveFilterAndFullPaginateArea('#missing');
-            moveFilterAndFullPaginateArea('#unexpected');""".format( tableId_reportsPopup).replaceAll("#table_var#",jsVarNameForId(tableId_reportsPopup))
+            moveFilterAndFullPaginateArea('#unexpected');""".format( tableId_reportsPopup)
         ) //&  initJsCallBack(tableId)
     ) &
     JsRaw( """ createPopup("%s",600,750)
