@@ -1992,6 +1992,11 @@ div.tabInform {
     margin-top: 4px;
     padding: 5px;
 }
+
+.filter {
+	float : right;
+	margin-right : 14px;
+}
 /***********************************
  *Directive display
 ************************************/

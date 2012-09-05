@@ -1381,6 +1381,7 @@ class RuleEditForm(
             "sPaginationType": "full_numbers",
             "bJQueryUI": false,
             "aaSorting": [[ 5, "asc" ]],
+            "bSearch": "",
             "aoColumns": [
               { "sWidth": "150px" },
               { "sWidth": "150px" },
@@ -1388,7 +1389,12 @@ class RuleEditForm(
               { "sWidth": "250px" },
               { "sWidth": "50px" }
             ]
-          });
+           });
+          $('.dataTables_filter input').attr("placeholder", "Search");
+          $('.dataTables_filter').contents().filter(function(){
+            return this.nodeType == this.TEXT_NODE;
+            })​.remove();​
+
           $('#missing').dataTable({
             "bAutoWidth": false,
             "bFilter" : false,
