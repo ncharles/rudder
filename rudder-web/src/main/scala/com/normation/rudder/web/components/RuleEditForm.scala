@@ -1160,7 +1160,7 @@ class RuleEditForm(
      }
     }
    def showReportDetail(nodeReports : ComponentValueRuleStatusReport) : NodeSeq= {
-     def showNodeReport(nodeid:NodeId):NodeSeq = {
+     def showNodeReport(nodeid:NodeId,reportType:ReportType,message:List[String]):NodeSeq = {
          nodeInfoService.getNodeInfo(nodeid) match {
          case Full(nodeInfo)  => {
              val message = nodeReports.nodesreport.filter(_._1==nodeid).flatMap(_._3)
@@ -1170,9 +1170,9 @@ class RuleEditForm(
                {nodeInfo.hostname}
                </span>
                </a>  &
-               ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(nodeReports.cptValueReportType).replaceAll(" ", "")&
+               ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(reportType).replaceAll(" ", "")&
                "#component *" #> nodeReports.component &
-               "#severity *" #> Text(ReportType.getSeverityFromStatus(nodeReports.cptValueReportType)) &
+               "#severity *" #> Text(ReportType.getSeverityFromStatus(reportType)) &
                "#value *" #> nodeReports.componentValue &
                "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> 
              ) ( reportLineXml )
@@ -1183,16 +1183,18 @@ class RuleEditForm(
        <div class="error">Node with ID "{nodeid}" is invalid</div>
      }
      }
+         println("Info : reports dor directive %s component %s value %s having status %s contains report %s".format(nodeReports.directiveid,nodeReports.component,nodeReports.componentValue,nodeReports.cptValueReportType,nodeReports.nodesreport.map(repo => "\n ERROR : on Node %s with status %s and message %s".format(repo._1,repo._2,repo._3))  )) 
      val reports = nodeReports.nodesreport
      val nodes = reports.map(_._1).distinct
      val nodeStatuses = nodes.map(node => (node,ReportType.getWorseType(reports.filter(_._1==node).map(stat => stat._2)),reports.filter(_._1==node).flatMap(stat => stat._3).toList))
      nodeStatuses.toList match {
      case Nil =>  NodeSeq.Empty
-     case nodes => nodes.flatMap(node =>showNodeReport(node._1))
+     case nodes => nodes.flatMap(node =>showNodeReport(node._1,node._2,node._3))
      }
     }
     def showReportDetails(nodeReport : Seq[ComponentValueRuleStatusReport], message:String, id:String = "reportsGrid" ) : NodeSeq = {
- val report =      nodeReport.filterNot(_.cptValueReportType == SuccessReportType)
+      nodeReport.map(report => println("ERROR : reports dor directive %s component %s value %s having status %s contains report %s".format(report.directiveid,report.component,report.componentValue,report.cptValueReportType,report.nodesreport.map(repo => "\n ERROR : on Node %s with status %s and message %s".format(repo._1,repo._2,repo._3))  )))
+      val report =      nodeReport.map(value=> value.copy(reports= value.reports.filterNot(_._2 == SuccessReportType)))
      if (report.size>0)
      ( "#reportLine" #>
             <div class="reportLine ui-corner-top"><b> {message} </b>{report.map(showReportDetail(_))}</div>
@@ -1391,9 +1393,6 @@ class RuleEditForm(
             ]
            });
           $('.dataTables_filter input').attr("placeholder", "Search");
-          $('.dataTables_filter').contents().filter(function(){
-            return this.nodeType == this.TEXT_NODE;
-            })​.remove();​
 
           $('#missing').dataTable({
             "bAutoWidth": false,
