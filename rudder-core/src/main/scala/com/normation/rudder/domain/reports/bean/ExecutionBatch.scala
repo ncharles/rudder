@@ -315,7 +315,7 @@ class ConfigurationExecutionBatch(
 
     def getComponentStatus (filteredReports:Seq[Reports]) : (ReportType,List[String]) = {
        filteredReports.filter( x => x.isInstanceOf[ResultErrorReport]).size match {
-          case i if i > 0 => (ErrorReportType,purgedReports.map(_.message).toList)
+          case i if i > 0 => (ErrorReportType,filteredReports.map(_.message).toList)
           case _ => {
             filteredReports.size match {
               case 0 if unexepectedReports.size==0 =>  (getNoAnswerOrPending(),Nil)
@@ -332,23 +332,20 @@ class ConfigurationExecutionBatch(
       case "None" =>
       val filteredReports = purgedReports.filter( x => x.keyValue == currentValue)
       getComponentStatus(filteredReports)
-        
-            
+
       case matchCFEngineVars(_) => 
         // convert the entry to regexp, and match what can be matched
          val matchableExpected = currentValue.replaceAll(replaceCFEngineVars, ".*")
          val matchedReports = purgedReports.filter( x => x.keyValue.matches(matchableExpected))
           getComponentStatus(matchedReports)
-         
+
       case _: String => 
           // for a given component, if the key is not "None", then we are 
           // checking that what is have is what we wish
           // we can have more reports that what we expected, because of
           // name collision, but it would be resolved by the total number
         val keyReports =  purgedReports.filter( x => x.keyValue == currentValue)
-       val res =  getComponentStatus(keyReports)
-       println("DEBUG stauts is %s and message %s for current value %s".format(res._1,res._2,currentValue))
-       res
+        getComponentStatus(keyReports)
     }
   }
   
@@ -519,7 +516,11 @@ case class ComponentValueRuleStatusReport(
   , reports             : Seq[NodeReport]
 ) extends RuleStatusReport {
   
-  override val nodesreport = reports  
+  override val nodesreport = reports
+  
+  def processMessageReport(filter: NodeReport => Boolean):Seq[MessageReport] ={
+    reports.filter(filter).map(MessageReport(_,component,componentValue))
+  }
 }
 
 case class ComponentRuleStatusReport (
@@ -556,3 +557,10 @@ case class DirectiveRuleStatusReport(
     else
       None
 }
+
+  
+  case class MessageReport(
+        report : NodeReport
+      , component : String
+      , value : String
+  )  

@@ -423,6 +423,11 @@ td {
 .warning {
    color: #c00;
 }
+
+a.warning {
+   color: #c00;
+   padding-left: 30px;
+}
 #contenu table td img, #contenu table th img {
    float: none;
    margin: 0;
@@ -2106,10 +2111,10 @@ tr.Warn {
   background-color:#FF9922;
 }
 tr.Unknown {
-    background-color: #FFBB44;
+    background-color: #FFBB66;
 }
 tr.Error {
-  background-color:#FF4433;
+  background-color:#FF6655;
 }
 
 tr.Noanswer {

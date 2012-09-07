@@ -1007,7 +1007,12 @@ class RuleEditForm(
                       val xml:NodeSeq = (
                               "#directive [class+]" #> "listopen" &
                               "#directive *" #>
-                                <span>{directive.name}</span> &
+                              { if (directiveStatus.directiveReportType==UnknownReportType) { 
+                                  val text = Text("Analyse")
+                                  val attr = BasicElemAttr("class","unfoldable warning")
+                                  <span>{directive.name}</span> ++ SHtml.a({() => showPopup(directiveStatus)}, text,attr)}
+                                else
+                                  <span>{directive.name}</span> } &
                               "#technique *" #> <span>{"%s (%s)".format(tech,techversion)}</span> &
                               "#severity *" #> buildComplianceChart(directiveStatus) &
                               ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(directiveStatus.directiveReportType).replaceAll(" ", "") &
@@ -1037,7 +1042,12 @@ class RuleEditForm(
           )(componentDetails)
         case false => // standard  display that can be expanded
           val tooltipid = Helpers.nextFuncName
-           ( "#component *" #> <span>{component.component}</span> &
+           ( "#component *" #> { if (component.componentReportType==UnknownReportType) { 
+                                  val text = Text("Analyse")
+                                  val attr = BasicElemAttr("class","unfoldable warning")
+                                  <span>{component.component}</span> ++ SHtml.a({() => showPopup(component)}, text,attr)}
+                                else
+                                  <span>{component.component}</span> } &
              "#component [class+]" #> "listopen firstTd" &
              ".unfoldable [toggler]" #> tooltipid
            )(componentDetails) ++ showComponentValueReport(component.componentValues,tooltipid)
@@ -1123,165 +1133,237 @@ class RuleEditForm(
 
   private[this] def createPopup(directivebynode: RuleStatusReport) : NodeSeq = {
       
-   def templatePath = List("templates-hidden", "reports_grid")
-   def template() =  Templates(templatePath) match {
-     case Empty | Failure(_,_,_) =>
-     throw new TechnicalException("Template for report grid not found. I was looking for %s.html".format(templatePath.mkString("/")))
-     case Full(n) => n
-   }
-   def reportTemplate = chooseTemplate("reports", "report", template)
-    
-    
-   
-  def showNodeReports(nodeReports : Seq[(NodeId,ReportType,List[String])]) : NodeSeq= {
-     val nodes = nodeReports.map(_._1).distinct
-     val nodeStatuses = nodes.map(node => (node,ReportType.getWorseType(nodeReports.filter(_._1==node).map(stat => stat._2)),nodeReports.filter(_._1==node).flatMap(stat => stat._3).toList))
-     nodeStatuses.toList match {
-     case Nil => NodeSeq.Empty
-     case nodeStatus :: rest =>
-     val nodeReport = nodeInfoService.getNodeInfo(nodeStatus._1) match {
-     case Full(nodeInfo) => {
-       val tooltipid = Helpers.nextFuncName
-               ("#node *" #>
-               <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeStatus._1.value)}>
-               <span class="curspoint">
-               {nodeInfo.hostname}
-               </span>
-               </a> &
-               "#severity *" #> ReportType.getSeverityFromStatus(nodeStatus._2) &
-               ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(nodeStatus._2).replaceAll(" ", "")
-               )(nodeLineXml)
-       }
-     case x:EmptyBox =>
-       logger.error( (x?~! "An error occured when trying to load node %s".format(nodeStatus._1.value)),x)
-       <div class="error">Node with ID "{nodeStatus._1.value}" is invalid</div>
-     }
-     nodeReport ++ showNodeReports(rest)
-     }
+    def templatePath = List("templates-hidden", "reports_detail")
+    def template() =  Templates(templatePath) match {
+      case Empty | Failure(_,_,_) =>
+      throw new TechnicalException("Template for report grid not found. I was looking for %s.html".format(templatePath.mkString("/")))
+      case Full(n) => n
     }
-   def showReportDetail(nodeReports : ComponentValueRuleStatusReport) : NodeSeq= {
-     def showNodeReport(nodeid:NodeId,reportType:ReportType,message:List[String]):NodeSeq = {
-         nodeInfoService.getNodeInfo(nodeid) match {
-         case Full(nodeInfo)  => {
-             val message = nodeReports.nodesreport.filter(_._1==nodeid).flatMap(_._3)
-             ( "#node *" #>
-               <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeid)}>
-               <span class="curspoint">
-               {nodeInfo.hostname}
-               </span>
-               </a>  &
-               ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(reportType).replaceAll(" ", "")&
-               "#component *" #> nodeReports.component &
-               "#severity *" #> Text(ReportType.getSeverityFromStatus(reportType)) &
-               "#value *" #> nodeReports.componentValue &
-               "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> 
-             ) ( reportLineXml )
-               
-       }
-     case x:EmptyBox =>
-       logger.error( (x?~! "An error occured when trying to load node %s".format(nodeid)),x)
-       <div class="error">Node with ID "{nodeid}" is invalid</div>
-     }
-     }
-         println("Info : reports dor directive %s component %s value %s having status %s contains report %s".format(nodeReports.directiveid,nodeReports.component,nodeReports.componentValue,nodeReports.cptValueReportType,nodeReports.nodesreport.map(repo => "\n ERROR : on Node %s with status %s and message %s".format(repo._1,repo._2,repo._3))  )) 
-     val reports = nodeReports.nodesreport
-     val nodes = reports.map(_._1).distinct
-     val nodeStatuses = nodes.map(node => (node,ReportType.getWorseType(reports.filter(_._1==node).map(stat => stat._2)),reports.filter(_._1==node).flatMap(stat => stat._3).toList))
-     nodeStatuses.toList match {
-     case Nil =>  NodeSeq.Empty
-     case nodes => nodes.flatMap(node =>showNodeReport(node._1,node._2,node._3))
-     }
-    }
-    def showReportDetails(nodeReport : Seq[ComponentValueRuleStatusReport], message:String, id:String = "reportsGrid" ) : NodeSeq = {
-      nodeReport.map(report => println("ERROR : reports dor directive %s component %s value %s having status %s contains report %s".format(report.directiveid,report.component,report.componentValue,report.cptValueReportType,report.nodesreport.map(repo => "\n ERROR : on Node %s with status %s and message %s".format(repo._1,repo._2,repo._3))  )))
-      val report =      nodeReport.map(value=> value.copy(reports= value.reports.filterNot(_._2 == SuccessReportType)))
-     if (report.size>0)
-     ( "#reportLine" #>
-            <div class="reportLine ui-corner-top"><b> {message} </b>{report.map(showReportDetail(_))}</div>
-     )(reportsGridXml(id)) 
-     else 
-      ( "#reportLine" #>
-      <div class="reportLine ui-corner-top"><b> All reports message are </b>{nodeReport.map(showReportDetail(_))}</div>
-     )(reportsGridXml(id)) 
+    def reportTemplate = chooseTemplate("reports", "report", template)
+    def tabsTemplate = chooseTemplate("reports", "tabs", template)
+  
+   /*
+    * Node summary, treat all top level reports
+    */
+    def nodeGridXml : NodeSeq = {
+        <table id="nodeReportGrid"  cellspacing="0">
+          <thead>
+            <tr class="head">
+              <th>Node<span/></th>
+              <th >Severity<span/></th>
+            </tr>
+          </thead>
+          <tbody>
+            <div id="reportLine"/>
+          </tbody>
+        </table>
+        <div class="nodeReportGrid_pagination paginatescala">
+          <div id="nodeReportGrid_paginate_area"/>
+        </div>
+        <hr class="spacer"/>
+        <br/> ++ Script(OnLoad(JsRaw("""
+          $('#nodeReportGrid').dataTable({
+            "bAutoWidth": false,
+            "bFilter" : true,
+            "bPaginate" : true,
+            "bLengthChange": false,
+            "sPaginationType": "full_numbers",
+            "bJQueryUI": false,
+            "aaSorting": [[ 5, "asc" ]],
+            "bSearch": "",
+            "aoColumns": [
+              { "sWidth": "200px" },
+              { "sWidth": "150px" }
+            ]
+          });
+          moveFilterAndFullPaginateArea('#nodeReportGrid');""")))
     }
 
-    def treatmissingreports(nodeReport : Seq[ComponentValueRuleStatusReport]) : NodeSeq = {
-      val missingreports = nodeReport.map(value => value.copy(reports =  value.reports.filter(report => report._3.contains("Report should have been received.")))).filter(_.reports.size!=0)
-      val unexpectedreports = nodeReport.map(value => value.copy(reports =  value.reports.filter(report => report._3.contains("Report should have not been received")))).filter(_.reports.size!=0)
-      (if (missingreports.size !=0)(
-          <div>{showReportDetails(missingreports,"Those reports should have been received","missing")}</div>      <hr class="spacer" />    <div class="missing_pagination paginatescala">
-            <div id="missing_paginate_area"/>
-          </div>
-          <hr class="spacer"/>
-          <br/>) else NodeSeq.Empty) ++ 
-      (if (unexpectedreports.size !=0)(
-          <div>{showReportDetails(unexpectedreports,"Those reports should have not been received","unexpected")}</div>      <hr class="spacer" />    <div class="unexpected_pagination paginatescala">
-            <div id="unexpected_paginate_area"/>
-          </div> 
-          <hr class="spacer"/>
-          <br/>) else NodeSeq.Empty)
+    def nodeLineXml : NodeSeq = {
+      <tr class="unfoldable">
+        <td id="node"></td>
+        <td id="severity"></td>
+      </tr>
     }
-    def reportsGridXml(id:String = "reportsGrid") : NodeSeq = {
-    <table id={id}  cellspacing="0" style="clear:both">
-      <thead>
-        <tr class="head">
-          <th>Node<span/></th>
-          <th >Component<span/></th>
-          <th >Value<span/></th>
-          <th >Message <span/></th>
-         <th >Severity<span/></th>
-        </tr>
-      </thead>
-      <tbody>
-        <div id="reportLine"/>
-      </tbody>
-    </table>
-  }
-
-  def nodeGridXml : NodeSeq = {
-    <table id="nodeReportGrid"  cellspacing="0">
-      <thead>
-        <tr class="head">
-          <th>Node<span/></th>
-         <th >Severity<span/></th>
-        </tr>
-      </thead>
-      <tbody>
-        <div id="reportLine"/>
-      </tbody>
-    </table>
-  }
-   def reportLineXml : NodeSeq = {
-    <tr class="unfoldable">
-      <td id="node"></td>
-      <td id="component"></td>
-      <td id="value"></td>
-      <td id="message"></td>
-      <td id="severity"></td>
-    </tr>
-  }
-   
-  def nodeLineXml : NodeSeq = {
-    <tr class="unfoldable">
-      <td id="node"></td>
-      <td id="severity"></td>
-    </tr>
-  }
  
-  val batch = directivebynode match {
-       case DirectiveRuleStatusReport(directiveId,components,_) => 
-         components.flatMap(_.componentValues)
-       case ComponentRuleStatusReport(directiveId,component,values,_) =>
-         values
-       case value : ComponentValueRuleStatusReport =>
-         Seq(value)
+   
+    def showNodeReports(nodeReports : Seq[NodeReport]) : NodeSeq= {
+      val nodes = nodeReports.map(_.node).distinct
+      val nodeStatuses = nodes.map(node => NodeReport(node,ReportType.getWorseType(nodeReports.filter(_.node==node).map(stat => stat.reportType)),nodeReports.filter(_.node==node).flatMap(stat => stat.message).toList))
+      nodeStatuses.toList match {
+        case Nil => NodeSeq.Empty
+        case nodeStatus :: rest =>
+          val nodeReport = nodeInfoService.getNodeInfo(nodeStatus.node) match {
+            case Full(nodeInfo) => {
+              val tooltipid = Helpers.nextFuncName
+                ("#node *" #>
+                <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeStatus.node.value)}>
+                  <span class="curspoint">
+                    {nodeInfo.hostname}
+                  </span>
+                </a> &
+                "#severity *" #> ReportType.getSeverityFromStatus(nodeStatus.reportType) &
+                ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(nodeStatus.reportType).replaceAll(" ", "")
+                )(nodeLineXml)
+            }
+            case x:EmptyBox =>
+              logger.error( (x?~! "An error occured when trying to load node %s".format(nodeStatus.node.value)),x)
+              <div class="error">Node with ID "{nodeStatus.node.value}" is invalid</div>
+          }
+          nodeReport ++ showNodeReports(rest)
+      }
+    }
+
+    /*
+     * Detailled reporting, each line is a report message
+     */
+    def reportsGridXml(id:String = "reports") : NodeSeq = {
+      <table id={id+"Grid"}  cellspacing="0" style="clear:both">
+        <thead>
+          <tr class="head">
+            <th>Node<span/></th>
+            <th >Component<span/></th>
+            <th >Value<span/></th>
+            <th >Message <span/></th>
+          </tr>
+        </thead>
+        <tbody>
+          <div id="reportLine"/>
+        </tbody>
+      </table>
+        <div class={id+"Grid_pagination paginatescala"}>
+          <div id={id+"Grid_paginate_area"}/>
+        </div>
+        <hr class="spacer"/>
+        <br/>
   }
+
+
+    def reportLineXml : NodeSeq = {
+      <tr class="unfoldable">
+        <td id="node"></td>
+        <td id="component"></td>
+        <td id="value"></td>
+        <td id="message"></td>
+      </tr>
+    }
+   
+    def tabsxml : NodeSeq = {
+      <div id="messageDetailsZone">
+        <ul id="messageDetailsTabMenu">
+          <li><a href="#summaryTab">Summary</a></li>
+          <li><a href="#errorTab">Error</a></li>
+          <li><a href="#missingTab">Missing</a></li>
+          <li><a href="#unexpectedTab">Unexpected</a></li>
+          <li><a href="#noAnswerTab">No answer</a></li>
+          <li><a href="#pendingTab">Pending</a></li>
+          <li><a href="#repairedTab">Repaired</a></li>
+          <li><a href="#successTab">Success</a></li>
+          <li><a href="#allTab">All reports</a></li>
+        </ul>
+        <div id="summaryTab"/>
+        <div id="errorTab"/>
+        <div id="missingTab"/>
+        <div id="unexpectedTab"/>
+        <div id="noAnswerTab"/>
+        <div id="pendingTab"/>
+        <div id="repairedTab"/>
+        <div id="successTab"/>
+        <div id="allTab"/>
+      </div>
+    }
+  
+    def ShowReportsByType(report:RuleStatusReport) : NodeSeq = {
+        def showreports (reports:Seq[MessageReport],gridId:String, tabid:Int) : NodeSeq = {
+            def showreport(report:MessageReport) : NodeSeq = {
+              val nodeReport= report.report
+              nodeInfoService.getNodeInfo(nodeReport.node) match {
+                case Full(nodeInfo)  => {
+                  val message = nodeReport.message
+                  ( "#node *" #>
+                    <a class="unfoldable" href={"""secure/nodeManager/searchNodes#{"nodeId":"%s"}""".format(nodeReport.node)}>
+                      <span class="curspoint">
+                        {nodeInfo.hostname}
+                      </span>
+                    </a>  &
+                    ".unfoldable [class+]" #> ReportType.getSeverityFromStatus(nodeReport.reportType).replaceAll(" ", "")&
+                    "#component *" #> report.component &
+                    "#value *" #> report.value &
+                    "#message *" #>  <ul>{message.map(msg => <li>{msg}</li>)}</ul> 
+                  ) ( reportLineXml )
+                }
+                case x:EmptyBox =>
+                  logger.error( (x?~! "An error occured when trying to load node %s".format(nodeReport.node)),x)
+                  <div class="error">Node with ID "{nodeReport.node}" is invalid</div>
+              }
+            }
+          if (reports.size >0)
+            ( "#reportLine" #> reports.flatMap(showreport(_) )
+            ) (reportsGridXml(gridId)) ++Script(OnLoad(JsRaw("""
+              $('#%s').dataTable({
+                "bAutoWidth": false,
+                "bFilter" : true,
+                "bPaginate" : true,
+                "bLengthChange": false,
+                "sPaginationType": "full_numbers",
+                "bJQueryUI": false,
+                "aaSorting": [[ 5, "asc" ]],
+                "aoColumns": [
+                  { "sWidth": "100px" },
+                  { "sWidth": "175px" },
+                  { "sWidth": "175px" },
+                  { "sWidth": "450px" }
+                ]
+              });
+              moveFilterAndFullPaginateArea('#%s');""".format(gridId+"Grid",gridId+"Grid"))))
+          else
+            NodeSeq.Empty 
+        }
+        def buildDisabled(toDisable:List[Int]):String = {
+          toDisable match {
+            case Nil => ""
+            case value::Nil => value.toString()
+            case value::rest => "%s, %s".format(value,buildDisabled(rest))
+        } }
+    
+      
+    val reports = report match {
+      case DirectiveRuleStatusReport(directiveId,components,_) => 
+        components.flatMap(_.componentValues)
+      case ComponentRuleStatusReport(directiveId,component,values,_) =>
+        values
+      case value : ComponentValueRuleStatusReport =>
+        Seq(value)
+    }
+    val error = reports.flatMap(report => report.processMessageReport(_.reportType==ErrorReportType))
+    val missing = reports.flatMap(report => report.processMessageReport(nreport => nreport.reportType==UnknownReportType&nreport.message.size==0))
+    val unexpected = reports.flatMap(report => report.processMessageReport(nreport => nreport.reportType==UnknownReportType&nreport.message.size!=0))
+    val noAnswer = reports.flatMap(report => report.processMessageReport(_.reportType==NoAnswerReportType))
+    val pending = reports.flatMap(report => report.processMessageReport(_.reportType==PendingReportType))
+    val repaired = reports.flatMap(report => report.processMessageReport(_.reportType==RepairedReportType))
+    val success = reports.flatMap(report => report.processMessageReport(_.reportType==SuccessReportType))
+    val all = reports.flatMap(report => report.processMessageReport(report => true))
+    val todisable=List((error,1),(missing,2),(unexpected,3),(noAnswer,4),(pending,5),(repaired,6),(success,7)).filter(_._1.size==0).map(_._2)
+   // val selected =List((error,1),(missing,2),(unexpected,3),(noAnswer,4),(pending,5),(repaired,6),(success,7)).filter(_._1.size!=0).map(_._2).head
+    ( "#summaryTab *" #>  ( "#reportLine" #>showNodeReports(report.nodesreport)) (nodeGridXml) &
+      "#errorTab *" #> showreports(error,"error",0) &
+      "#missingTab *" #> showreports(missing,"missing",1)&
+      "#unexpectedTab *" #> showreports(unexpected,"unexpected",2)&
+      "#noAnswerTab *" #> showreports(noAnswer,"noAnswer",3) &
+      "#pendingTab *" #> showreports(pending,"pending",4)&
+      "#repairedTab *" #> showreports(repaired,"repaired",5) &
+      "#successTab *" #> showreports(success,"success",6)&
+      "#allTab *" #> showreports(all,"all",7)
+    ) (tabsxml) ++ 
+    Script(OnLoad(JsRaw("""$('#messageDetailsZone').tabs({ disabled: [%s] });""".format(buildDisabled(todisable)))))
+  }
+
    <div class="simplemodal-title">
     <h1>Node compliance detail</h1>
     <hr/>
   </div>++{
 
-      <div class="simplemodal-content" style="height:300px;overflow-y:auto;" > { bind("lastReportGrid",reportTemplate,
+      <div class="simplemodal-content" style="max-height:500px;overflow-y:auto;" > { bind("lastReportGrid",reportTemplate,
         "detail" ->{  directivebynode match {
     case d:DirectiveRuleStatusReport =>
       val directive = directiveRepository.getDirective(d.directiveId) 
@@ -1299,9 +1381,7 @@ class RuleEditForm(
                         <li><b>Directive:</b> {directive.map(_.name).getOrElse("can't find directive name")}</li>
                         <li><b>Component:</b> {c.component}</li>
                       </ul>
-                    </div>++  ( "#reportLine" #>
-     { showNodeReports(c.nodesreport)}
-     )(nodeGridXml)
+                    </div>
       case ComponentValueRuleStatusReport(directiveId,component,value,_,_) =>
       val directive = directiveRepository.getDirective(directiveId)
       <div>
@@ -1313,23 +1393,15 @@ class RuleEditForm(
                       </ul>
                     </div> 
                         } },
-      "lines"   -> showReportDetails(batch,"You shoud look for all this reports message"),
-      "missing" -> treatmissingreports(batch)
-         )
-      }
-      <hr class="spacer" />
- { ( "#reportLine" #>
-     { showNodeReports(directivebynode.nodesreport)}
-     )(nodeGridXml)}
-       <div class="nodeReportGrid_pagination paginatescala">
-     <div id="nodeReportGrid_paginate_area"/>
-     </div>
-           <hr class="spacer"/>
-           <br/>
-      </div>
+     /* "lines"   -> showReportDetails(batch,"You shoud look for all this reports message"),
+      "missing" -> treatmissingreports(batch),*/
+      "tab" -> ShowReportsByType(directivebynode)
+         ) 
+      } 
 
-  
-  } ++
+      </div> 
+      
+  } ++ 
      <div class="simplemodal-bottom">
     <hr/>
     <div class="popupButton">
@@ -1349,89 +1421,16 @@ class RuleEditForm(
   val htmlId_modalReportsPopup = "modal_" + htmlId_rulesGridZone
   
   private[this] def showPopup(directiveStatus: RuleStatusReport) : JsCmd = {
+   
     val popupHtml = createPopup(directiveStatus)
-    SetHtml(htmlId_reportsPopup, popupHtml) &
-      JsRaw("""
-        /* Formating function for row details */
-        function fnFormatDetails ( id ) {
-          var sOut = '<div id="'+id+'" class="reportDetailsGroup"/>';
-          return sOut;
-        }
-      """.replaceAll("#table_var#",jsVarNameForId(tableId_reportsPopup))
-    ) & OnLoad(
+    SetHtml(htmlId_reportsPopup, popupHtml) & OnLoad(
         JsRaw("""
-          /* Event handler function */
-         $('#nodeReportGrid').dataTable({
-            "bAutoWidth": false,
-            "bFilter" : false,
-            "bPaginate" : true,
-            "bLengthChange": false,
-            "sPaginationType": "full_numbers",
-            "bJQueryUI": false,
-            "aaSorting": [[ 3, "asc" ]],
-            "iDisplayLength" : 5,
-            "aoColumns": [
-              { "sWidth": "150px" },
-              { "sWidth": "150px" }
-            ]
-          });
-            $('#%1$s').dataTable({
-            "bAutoWidth": false,
-            "bFilter" : true,
-            "bPaginate" : true,
-            "bLengthChange": false,
-            "sPaginationType": "full_numbers",
-            "bJQueryUI": false,
-            "aaSorting": [[ 5, "asc" ]],
-            "bSearch": "",
-            "aoColumns": [
-              { "sWidth": "150px" },
-              { "sWidth": "150px" },
-              { "sWidth": "150px" },
-              { "sWidth": "250px" },
-              { "sWidth": "50px" }
-            ]
-           });
-          $('.dataTables_filter input').attr("placeholder", "Search");
-
-          $('#missing').dataTable({
-            "bAutoWidth": false,
-            "bFilter" : false,
-            "bPaginate" : true,
-            "bLengthChange": false,
-            "sPaginationType": "full_numbers",
-            "bJQueryUI": false,
-            "aaSorting": [[ 5, "asc" ]],
-            "aoColumns": [
-              { "sWidth": "150px" },
-              { "sWidth": "150px" },
-              { "sWidth": "150px" },
-              { "sWidth": "250px" },
-              { "sWidth": "50px" }
-            ]
-          });
-            $('#unexpected').dataTable({
-            "bAutoWidth": false,
-            "bFilter" : false,
-            "bPaginate" : true,
-            "bLengthChange": false,
-            "sPaginationType": "full_numbers",
-            "bJQueryUI": false,
-            "aaSorting": [[ 5, "asc" ]],
-            "aoColumns": [
-              { "sWidth": "150px" },
-              { "sWidth": "150px" },
-              { "sWidth": "150px" },
-              { "sWidth": "250px" },
-              { "sWidth": "50px" }
-            ]
-          });moveFilterAndFullPaginateArea('#%1$s');
-            moveFilterAndFullPaginateArea('#nodeReportGrid');
-            moveFilterAndFullPaginateArea('#missing');
-            moveFilterAndFullPaginateArea('#unexpected');""".format( tableId_reportsPopup)
+            $( "#messageDetailsZone" ).tabs();
+            $('.dataTables_filter input').attr("placeholder", "Search");
+            """
         ) //&  initJsCallBack(tableId)
     ) &
-    JsRaw( """ createPopup("%s",600,750)
+    JsRaw( """ createPopup("%s",600,900)
      """.format(htmlId_modalReportsPopup))
   }
   
