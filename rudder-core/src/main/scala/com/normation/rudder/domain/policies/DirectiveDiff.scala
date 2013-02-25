@@ -60,17 +60,17 @@ final case class AddDirectiveDiff(
 
 
 final case class ModifyDirectiveDiff(
-    techniqueName           : TechniqueName
-  , id                      : DirectiveId
-  , name                    : String //keep the name around to be able to display it as it was at that time
-  , modName                 : Option[SimpleDiff[String]]           = None
+    techniqueName      : TechniqueName
+  , id                 : DirectiveId
+  , name               : String //keep the name around to be able to display it as it was at that time
+  , modName            : Option[SimpleDiff[String]]           = None
   , modTechniqueVersion: Option[SimpleDiff[TechniqueVersion]] = None
-  , modParameters           : Option[SimpleDiff[SectionVal]]       = None
-  , modShortDescription     : Option[SimpleDiff[String]]           = None
-  , modLongDescription      : Option[SimpleDiff[String]]           = None
-  , modPriority             : Option[SimpleDiff[Int]]              = None
-  , modIsActivated          : Option[SimpleDiff[Boolean]]          = None
-  , modIsSystem             : Option[SimpleDiff[Boolean]]          = None
+  , modParameters      : Option[SimpleDiff[SectionVal]]       = None
+  , modShortDescription: Option[SimpleDiff[String]]           = None
+  , modLongDescription : Option[SimpleDiff[String]]           = None
+  , modPriority        : Option[SimpleDiff[Int]]              = None
+  , modIsActivated     : Option[SimpleDiff[Boolean]]          = None
+  , modIsSystem        : Option[SimpleDiff[Boolean]]          = None
 ) extends DirectiveSaveDiff with HashcodeCaching
 
 
