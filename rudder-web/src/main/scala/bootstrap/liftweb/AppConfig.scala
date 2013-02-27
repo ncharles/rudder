@@ -109,6 +109,7 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import scala.util.Try
 import com.normation.rudder.services.user.PersonIdentService
+import com.normation.rudder.services.workflows.WorkflowService
 
 /**
  * Define a resource for configuration.
@@ -294,6 +295,9 @@ object RudderConfig extends Loggable {
   val eventLogDeploymentService: EventLogDeploymentService = eventLogDeploymentServiceImpl
   val allBootstrapChecks : BootstrapChecks = allChecks
   val srvGrid = new SrvGrid
+
+  val woChangeRequestRepository: WoChangeRequestRepository = ???
+  val workflowService: WorkflowService = ???
 
 
   //////////////////////////////////////////////////////////////////////////////////////////

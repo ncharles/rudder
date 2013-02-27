@@ -44,6 +44,87 @@ import com.normation.rudder.domain.policies.DirectiveId
 
 
 
+case class ChangeRequestId(value:String)
+
+
+sealed trait ChangeRequest {
+  def id     : ChangeRequestId //modification Id ?
+  def status : ChangeRequestStatusChange
+}
+
+
+///////////////////////////////////////////
+///// About the change request status /////
+///////////////////////////////////////////
+
+
+case class ChangeRequestStatus(
+    name       : String
+  , description: String
+  // A marker to know if the ChangeRequest can be modified or not.
+  // A change request can be modified only at certain point in
+  // workflow, and for example we don't want someone to modify a
+  // changeRequest just after the moment a reviewer validated it
+  , readOnly   : Boolean
+)
+
+sealed trait ChangeRequestStatusDiff
+
+case object AddChangeRequestStatusDiff extends ChangeRequestStatusDiff
+
+case object DeleteChangeRequestStatusDiff extends ChangeRequestStatusDiff
+
+case class ModifyChangeRequestStatusDiff(
+    modName       : Option[SimpleDiff[String]]
+  , modDescription: Option[SimpleDiff[String]]
+) extends ChangeRequestStatusDiff
+
+case class ChangeRequestStatusItem(
+    actor       : EventActor
+  , creationDate: DateTime
+  , reason      : Option[String]
+  , diff        : ChangeRequestStatusDiff
+)
+
+case class ChangeRequestStatusChange(
+    initialState: ChangeRequestStatus
+  , firstChange : ChangeRequestStatusDiff
+    //the most recent change is in head,
+    //the older in tail.
+  , nextChanges : Seq[ChangeRequestStatusDiff]
+)
+
+
+////////////////////////////////////////
+///// Some types of change request /////
+////////////////////////////////////////
+
+
+case class DirectiveChangeRequest(
+    id    : ChangeRequestId //modification Id ?
+  , status: ChangeRequestStatusChange
+  , change: DirectiveChange
+) extends ChangeRequest
+
+case class ConfigurationChangeRequest(
+    id        : ChangeRequestId //modification Id ?
+  , status    : ChangeRequestStatusChange
+  , directives: Map[DirectiveId, DirectiveChange]
+  // ... TODO: complete for groups and rules
+) extends ChangeRequest
+
+
+case class RollbackChangeRequest(
+    id      : ChangeRequestId //modification Id ?
+  , status  : ChangeRequestStatusChange
+  , rollback: Null // TODO: rollback change request
+) extends ChangeRequest
+
+
+//////////////////////////////////
+///// example for directives /////
+//////////////////////////////////
+
 
 sealed trait ChangeItem[DIFF] {
   def actor       : EventActor
@@ -69,48 +150,6 @@ sealed trait Change[T, DIFF, T_CHANGE <: ChangeItem[DIFF]] {
 
 
 
-case class ChangeRequestId(value:String)
-
-case class ChangeRequestStatus(
-    name       : String
-  , description: String
-)
-
-case class ChangeRequest(
-    id        : ChangeRequestId //modification Id ?
-  , status    : ChangeRequestStatus
-  , directives: Map[DirectiveId, DirectiveChange]
-)
-
-sealed trait ChangeRequestStatusDiff
-
-case object AddChangeRequestStatusDiff extends ChangeRequestStatusDiff
-
-case object DeleteChangeRequestStatusDiff extends ChangeRequestStatusDiff
-
-case class ModifyChangeRequestStatusDiff(
-    modName       : Option[SimpleDiff[String]]
-  , modDescription: Option[SimpleDiff[String]]
-) extends ChangeRequestStatusDiff
-
-case class ChangeRequestStatusItem(
-    actor       : EventActor
-  , creationDate: DateTime
-  , reason      : Option[String]
-  , diff        : ChangeRequestStatusDiff
-)
-
-case class ChangeRequestStatusChange(
-    initialState: ChangeRequestStatus
-  , firstChange : ChangeRequestStatusDiff
-  , nextChanges : Seq[ChangeRequestStatusDiff]
-)
-
-
-//////////////////////////////////
-///// example for directives /////
-//////////////////////////////////
-
 case class DirectiveChangeItem(
   //no ID: that object does not have any meaning outside
   // a change request
@@ -124,5 +163,7 @@ case class DirectiveChangeItem(
 case class DirectiveChange(
     initialState: Directive
   , firstChange : DirectiveChangeItem
+    //the most recent change is in head,
+    //the older in tail.
   , nextChanges : Seq[DirectiveChangeItem]
 ) extends Change[Directive, DirectiveDiff, DirectiveChangeItem]
