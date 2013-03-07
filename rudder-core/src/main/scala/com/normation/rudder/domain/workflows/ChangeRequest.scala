@@ -51,8 +51,12 @@ import com.normation.rudder.domain.policies.DirectiveId
  */
 
 
-case class ChangeRequestId(value:String)
-
+case class ChangeRequestId(value:String) {
+  override def toString = value
+}
+object ChangeRequestId {
+  implicit def displayCRId (CRId:ChangeRequestId):String= CRId.value
+}
 
 sealed trait ChangeRequest {
         def id     : ChangeRequestId //modification Id ?
