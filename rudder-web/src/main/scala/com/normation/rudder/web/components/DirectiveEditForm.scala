@@ -66,6 +66,7 @@ import com.normation.rudder.domain.workflows._
 import org.joda.time.DateTime
 import com.normation.cfclerk.domain.TechniqueName
 import com.normation.rudder.web.components.popup.ModificationValidationPopup
+import com.normation.rudder.services.workflows.WorkflowService
 
 object DirectiveEditForm {
 
@@ -150,8 +151,8 @@ class DirectiveEditForm(
   private[this] val asyncDeploymentAgent   = RudderConfig.asyncDeploymentAgent
   private[this] val userPropertyService    = RudderConfig.userPropertyService
   private[this] val uuidGen                = RudderConfig.stringUuidGenerator
-  private[this] val workflowEngine         = RudderConfig.workflowService
-  private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
+  private[this] val workflowEngine:WorkflowService         = ???
+  private[this] val woChangeRequestRepo:WoChangeRequestRepository    = ???
 
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"

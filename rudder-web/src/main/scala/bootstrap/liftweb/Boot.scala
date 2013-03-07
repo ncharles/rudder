@@ -96,6 +96,8 @@ class Boot extends Loggable {
         RewriteResponse("secure" :: "configurationManager" :: "techniqueLibraryManagement" :: Nil, Map("techniqueId" -> activeTechniqueId))
       case RewriteRequest(ParsePath("secure"::"nodeManager"::"searchNodes"::nodeId::Nil, _, _, _), GetRequest, _) =>
         RewriteResponse("secure"::"nodeManager"::"searchNodes"::Nil, Map("nodeId" -> nodeId))
+      case RewriteRequest(ParsePath("secure"::"administration"::"changeRequest"::crId::Nil, _, _, _), GetRequest, _) =>
+        RewriteResponse("secure"::"administration"::"changeRequest"::Nil, Map("crId" -> crId))
     }
 
     // Fix relative path to css resources
@@ -192,12 +194,16 @@ class Boot extends Loggable {
 
           Menu("archivesManagement", <span>Archives</span>) /
             "secure" / "administration" / "archiveManagement"
-            >> LocGroup("administrationGroup")
+            >> LocGroup("utilitiesGroup")
             >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/eventLogs") )
+
+        , Menu("changeRequest", <span>Change request</span>) /
+            "secure" / "administration" / "changeRequest"
+            >> LocGroup("utilitiesGroup")
 
         , Menu("eventLogViewer", <span>Event Logs</span>) /
             "secure" / "administration" / "eventLogs"
-            >> LocGroup("administrationGroup")
+            >> LocGroup("utilitiesGroup")
 
         , Menu("policyServerManagement", <span>Policy Server</span>) /
             "secure" / "administration" / "policyServerManagement"
