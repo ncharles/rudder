@@ -278,6 +278,7 @@ object RudderConfig extends Loggable {
   val updateDynamicGroups: UpdateDynamicGroups = dyngroupUpdaterBatch
   val databaseManager: DatabaseManager = databaseManagerImpl
   val automaticReportsCleaning: AutomaticReportsCleaning = dbCleaner
+  val automaticReportLogger: AutomaticReportLogger = autoReportLogger
   val nodeConfigurationService: NodeConfigurationService = nodeConfigurationServiceImpl
   val removeNodeService: RemoveNodeService = removeNodeServiceImpl
   val nodeInfoService: NodeInfoService = nodeInfoServiceImpl
@@ -1011,7 +1012,7 @@ object RudderConfig extends Loggable {
   private[this] lazy val propertyRepository = new RudderPropertiesSquerylRepository(
       squerylDatasourceProvider
     , reportsRepository )
-  private[this] lazy val automaticReportLogger = new AutomaticReportLogger(
+  private[this] lazy val autoReportLogger = new AutomaticReportLogger(
       propertyRepository
     , reportsRepository
     , roLdapRuleRepository
