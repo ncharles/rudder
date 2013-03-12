@@ -79,6 +79,11 @@ case class ModifyChangeRequestStatusDiff(
   , modDescription: Option[SimpleDiff[String]]
 ) extends ChangeRequestStatusDiff
 
+case class RebaseChangeRequestStatusDiff(
+    modName       : Option[SimpleDiff[String]]
+  , modDescription: Option[SimpleDiff[String]]
+) extends ChangeRequestStatusDiff
+
 case class ChangeRequestStatusItem(
     actor       : EventActor
   , creationDate: DateTime
@@ -99,17 +104,15 @@ case class ChangeRequestStatusChange(
 ///// Some types of change request /////
 ////////////////////////////////////////
 
-
-case class DirectiveChangeRequest(
-    id    : ChangeRequestId //modification Id ?
-  , status: ChangeRequestStatusChange
-  , change: DirectiveChange
-) extends ChangeRequest
-
+/**
+ * A global configuration change request.
+ * Can modify any number of Directives,
+ * Rules and Group.
+ */
 case class ConfigurationChangeRequest(
     id        : ChangeRequestId //modification Id ?
   , status    : ChangeRequestStatusChange
-  , directives: Map[DirectiveId, DirectiveChange]
+  , directives: Map[DirectiveId, DirectiveChanges]
   // ... TODO: complete for groups and rules
 ) extends ChangeRequest
 
@@ -133,6 +136,26 @@ sealed trait ChangeItem[DIFF] {
   def diff        : DIFF
 }
 
+// A change for the given type is either the value
+// of the item from the "current" environment or
+// a diff.
+// More preciselly, we have sequence of change related
+// to an initial state (which can be empty).
+sealed trait Change[T, DIFF, T_CHANGE <: ChangeItem[DIFF]] {
+  // A change for the given type is either the value
+  // of the item from the "current" environment or
+  // a diff.
+  // More preciselly, we have sequence of change related
+  // to an initial state (which can be empty).
+
+  //we have at least one such sequence
+  def initialState: Option[T]
+  def firstChange: T_CHANGE
+  //non-empty list
+  def olderChanges: Seq[T_CHANGE]
+}
+
+
 /**
  * A list of modification on a given item (directive, etc).
  * The parametrisation is as follow:
@@ -141,14 +164,29 @@ sealed trait ChangeItem[DIFF] {
  *   that object.
  * As the class is sealed, you can see implementation example
  * below.
+ *
+ * Younger generation are on head.
  */
-sealed trait Change[T, DIFF, T_CHANGE <: ChangeItem[DIFF]] {
-  def initialState: T
-  def firstChange : T_CHANGE
-  def nextChanges : Seq[T_CHANGE]
+sealed trait Changes[T, DIFF, T_CHANGE <: ChangeItem[DIFF]] {
+
+  // A change for the given type is either the value
+  // of the item from the "current" environment or
+  // a diff.
+  // More preciselly, we have sequence of change related
+  // to an initial state (which can be empty).
+
+  //we have at least one such sequence
+  def changes: Change[T, DIFF, T_CHANGE]
+
+  //older changes
+  def changeHistory: Seq[Change[T, DIFF, T_CHANGE]]
+
+  //TODO: we want to be able to compose diff so that
+  //we are able to have a "final" view of the Diff.
+  //for example: Add(title, desc), Mod(title2), Mod(description2)
+  // => Add(title2, description2)
+
 }
-
-
 
 case class DirectiveChangeItem(
   //no ID: that object does not have any meaning outside
@@ -161,9 +199,12 @@ case class DirectiveChangeItem(
 
 
 case class DirectiveChange(
-    initialState: Directive
-  , firstChange : DirectiveChangeItem
-    //the most recent change is in head,
-    //the older in tail.
-  , nextChanges : Seq[DirectiveChangeItem]
+    val initialState: Option[Directive]
+  , val firstChange: DirectiveChangeItem
+  , val olderChanges: Seq[DirectiveChangeItem]
 ) extends Change[Directive, DirectiveDiff, DirectiveChangeItem]
+
+case class DirectiveChanges(
+    val changes: DirectiveChange
+  , val changeHistory: Seq[DirectiveChange]
+)extends Changes[Directive, DirectiveDiff, DirectiveChangeItem]

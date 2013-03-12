@@ -62,6 +62,8 @@ import com.normation.rudder.web.snippet.configuration.DirectiveManagement
 import com.normation.eventlog.ModificationId
 import com.normation.utils.StringUuidGenerator
 import bootstrap.liftweb.RudderConfig
+import com.normation.rudder.domain.workflows._
+import org.joda.time.DateTime
 
 object DirectiveEditForm {
 
@@ -142,12 +144,13 @@ class DirectiveEditForm(
 
   val currentDirectiveSettingForm = new LocalSnippet[DirectiveEditForm]
 
-  private[this] val directiveRepository    = RudderConfig.woDirectiveRepository
   private[this] val dependencyService      = RudderConfig.dependencyAndDeletionService
   private[this] val directiveEditorService = RudderConfig.directiveEditorService
   private[this] val asyncDeploymentAgent   = RudderConfig.asyncDeploymentAgent
   private[this] val userPropertyService    = RudderConfig.userPropertyService
   private[this] val uuidGen                = RudderConfig.stringUuidGenerator
+  private[this] val workflowEngine         = RudderConfig.workflowService
+  private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
 
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"
@@ -654,22 +657,85 @@ class DirectiveEditForm(
     createPopup("updateActionDialog",140,850)
   }
 
+//  private[this] def saveAndDeployDirective(directive: Directive, why:Option[String]): JsCmd = {
+//    val modId = ModificationId(uuidGen.newUuid)
+//     directiveRepository.saveDirective(activeTechnique.id, directive, modId, CurrentUser.getActor, why) match {
+//      case Full(optChanges) =>
+//        optChanges match {
+//          case Some(_) => // There is a modification diff, launch a deployment.
+//            asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
+//          case None => // No change, don't launch a deployment
+//        }
+//        onSuccess(directive)
+//      case Empty =>
+//        formTracker.addFormError(error("An error occurred while saving the Directive"))
+//        onFailure
+//      case Failure(m, _, _) =>
+//        formTracker.addFormError(error(m))
+//        onFailure
+//    }
+//  }
+
+  /*
+   * Create a new change request with that directive, and
+   */
   private[this] def saveAndDeployDirective(directive: Directive, why:Option[String]): JsCmd = {
     val modId = ModificationId(uuidGen.newUuid)
-     directiveRepository.saveDirective(activeTechnique.id, directive, modId, CurrentUser.getActor, why) match {
-      case Full(optChanges) =>
-        optChanges match {
-          case Some(_) => // There is a modification diff, launch a deployment.
-            asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
-          case None => // No change, don't launch a deployment
-        }
-        onSuccess(directive)
+
+
+    val directiveDiff = if(directiveCurrentStatusCreationStatus) {
+      AddDirectiveDiff(this.technique.id.name, directive)
+    } else {
+      ModifyToDirectiveDiff(this.technique.id.name, directive)
+    }
+
+    // Create the directive change list (a unique one)
+    val dc = DirectiveChanges(
+                 DirectiveChange(
+                     initialState = if(directiveCurrentStatusCreationStatus) None else Some(this.directive)
+                   , firstChange = DirectiveChangeItem(CurrentUser.getActor, DateTime.now, why, directiveDiff)
+                   , Seq()
+                 )
+               , Seq()
+             )
+
+    //create the change request
+    val uuid = ChangeRequestId(uuidGen.newUuid)
+    val cr = ConfigurationChangeRequest(
+                 uuid
+               , ChangeRequestStatusChange(
+                     ChangeRequestStatus(
+                         s"Directive change request ${uuid.value}"
+                       , ""
+                       , false
+                     )
+                   , AddChangeRequestStatusDiff
+                   , Seq()
+                 )
+               , Map( directive.id  -> dc )
+             )
+
+
+    (for {
+      //save the change request
+      res1 <- woChangeRequestRepo.createChangeRequest(cr)
+      //For now, the user always say that he wants to close the CR and send it to
+      //validation
+      res2 <- woChangeRequestRepo.setReadWrite(res1.id)
+      //and now, we actually launch the workflows.
+      res3 <- workflowEngine.startWorkflow(res2)
+    } yield {
+      res3
+    }) match {
       case Empty =>
         formTracker.addFormError(error("An error occurred while saving the Directive"))
         onFailure
       case Failure(m, _, _) =>
         formTracker.addFormError(error(m))
         onFailure
+      case Full(res) =>
+        //ok, here we certainly have something to do...
+        onSuccess(directive)
     }
   }
 
