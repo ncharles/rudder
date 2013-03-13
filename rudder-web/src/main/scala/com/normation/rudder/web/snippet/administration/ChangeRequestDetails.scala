@@ -94,7 +94,9 @@ import ChangeRequestDetails._
     case "details" => xml =>
     Cr match { case eb:EmptyBox => <div> Error {eb}</div>
 
-     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>     SetHtml("changeRequestHeader",displayHeader(statusUpdate))).display
+     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>  { Cr = Cr
+       logger.warn(Cr)
+       SetHtml("changeRequestHeader",displayHeader(statusUpdate))}).display
 
     }
     case "display" => xml => CrId match { case eb:EmptyBox => <div> Error</div>
