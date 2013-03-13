@@ -49,45 +49,52 @@ import scala.xml.Text
 import scala.xml.NodeSeq
 import net.liftweb.http.SHtml
 import com.normation.rudder.domain.workflows._
-import com.normation.rudder.web.model.WBTextField
+import com.normation.rudder.web.model._
 
+
+object ChangeRequestDetails {
+  def header =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
+    } yield {
+      chooseTemplate("component", "header", xml)
+    }) openOr Nil
+ }
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
+import ChangeRequestDetails._
 
-
-  val dummyStatus = ChangeRequestStatus("Draft","blablabla",false)
-  val dummyStatus2 = ChangeRequestStatus("Validation","blablabla",false)
-  val dummyStatusChange = ChangeRequestStatusChange(dummyStatus,AddChangeRequestStatusDiff,Seq())
-  val dummyStatusChange2 = ChangeRequestStatusChange(dummyStatus2,AddChangeRequestStatusDiff,Seq())
-  val dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map())
-  val dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map())
+  var dummyStatus = ChangeRequestStatus("MyFirstChangeRequest","blablabla",false)
+  var dummyStatus2 = ChangeRequestStatus("MySecondChangeRequest","blablabla",false)
+  var dummyStatusChange = ChangeRequestStatusChange(dummyStatus,AddChangeRequestStatusDiff,Seq())
+  var dummyStatusChange2 = ChangeRequestStatusChange(dummyStatus2,AddChangeRequestStatusDiff,Seq())
+  var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map())
+  var dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map())
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[String] = {S.param("crId") }
-  private[this] val Cr: Box[ChangeRequest] = Full(dummyCR)
+  private[this] var Cr: Box[ChangeRequest] = CrId match {case Full("1") => Full(dummyCR)
+  case Full("2") => Full(dummyCR2)
+  case Full(id) => Failure(s"${id} is not a good Change request id")
+  case eb:EmptyBox => val fail = eb ?~ "no id selected"
+  Failure(s"Error in the cr id asked: ${fail.msg}")
+  }
 
 
   def dispatch = {
-    case "header" => xml => CrId match { case eb:EmptyBox => <div id="content">
+    case "header" => xml => Cr match { case eb:EmptyBox => <div id="content">
 
       <div> Error</div>
     </div>
       /* detail page */
-    case Full(id) =>
-      ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
-       "#CRName *" #> (if (id=="1") dummyCR.status.initialState.name else if (id=="2") dummyCR2.status.initialState.name else "not a CR") &
-       "#CRStatus *" #> "status" &
-       "#CRLastAction *" #> "Was sent to validation by machin on the 03/03/13") (xml)
+    case Full(id) => displayHeader(id.status.initialState)
     }
 
-    case "details" => xml => logger.info(Cr)
+    case "details" => xml =>
     Cr match { case eb:EmptyBox => <div> Error {eb}</div>
 
-     case Full(cr) => logger.info(cr)
-       ("#detailsForm *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
-        ClearClearable &
-        "#CRName *" #> changeRequestName(cr).toForm_! &
-        "#CRDescription *" #> changeRequestDescription(cr).toForm_!) (xml)
+     case Full(cr) => new ChangeRequestEditForm(cr.status.initialState, (statusUpdate:ChangeRequestStatus) =>     SetHtml("changeRequestHeader",displayHeader(statusUpdate))).display
+
     }
     case "display" => xml => CrId match { case eb:EmptyBox => <div> Error</div>
 
@@ -95,20 +102,61 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     }
   }
 
-  private[this] def changeRequestName(Cr:ChangeRequest) =
-    new WBTextField("Name", Cr.status.initialState.name) {
+  def displayHeader(cRStatus:ChangeRequestStatus) =       ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
+       "#CRName *" #> cRStatus.name &
+       "#CRStatus *" #> "status" &
+       "#CRLastAction *" #> "Was sent to validation by machin on the 03/03/13") (header)
+
+
+
+
+}
+
+object ChangeRequestEditForm {
+  def form =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
+    } yield {
+      chooseTemplate("component", "details", xml)
+    }) openOr Nil
+ }
+
+class ChangeRequestEditForm (var changeRequest: ChangeRequestStatus,
+    SuccessCallback: ChangeRequestStatus => JsCmd)   extends DispatchSnippet with Loggable {
+import ChangeRequestEditForm._
+
+  def dispatch = {
+    case "details" => { _ => display }
+  }
+  private[this] val changeRequestName =
+    new WBTextField("Name", changeRequest.name) {
     override def setFilter = notNull _ :: trim _ :: Nil
     override def className = "twoCol"
     override def validations =
       valMinLen(3, "The name must have at least 3 characters") _ :: Nil
   }
 
-  private[this] def changeRequestDescription(Cr:ChangeRequest) =
-    new WBTextField("Description", Cr.status.initialState.description) {
+  private[this] val changeRequestDescription=
+    new WBTextAreaField("Description", changeRequest.description) {
       override def className = "twoCol"
       override def setFilter = notNull _ :: trim _ :: Nil
       override val maxLen = 255
       override def validations = Nil
   }
 
+
+  def display: NodeSeq = { logger.info(changeRequest)
+    ("#detailsForm *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
+        ClearClearable &
+        "#CRName *" #> changeRequestName.toForm_! &
+        "#CRDescription *" #> changeRequestDescription.toForm_! &
+        "#CRSave" #> SHtml.ajaxSubmit("Save", () =>  submit)
+        ) (form) ++ Script(JsRaw("correctButtons();"))}
+
+  def submit = {
+    changeRequest = changeRequest.copy(name=changeRequestName.is, description = changeRequestDescription.is)
+    SuccessCallback(changeRequest) & SetHtml("changeRequestDetails",display)
+  }
 }
+
+
