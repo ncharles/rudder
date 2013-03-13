@@ -1,3 +1,37 @@
+/*
+*************************************************************************************
+* Copyright 2011-2013 Normation SAS
+*************************************************************************************
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU Affero General Public License as
+* published by the Free Software Foundation, either version 3 of the
+* License, or (at your option) any later version.
+*
+* In accordance with the terms of section 7 (7. Additional Terms.) of
+* the GNU Affero GPL v3, the copyright holders add the following
+* Additional permissions:
+* Notwithstanding to the terms of section 5 (5. Conveying Modified Source
+* Versions) and 6 (6. Conveying Non-Source Forms.) of the GNU Affero GPL v3
+* licence, when you create a Related Module, this Related Module is
+* not considered as a part of the work and may be distributed under the
+* license agreement of your choice.
+* A "Related Module" means a set of sources files including their
+* documentation that, without modification of the Source Code, enables
+* supplementary functions or services in addition to those offered by
+* the Software.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU Affero General Public License for more details.
+*
+* You should have received a copy of the GNU Affero General Public License
+* along with this program. If not, see <http://www.gnu.org/licenses/agpl.html>.
+*
+*************************************************************************************
+*/
+
 package com.normation.rudder.web.snippet.administration
 
 import net.liftweb.common._
@@ -14,6 +48,8 @@ import net.liftweb.http.SHtml
 import scala.xml.Text
 import com.normation.rudder.web.model.CurrentUser
 import org.joda.time.DateTime
+import scala.xml.NodeSeq
+import net.liftweb.http.SHtml
 
 class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
@@ -22,13 +58,28 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
   private[this] val CrId: Box[String] = S.param("crId")
   val dummyStatus = ChangeRequestStatus("Draft","blablabla",false)
-  val dummyStatusChange = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,AddChangeRequestStatusDiff(dummyStatus))
-  val dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),List(dummyStatusChange),Map(),Map())
-  def dispatch = {
-    case "filter" => xml => <div>{CrId.map(_ => SHtml.ajaxButton("back",() => changerUrl(""))).getOrElse("no cr asked for")}<div id="content"> future filter here </div></div>
+    val dummyStatus2 = ChangeRequestStatus("Validation","blablabla",false)
 
-    case "display" => xml => <div> {
-      ( "#crBody *" #> Seq(dummyCR,dummyCR).map(CRLine(_))).apply(CRTable)
+  val dummyStatusChange = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,AddChangeRequestStatusDiff(dummyStatus))
+  val dummyStatusChange2 = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusHours(9),None,AddChangeRequestStatusDiff(dummyStatus2))
+  val dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),List(dummyStatusChange),Map(),Map())
+  val dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),List(dummyStatusChange2),Map(),Map())
+  def dispatch = {
+    case "filter" => xml => CrId match { case eb:EmptyBox => <div id="content">
+
+      <div id="nameFilter"><span><b>Status</b><span id="actualFilter">{statusFilter}</span></span></div>
+    </div>
+      /* detail page */
+    case Full(id) =>
+      <div>
+        <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
+        <h2 style="float:left; margin-left:50px;font-size:60px;">{if (id=="1") dummyCR.status.name else if (id=="2") dummyCR2.status.name else "not a CR" }</h2>
+        <div class="statusdiv" style="float: right; color : #F79D10; font-size:30px; background-color:#111; margin-right:50px; padding:5px" >status</div>
+      </div>
+    }
+    case "display" => xml => CrId match { case eb:EmptyBox => <div> {
+
+      ( "#crBody" #> Seq(dummyCR,dummyCR2).flatMap(CRLine(_)) ).apply(CRTable)
       }
     </div> ++ Script(OnLoad(
         JsRaw(s"""$$('#${changeRequestTableId}').dataTable( {
@@ -53,6 +104,8 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
                     ],
                   } );
                   $$('.dataTables_filter input').attr("placeholder", "Search"); """)))
+     case Full(id) => <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
+    }
   }
 
   val CRTable =
@@ -66,7 +119,8 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
         <th>last modified date</th>
       </tr>
       </thead>
-      <tbody id="crBody">
+      <tbody >
+      <div id="crBody"/>
       </tbody>
     </table>
 
@@ -88,7 +142,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   def CRLine(cr: ChangeRequest)=
     <tr>
       <td id="crId">
-         {SHtml.a(() => changerUrl(cr.id), Text(cr.id))}
+         {SHtml.a(() => S.redirectTo(s"changeRequest/${cr.id}"), Text(cr.id))}
       </td>
       <td id="crStatus">
          {cr.statusHistory.headOption}
@@ -104,4 +158,28 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       </td>
    </tr>
 
+
+  val noexpand:NodeSeq = SHtml.select(Seq(("Validation","Validation"),("Draft","Draft")), Full("Draft"), list => logger.info(list)) %
+         ("onchange" ->
+        JsRaw(s"""
+        var filter = [];
+        $$(this).children(":selected").each(function () {
+            filter.push($$(this).text());
+                });
+
+           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),2,true,false,true);  """)) ++
+       SHtml.ajaxButton("+", () => SetHtml("actualFilter",expand))
+
+  val expand =  SHtml.multiSelect(Seq(("Validation","Validation"),("Draft","Draft")), List(), list => logger.info(list)) % ("onchange" ->
+        JsRaw(s"""
+        var filter = [];
+        $$(this).children(":selected").each(function () {
+            filter.push($$(this).text());
+                });
+           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),2,true,false,true);  """)) ++
+       SHtml.ajaxButton("-", () => SetHtml("actualFilter",noexpand))
+
+   def statusFilter = {
+           noexpand
+   }
 }
