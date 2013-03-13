@@ -145,7 +145,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          {SHtml.a(() => S.redirectTo(s"changeRequest/${cr.id}"), Text(cr.id))}
       </td>
       <td id="crStatus">
-         {cr.statusHistory.initialState}
+         {cr.statusHistory.history.last.diff}
       </td>
       <td id="crName">
          {cr.status.name}
