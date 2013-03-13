@@ -53,18 +53,20 @@ import com.normation.rudder.web.model.WBTextField
 
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
 
-  private[this] val uuidGen = RudderConfig.stringUuidGenerator
-  private[this] val changeRequestTableId = "ChangeRequestId"
 
-  private[this] val Cr: Box[ChangeRequest] = { CrId match {case Full(id) => if (id=="1") Full(dummyCR) else if (id=="2") Full(dummyCR2) else Failure("Unknown CR")
-  case eb:EmptyBox => Failure("not a Cr")} }
-  private[this] val CrId: Box[String] = {S.param("crId") }
   val dummyStatus = ChangeRequestStatus("Draft","blablabla",false)
   val dummyStatus2 = ChangeRequestStatus("Validation","blablabla",false)
   val dummyStatusChange = ChangeRequestStatusChange(dummyStatus,AddChangeRequestStatusDiff,Seq())
   val dummyStatusChange2 = ChangeRequestStatusChange(dummyStatus2,AddChangeRequestStatusDiff,Seq())
   val dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map())
   val dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map())
+
+  private[this] val uuidGen = RudderConfig.stringUuidGenerator
+  private[this] val changeRequestTableId = "ChangeRequestId"
+  private[this] val CrId: Box[String] = {S.param("crId") }
+  private[this] val Cr: Box[ChangeRequest] = Full(dummyCR)
+
+
   def dispatch = {
     case "header" => xml => CrId match { case eb:EmptyBox => <div id="content">
 
@@ -78,11 +80,14 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
        "#CRLastAction *" #> "Was sent to validation by machin on the 03/03/13") (xml)
     }
 
-    case "CrDetails" => xml => Cr match { case eb:EmptyBox => <div> Error {eb}</div>
+    case "details" => xml => logger.info(Cr)
+    Cr match { case eb:EmptyBox => <div> Error {eb}</div>
 
-     case Full(cr) =>
-       ("#CRName *" #> changeRequestName &
-        "#CRDescription *" #> changeRequestDescription) (xml)
+     case Full(cr) => logger.info(cr)
+       ("#detailsForm *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
+        ClearClearable &
+        "#CRName *" #> changeRequestName(cr).toForm_! &
+        "#CRDescription *" #> changeRequestDescription(cr).toForm_!) (xml)
     }
     case "display" => xml => CrId match { case eb:EmptyBox => <div> Error</div>
 
@@ -90,21 +95,20 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     }
   }
 
-  private[this] val changeRequestName =
-    new WBTextField("Name", Cr.get.status.initialState.name) {
+  private[this] def changeRequestName(Cr:ChangeRequest) =
+    new WBTextField("Name", Cr.status.initialState.name) {
     override def setFilter = notNull _ :: trim _ :: Nil
     override def className = "twoCol"
     override def validations =
       valMinLen(3, "The name must have at least 3 characters") _ :: Nil
   }
 
-  private[this] val changeRequestDescription =
-    new WBTextField("Nescription", Cr.get.status.initialState.description) {
+  private[this] def changeRequestDescription(Cr:ChangeRequest) =
+    new WBTextField("Description", Cr.status.initialState.description) {
       override def className = "twoCol"
       override def setFilter = notNull _ :: trim _ :: Nil
       override val maxLen = 255
       override def validations = Nil
   }
-
 
 }
