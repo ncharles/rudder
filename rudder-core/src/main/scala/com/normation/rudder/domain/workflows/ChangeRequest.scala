@@ -55,7 +55,6 @@ case class ChangeRequestId(value:String) {
 object ChangeRequestId {
   implicit def displayCRId (CRId:ChangeRequestId):String= CRId.value
 }
-
 sealed trait ChangeRequest {
         def id     : ChangeRequestId //modification Id ?
   final def status : ChangeRequestStatus = {
@@ -81,12 +80,6 @@ sealed trait ChangeRequest {
   //an AddChangeRequestStatusDiff
   def statusHistory: List[ChangeRequestStatusItem]
 }
-
-
-///////////////////////////////////////////
-///// About the change request status /////
-///////////////////////////////////////////
-
 
 case class ChangeRequestStatus(
     name       : String
