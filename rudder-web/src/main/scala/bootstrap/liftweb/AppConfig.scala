@@ -302,11 +302,11 @@ object RudderConfig extends Loggable {
   val allBootstrapChecks : BootstrapChecks = allChecks
   val srvGrid = new SrvGrid
 
-  /*val woChangeRequestRepository: WoChangeRequestRepository = ???
+  val woChangeRequestRepository: WoChangeRequestRepository = ???
   val workflowService: WorkflowService = ???
   val diffService: DiffService = ???
 
-*/
+
 
   //////////////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////////////////// REST ///////////////////////////////////////////

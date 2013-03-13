@@ -65,8 +65,10 @@ import ChangeRequestDetails._
 
   var dummyStatus = ChangeRequestStatus("MyFirstChangeRequest","blablabla",false)
   var dummyStatus2 = ChangeRequestStatus("MySecondChangeRequest","blablabla",false)
-  var dummyStatusChange = ChangeRequestStatusChange(dummyStatus,AddChangeRequestStatusDiff,Seq())
-  var dummyStatusChange2 = ChangeRequestStatusChange(dummyStatus2,AddChangeRequestStatusDiff,Seq())
+  val startStatus = AddChangeRequestStatusDiff(dummyStatus)
+  val startStatus2 = AddChangeRequestStatusDiff(dummyStatus2)
+  var dummyStatusChange = ChangeRequestStatusHistory(startStatus)
+  var dummyStatusChange2 = ChangeRequestStatusHistory(startStatus2)
   var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map())
   var dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map())
 
@@ -87,13 +89,13 @@ import ChangeRequestDetails._
       <div> Error</div>
     </div>
       /* detail page */
-    case Full(id) => displayHeader(id.status.initialState)
+    case Full(id) => displayHeader(id.status)
     }
 
     case "details" => xml =>
     Cr match { case eb:EmptyBox => <div> Error {eb}</div>
 
-     case Full(cr) => new ChangeRequestEditForm(cr.status.initialState, (statusUpdate:ChangeRequestStatus) =>     SetHtml("changeRequestHeader",displayHeader(statusUpdate))).display
+     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>     SetHtml("changeRequestHeader",displayHeader(statusUpdate))).display
 
     }
     case "display" => xml => CrId match { case eb:EmptyBox => <div> Error</div>

@@ -58,7 +58,6 @@ case class ChangeRequestId(value:String) {
 object ChangeRequestId {
   implicit def displayCRId (CRId:ChangeRequestId):String= CRId.value
 }
-
 sealed trait ChangeRequest {
         def id     : ChangeRequestId //modification Id ?
   final def status : ChangeRequestStatus = {
@@ -81,12 +80,6 @@ sealed trait ChangeRequest {
   //most recent in head
   def statusHistory: ChangeRequestStatusHistory
 }
-
-
-///////////////////////////////////////////
-///// About the change request status /////
-///////////////////////////////////////////
-
 
 case class ChangeRequestStatus(
     name       : String
@@ -123,11 +116,6 @@ case class ChangeRequestStatusHistory(
     initialState: AddChangeRequestStatusDiff
   , history     : List[ChangeRequestStatusItem] = Nil
 )
-
-////////////////////////////////////////
-///// Some types of change request /////
-////////////////////////////////////////
-
 /**
  * A global configuration change request.
  * Can modify any number of Directives,
