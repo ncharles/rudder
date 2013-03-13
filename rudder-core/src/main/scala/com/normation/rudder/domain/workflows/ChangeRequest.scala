@@ -54,6 +54,7 @@ import com.normation.rudder.domain.policies.DirectiveId
 case class ChangeRequestId(value:String) {
   override def toString = value
 }
+
 object ChangeRequestId {
   implicit def displayCRId (CRId:ChangeRequestId):String= CRId.value
 }

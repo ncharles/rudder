@@ -96,6 +96,8 @@ class Boot extends Loggable {
         RewriteResponse("secure" :: "configurationManager" :: "techniqueLibraryManagement" :: Nil, Map("techniqueId" -> activeTechniqueId))
       case RewriteRequest(ParsePath("secure"::"nodeManager"::"searchNodes"::nodeId::Nil, _, _, _), GetRequest, _) =>
         RewriteResponse("secure"::"nodeManager"::"searchNodes"::Nil, Map("nodeId" -> nodeId))
+      case RewriteRequest(ParsePath("secure"::"administration"::"changeRequests"::crId::Nil, _, _, _), GetRequest, _) =>
+        RewriteResponse("secure"::"administration"::"changeRequest"::Nil, Map("crId" -> crId))
       case RewriteRequest(ParsePath("secure"::"administration"::"changeRequest"::crId::Nil, _, _, _), GetRequest, _) =>
         RewriteResponse("secure"::"administration"::"changeRequest"::Nil, Map("crId" -> crId))
     }
@@ -197,9 +199,14 @@ class Boot extends Loggable {
             >> LocGroup("utilitiesGroup")
             >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/eventLogs") )
 
+        , Menu("changeRequests", <span>Change requests</span>) /
+            "secure" / "administration" / "changeRequests"
+            >> LocGroup("utilitiesGroup")
+
         , Menu("changeRequest", <span>Change request</span>) /
             "secure" / "administration" / "changeRequest"
-            >> LocGroup("utilitiesGroup")
+            >> Hidden
+
 
         , Menu("eventLogViewer", <span>Event Logs</span>) /
             "secure" / "administration" / "eventLogs"
