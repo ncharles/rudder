@@ -89,15 +89,16 @@ import ChangeRequestDetails._
       <div> Error</div>
     </div>
       /* detail page */
-    case Full(id) => displayHeader(id.status)
+    case Full(id) => displayHeader(id)
     }
 
     case "details" => xml =>
     Cr match { case eb:EmptyBox => <div> Error {eb}</div>
 
-     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>  { Cr = Cr
+     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>  {val newCR = Cr
+       Cr = newCR
        logger.warn(Cr)
-       SetHtml("changeRequestHeader",displayHeader(statusUpdate))}).display
+       SetHtml("changeRequestHeader",displayHeader(newCR.get))}).display
 
     }
     case "display" => xml => CrId match { case eb:EmptyBox => <div> Error</div>
@@ -106,10 +107,13 @@ import ChangeRequestDetails._
     }
   }
 
-  def displayHeader(cRStatus:ChangeRequestStatus) =       ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
-       "#CRName *" #> cRStatus.name &
+  def displayHeader(cr:ChangeRequest) =       ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
+       "#CRName *" #> cr.status.name &
        "#CRStatus *" #> "status" &
-       "#CRLastAction *" #> "Was sent to validation by machin on the 03/03/13") (header)
+       "#CRLastAction *" #> s"${cr.statusHistory.history.last.diff match {
+         case ModifyToChangeRequestStatusDiff(_) => "Modified"
+         case AddChangeRequestStatusDiff(_)    => "Created"
+         case DeleteChangeRequestStatusDiff => "Deleted"}}") (header)
 
 
 
