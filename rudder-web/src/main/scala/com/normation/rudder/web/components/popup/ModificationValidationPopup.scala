@@ -49,9 +49,15 @@ import com.normation.rudder.web.model.{
 import com.normation.cfclerk.services.TechniqueRepository
 import com.normation.cfclerk.domain.{TechniqueVersion,TechniqueName}
 import bootstrap.liftweb.RudderConfig
-import com.normation.rudder.domain.workflows.ChangeRequest
+import com.normation.rudder.domain.workflows._
 import com.normation.rudder.domain.nodes.NodeGroup
 import net.liftweb.http.SHtml.ChoiceHolder
+import com.normation.rudder.web.model.WBSelectField
+import com.normation.cfclerk.domain.TechniqueName
+import com.normation.rudder.domain.nodes.AddNodeGroupDiff
+import com.normation.rudder.web.model.CurrentUser
+import org.joda.time.DateTime
+import com.normation.rudder.domain.nodes.ModifyToNodeGroupDiff
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -139,7 +145,11 @@ object ModificationValidationPopup extends Loggable {
 
 
 class ModificationValidationPopup(
-    item              : Either[(TechniqueName, Directive), NodeGroup]
+    //if we are creating a new item, then None, else Some(x)
+    item              : Either[
+                            (TechniqueName, Directive, Option[Directive])
+                          , (NodeGroup, Option[NodeGroup])
+                        ]
   , action            : String //one among: save, delete, enable, disable
   , onSuccessCallback : (Directive) => JsCmd = { (directive : Directive) => Noop }
   , onFailureCallback : () => JsCmd = { () => Noop }
@@ -149,6 +159,8 @@ class ModificationValidationPopup(
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val userPropertyService = RudderConfig.userPropertyService
+  private[this] val roChangeRequestRepo = RudderConfig.roChangeRequestRepository
+  private[this] val woChangeRequestRepo = RudderConfig.woChangeRequestRepository
 
   def dispatch = {
     case "popupContent" => { _ => popupContent }
@@ -161,7 +173,7 @@ class ModificationValidationPopup(
     (
       "#dialogTitle" #> titles(name)(action) &
       "#explanationMessageZone" #> explanationMessages(name)(action) &
-      "#reasonField" #> updateAndDisplayNotifications() &
+     // "#reasonField" #> updateAndDisplayNotifications() &
       ".reasonsFieldsetPopup" #> {
         crReasons.map { f =>
           "#explanationMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
@@ -179,11 +191,13 @@ class ModificationValidationPopup(
 
   ///////////// fields for category settings ///////////////////
   val (radioQuick, radioNew, radioExisting) = {
-    val radios : ChoiceHolder[String] = SHtml.radio(Seq("quick","new", "existing"), Empty, { s =>
-      ??? //TODO
+    val radios : ChoiceHolder[String] = SHtml.radio(Seq("quick","new", "existing"), Full(currentRadio), { s =>
+      currentRadio = s
     } )
     (radios(0),radios(1),radios(2))
   }
+
+  private[this] var currentRadio : String = "quick"
 
   private[this] val crReasons = {
     import com.normation.rudder.web.services.ReasonBehavior._
@@ -226,7 +240,19 @@ class ModificationValidationPopup(
 
   }
 
-  private[this] val formTracker = new FormTracker(crReasons.toList ::: changeRequestName :: changeRequestDescription :: Nil)
+  //TODO : get existing change request
+  private[this] val changeRequestList = Seq(("Private Draft 1", "pvd1"), ("Change Request 42", "cr42"))
+  private[this] val existingChangeRequest = new WBSelectField("Existing change requests", changeRequestList, "") {
+
+  }
+
+  private[this] val formTracker = new FormTracker(
+        crReasons.toList
+    ::: changeRequestName
+     :: changeRequestDescription
+     :: existingChangeRequest
+     :: Nil
+  )
 
   private[this] var notifications = List.empty[NodeSeq]
 
@@ -244,15 +270,92 @@ class ModificationValidationPopup(
     SetHtml(htmlId_popupContainer, popupContent())
   }
 
-  private[this] def onSubmit() : JsCmd = {
+  //create the change item
+  private[this] def buildChange() : Either[DirectiveChange, NodeGroupChange] = {
+    val why = crReasons.map( _.get)
+
+    item match {
+      case Left((techniqueName, directive, optModified)) =>
+        val (diff, initialState) = optModified match {
+          case None =>
+            (AddDirectiveDiff(techniqueName, directive), None)
+          case Some(x) =>
+            (ModifyToDirectiveDiff(techniqueName, directive), Some(x))
+        }
+
+        val change = DirectiveChange(
+                     initialState = initialState
+                   , firstChange = DirectiveChangeItem(CurrentUser.getActor, DateTime.now, why, diff)
+                   , Seq()
+                 )
+        Left(change)
+
+
+      case Right((nodeGroup, optModified)) =>
+        val (diff, initialState) = optModified match {
+          case None =>
+            (AddNodeGroupDiff(nodeGroup), None)
+          case Some(x) =>
+            (ModifyToNodeGroupDiff(nodeGroup), Some(x))
+        }
+
+        val change = NodeGroupChange(
+                         initialState = initialState
+                       , firstChange = NodeGroupChangeItem(CurrentUser.getActor, DateTime.now, why, diff)
+                       , Seq()
+                     )
+
+        Right(change)
+    }
+  }
+
+
+  private[this] def onSubmit(keepOpen:Boolean) : JsCmd = {
 
     if(formTracker.hasErrors) {
       onFailure & onFailureCallback()
     } else {
+      //based on the choice of the user, create or update a Change request
+      val newChangeRequest = {
+        currentRadio match {
+          case "quick" | "new" =>
 
-      //TODO
-      //closePopup() & onSuccessCallback(directive)
-      ???
+            ???
+
+//            // Create the directive change list (a unique one)
+//            val dc = DirectiveChanges(
+//                 DirectiveChange(
+//                     initialState = if(directiveCurrentStatusCreationStatus) None else Some(this.directive)
+//                   , firstChange = DirectiveChangeItem(CurrentUser.getActor, DateTime.now, why, directiveDiff)
+//                   , Seq()
+//                 )
+//               , Seq()
+//             )
+//
+//    //create the change request
+//    val uuid = ChangeRequestId(uuidGen.newUuid)
+//    val cr = ConfigurationChangeRequest(
+//                 uuid
+//               , ChangeRequestStatusHistory(
+//                   AddChangeRequestStatusDiff(
+//                     ChangeRequestStatus(
+//                         s"Directive change request ${uuid.value}"
+//                       , ""
+//                       , false
+//                     )
+//                   )
+//                 )
+//               , Map( directive.id  -> dc )
+//             )
+
+
+
+        case "existing" =>
+
+            ???
+
+      }
+
     }
   }
 

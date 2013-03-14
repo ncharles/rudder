@@ -50,6 +50,8 @@ final case class DeleteNodeGroupDiff(group:NodeGroup) extends
 
 final case class AddNodeGroupDiff(group:NodeGroup) extends NodeGroupDiff with HashcodeCaching
 
+final case class ModifyToNodeGroupDiff(group:NodeGroup) extends NodeGroupDiff with HashcodeCaching
+
 
 final case class ModifyNodeGroupDiff(
     id            : NodeGroupId

@@ -34,13 +34,10 @@
 
 package com.normation.rudder.domain.workflows
 
-import com.normation.rudder.domain.policies.Directive
-import com.normation.rudder.domain.policies.DirectiveDiff
 import org.joda.time.DateTime
 import com.normation.eventlog.EventActor
-import com.normation.rudder.domain.policies.SimpleDiff
-import com.normation.eventlog.EventActor
-import com.normation.rudder.domain.policies.DirectiveId
+import com.normation.rudder.domain.policies._
+import com.normation.rudder.domain.nodes._
 
 
 /*
@@ -59,7 +56,7 @@ sealed trait ChangeRequest {
   final def status : ChangeRequestStatus = {
     def recStatus(status:List[ChangeRequestStatusItem]) : ChangeRequestStatus = {
       status match {
-        case Nil => statusHistory.initialState.status
+        case Nil => throw new IllegalStateException("A change request must have at least a creation status")
         case h :: t => h.diff match {
           case DeleteChangeRequestStatusDiff | RebaseChangeRequestStatusDiff =>
             recStatus(t)
@@ -70,11 +67,14 @@ sealed trait ChangeRequest {
         }
       }
     }
-    recStatus(statusHistory.history)
+
+    recStatus(statusHistory)
   }
 
   //most recent in head
-  def statusHistory: ChangeRequestStatusHistory
+  //must be non empty and ends with an item containing*
+  //an AddChangeRequestStatusDiff
+  def statusHistory: List[ChangeRequestStatusItem]
 }
 
 
@@ -114,11 +114,6 @@ case class ChangeRequestStatusItem(
   , diff        : ChangeRequestStatusDiff
 )
 
-case class ChangeRequestStatusHistory(
-    initialState: AddChangeRequestStatusDiff
-  , history     : List[ChangeRequestStatusItem] = Nil
-)
-
 ////////////////////////////////////////
 ///// Some types of change request /////
 ////////////////////////////////////////
@@ -130,15 +125,16 @@ case class ChangeRequestStatusHistory(
  */
 case class ConfigurationChangeRequest(
     id           : ChangeRequestId //modification Id ?
-  , statusHistory: ChangeRequestStatusHistory
+  , statusHistory: List[ChangeRequestStatusItem]
   , directives   : Map[DirectiveId, DirectiveChanges]
+  , nodeGroups   : Map[NodeGroupId, NodeGroupChanges]
   // ... TODO: complete for groups and rules
 ) extends ChangeRequest
 
 
 case class RollbackChangeRequest(
     id           : ChangeRequestId //modification Id ?
-  , statusHistory: ChangeRequestStatusHistory
+  , statusHistory: List[ChangeRequestStatusItem]
   , rollback     : Null // TODO: rollback change request
 ) extends ChangeRequest
 
@@ -171,7 +167,7 @@ sealed trait Change[T, DIFF, T_CHANGE <: ChangeItem[DIFF]] {
   def initialState: Option[T]
   def firstChange: T_CHANGE
   //non-empty list
-  def olderChanges: Seq[T_CHANGE]
+  def nextChanges: Seq[T_CHANGE]
 }
 
 
@@ -220,10 +216,32 @@ case class DirectiveChangeItem(
 case class DirectiveChange(
     val initialState: Option[Directive]
   , val firstChange: DirectiveChangeItem
-  , val olderChanges: Seq[DirectiveChangeItem]
+  , val nextChanges: Seq[DirectiveChangeItem]
 ) extends Change[Directive, DirectiveDiff, DirectiveChangeItem]
 
 case class DirectiveChanges(
     val changes: DirectiveChange
   , val changeHistory: Seq[DirectiveChange]
 )extends Changes[Directive, DirectiveDiff, DirectiveChangeItem]
+
+
+case class NodeGroupChangeItem(
+  //no ID: that object does not have any meaning outside
+  // a change request
+    actor       : EventActor
+  , creationDate: DateTime
+  , reason      : Option[String]
+  , diff        : NodeGroupDiff
+) extends ChangeItem[NodeGroupDiff]
+
+case class NodeGroupChange(
+    val initialState: Option[NodeGroup]
+  , val firstChange: NodeGroupChangeItem
+  , val nextChanges: Seq[NodeGroupChangeItem]
+) extends Change[NodeGroup, NodeGroupDiff, NodeGroupChangeItem]
+
+case class NodeGroupChanges(
+    val changes: NodeGroupChange
+  , val changeHistory: Seq[NodeGroupChange]
+)extends Changes[NodeGroup, NodeGroupDiff, NodeGroupChangeItem]
+
