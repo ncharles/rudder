@@ -153,6 +153,7 @@ class DirectiveEditForm(
   private[this] val uuidGen                = RudderConfig.stringUuidGenerator
   private[this] val workflowEngine:WorkflowService         = ???
   private[this] val woChangeRequestRepo:WoChangeRequestRepository    = ???
+  private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
 
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"
