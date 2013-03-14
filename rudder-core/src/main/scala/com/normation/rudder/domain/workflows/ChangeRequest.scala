@@ -77,6 +77,19 @@ sealed trait ChangeRequest {
     recStatus(statusHistory.history)
   }
 
+  protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest
+
+  def updateStatus(update:ChangeRequestStatus,actor : EventActor) : ChangeRequest = {
+    if (update == status)
+      this
+    else {
+      val change = ChangeRequestStatusItem(actor,DateTime.now,None,ModifyToChangeRequestStatusDiff(update))
+      val newHistory = this.statusHistory.copy(history = change :: this.statusHistory.history)
+      copyWithNewHistory(newHistory)
+    }
+
+  }
+
   //most recent in head
   def statusHistory: ChangeRequestStatusHistory
 }
@@ -126,14 +139,18 @@ case class ConfigurationChangeRequest(
   , statusHistory: ChangeRequestStatusHistory
   , directives   : Map[DirectiveId, DirectiveChanges]
   // ... TODO: complete for groups and rules
-) extends ChangeRequest
+) extends ChangeRequest {
+    protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest = this.copy(statusHistory = newHistory)
+}
 
 
 case class RollbackChangeRequest(
     id           : ChangeRequestId //modification Id ?
   , statusHistory: ChangeRequestStatusHistory
   , rollback     : Null // TODO: rollback change request
-) extends ChangeRequest
+) extends ChangeRequest {
+    protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest = this.copy(statusHistory = newHistory)
+}
 
 
 //////////////////////////////////

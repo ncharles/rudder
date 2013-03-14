@@ -149,9 +149,11 @@ class DirectiveEditForm(
   private[this] val asyncDeploymentAgent   = RudderConfig.asyncDeploymentAgent
   private[this] val userPropertyService    = RudderConfig.userPropertyService
   private[this] val uuidGen                = RudderConfig.stringUuidGenerator
-  private[this] val workflowEngine         = RudderConfig.workflowService
-  private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
+  private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
 
+  /*private[this] val workflowEngine         = RudderConfig.workflowService
+  private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
+*/
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"
   private[this] val parameterEditor = {
@@ -717,13 +719,15 @@ class DirectiveEditForm(
 
 
     (for {
-      //save the change request
+     /* //save the change request
       res1 <- woChangeRequestRepo.createChangeRequest(cr)
       //For now, the user always say that he wants to close the CR and send it to
       //validation
       res2 <- woChangeRequestRepo.setReadWrite(res1.id)
       //and now, we actually launch the workflows.
       res3 <- workflowEngine.startWorkflow(res2)
+      */
+      res3 <- directiveRepo.saveDirective(activeTechnique.id, directive, modId, CurrentUser.getActor, why)
     } yield {
       res3
     }) match {

@@ -56,59 +56,16 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
   private[this] val CrId: Box[String] = S.param("crId")
 
-  var dummyStatus = ChangeRequestStatus("MyFirstChangeRequest","blablabla",false)
-  var dummyStatus2 = ChangeRequestStatus("MySecondChangeRequest","blablabla",false)
+  val dummyStatus = ChangeRequestStatus("MyFirstChangeRequest","blablabla",false)
+  val dummyStatus2 = ChangeRequestStatus("MySecondChangeRequest","blablabla",false)
   val startStatus = AddChangeRequestStatusDiff(dummyStatus)
   val startStatus2 = AddChangeRequestStatusDiff(dummyStatus2)
-  var dummyStatusChange = ChangeRequestStatusHistory(startStatus)
-  var dummyStatusChange2 = ChangeRequestStatusHistory(startStatus2)
-  var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map())
-  var dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map())
-  def dispatch = {
-    case "filter" => xml => CrId match { case eb:EmptyBox => <div id="content">
+  val dummyStatusChange = ChangeRequestStatusHistory(startStatus)
+  val dummyStatusChange2 = ChangeRequestStatusHistory(startStatus2)
+  val dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map())
+  val dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map())
 
-      <div id="nameFilter"><span><b>Status</b><span id="actualFilter">{statusFilter}</span></span></div>
-    </div>
-      /* detail page */
-    case Full(id) =>
-      <div>
-        <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
-        <h2 style="float:left; margin-left:50px;font-size:60px;">{if (id=="1") dummyCR.status.name else if (id=="2") dummyCR2.status.name else "not a CR" }</h2>
-        <div class="statusdiv" style="float: right; color : #F79D10; font-size:30px; background-color:#111; margin-right:50px; padding:5px" >status</div>
-      </div>
-    }
-    case "display" => xml => CrId match { case eb:EmptyBox => <div> {
-
-      ( "#crBody" #> Seq(dummyCR,dummyCR2).flatMap(CRLine(_)) ).apply(CRTable)
-      }
-    </div> ++ Script(OnLoad(
-        JsRaw(s"""$$('#${changeRequestTableId}').dataTable( {
-                    "asStripeClasses": [ 'color1', 'color2' ],
-                    "bAutoWidth": false,
-                    "bFilter" : true,
-                    "bPaginate" : true,
-                    "bLengthChange": true,
-                    "sPaginationType": "full_numbers",
-                    "bJQueryUI": true,
-                    "oLanguage": {
-                      "sSearch": ""
-                    },
-                    "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
-                    "aaSorting": [[ 1, "asc" ]],
-                    "aoColumns": [
-                      { "sWidth": "20px" },
-                      { "sWidth": "40px" },
-                      { "sWidth": "100px" },
-                      { "sWidth": "40px" },
-                      { "sWidth": "40px" }
-                    ],
-                  } );
-                  $$('.dataTables_filter input').attr("placeholder", "Search"); """)))
-     case Full(id) => <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
-    }
-  }
-
-  val CRTable =
+    val CRTable =
     <table id={changeRequestTableId}>
       <thead>
        <tr class="head tablewidth">
@@ -145,7 +102,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          {SHtml.a(() => S.redirectTo(s"changeRequest/${cr.id}"), Text(cr.id))}
       </td>
       <td id="crStatus">
-         {cr.statusHistory.history.last.diff}
+         {cr.statusHistory.history.lastOption.getOrElse(cr.statusHistory.initialState)}
       </td>
       <td id="crName">
          {cr.status.name}
@@ -157,6 +114,50 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          {"date"}
       </td>
    </tr>
+  def dispatch = {
+    case "filter" => xml => CrId match { case eb:EmptyBox => <div id="content">
+
+      <div id="nameFilter"><span><b>Status</b><span id="actualFilter">{statusFilter}</span></span></div>
+    </div>
+      /* detail page */
+    case Full(id) =>
+      <div>
+        <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
+        <h2 style="float:left; margin-left:50px;font-size:60px;">{if (id=="1") dummyCR.status.name else if (id=="2") dummyCR2.status.name else "not a CR" }</h2>
+        <div class="statusdiv" style="float: right; color : #F79D10; font-size:30px; background-color:#111; margin-right:50px; padding:5px" >status</div>
+      </div>
+    }
+    case "display" => xml => CrId match { case eb:EmptyBox => <div> {
+      ( "#crBody" #> Seq(dummyCR,dummyCR2).flatMap(CRLine(_)) ).apply(CRTable)
+      }
+    </div> ++ Script(OnLoad(
+        JsRaw(s"""$$('#${changeRequestTableId}').dataTable( {
+                    "asStripeClasses": [ 'color1', 'color2' ],
+                    "bAutoWidth": false,
+                    "bFilter" : true,
+                    "bPaginate" : true,
+                    "bLengthChange": true,
+                    "sPaginationType": "full_numbers",
+                    "bJQueryUI": true,
+                    "oLanguage": {
+                      "sSearch": ""
+                    },
+                    "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
+                    "aaSorting": [[ 1, "asc" ]],
+                    "aoColumns": [
+                      { "sWidth": "20px" },
+                      { "sWidth": "40px" },
+                      { "sWidth": "100px" },
+                      { "sWidth": "40px" },
+                      { "sWidth": "40px" }
+                    ],
+                  } );
+                  $$('.dataTables_filter input').attr("placeholder", "Search"); """)))
+     case Full(id) => <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
+    }
+  }
+
+
 
 
   val noexpand:NodeSeq = SHtml.select(Seq(("Validation","Validation"),("Draft","Draft")), Full("Draft"), list => logger.info(list)) %

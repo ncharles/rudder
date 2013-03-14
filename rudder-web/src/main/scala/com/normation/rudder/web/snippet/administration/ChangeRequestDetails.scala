@@ -51,6 +51,10 @@ import net.liftweb.http.SHtml
 import com.normation.rudder.domain.workflows._
 import com.normation.rudder.web.model._
 import com.normation.rudder.domain.policies.DirectiveId
+import org.joda.time.DateTime
+import com.normation.cfclerk.domain.TechniqueId
+import com.normation.rudder.domain.policies.AddDirectiveDiff
+import com.normation.rudder.domain.policies.DirectiveDiff
 
 
 object ChangeRequestDetails {
@@ -64,14 +68,25 @@ object ChangeRequestDetails {
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
 import ChangeRequestDetails._
 
+  val techRepo = RudderConfig.techniqueRepository
+  val rodirective = RudderConfig.roDirectiveRepository
+  val adirectiveId = DirectiveId("11c2fdab-053e-4100-a663-b6a29e8b049c")
+  val directive = rodirective.getDirective(adirectiveId).get
+  val tech = rodirective.getActiveTechnique(adirectiveId).get.techniqueName
+  val aDirectiveAddDiff = AddDirectiveDiff(tech,directive)
+  val aDirectiveChangeItem =  DirectiveChangeItem(CurrentUser.getActor,DateTime.now.minusHours(6),None,aDirectiveAddDiff)
+  val aDirectiveChange = DirectiveChange(Some(directive),aDirectiveChangeItem,Seq())
+  val aDirectiveChanges = DirectiveChanges(aDirectiveChange,Seq())
   var dummyStatus = ChangeRequestStatus("MyFirstChangeRequest","blablabla",false)
   var dummyStatus2 = ChangeRequestStatus("MySecondChangeRequest","blablabla",false)
   val startStatus = AddChangeRequestStatusDiff(dummyStatus)
   val startStatus2 = AddChangeRequestStatusDiff(dummyStatus2)
+  val startStatusItem = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,AddChangeRequestStatusDiff(dummyStatus))
+  val startStatusItem2 = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,AddChangeRequestStatusDiff(dummyStatus2))
   var dummyStatusChange = ChangeRequestStatusHistory(startStatus)
   var dummyStatusChange2 = ChangeRequestStatusHistory(startStatus2)
-  var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map())
-  var dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map())
+  var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map((adirectiveId,aDirectiveChanges)))
+  var dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map((adirectiveId,aDirectiveChanges)))
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val changeRequestTableId = "ChangeRequestId"
@@ -97,14 +112,14 @@ import ChangeRequestDetails._
     Cr match { case eb:EmptyBox => <div> Error {eb}</div>
 
      case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>  {
-       val newCR = Cr//.map(_.changeStatus(statusUpdate))
+       val newCR = Cr.map(_.updateStatus(statusUpdate,CurrentUser.getActor))
        Cr = newCR
        logger.warn(Cr)
-       SetHtml("changeRequestHeader",displayHeader(newCR.get))}).display
-    }
+       SetHtml("changeRequestHeader",displayHeader(newCR.get))& SetHtml("changeRequestChanges",new ChangeRequestChangesForm(newCR.get).dispatch("changes")(NodeSeq.Empty))
+ }).display    }
     case "changes" => xml => Cr match { case eb:EmptyBox => <div> Error</div>
 
-     case Full(id) => <div>{new ChangeRequestChangesForm(id).dispatch("changes")(NodeSeq.Empty)}</div>
+     case Full(id) => <div id="changeRequestChanges">{new ChangeRequestChangesForm(id).dispatch("changes")(NodeSeq.Empty)}</div>
     }
   }
 
@@ -112,7 +127,7 @@ import ChangeRequestDetails._
     ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
        "#CRName *" #> cr.status.name &
        "#CRStatus *" #> "status" &
-       "#CRLastAction *" #> s"${cr.statusHistory.history.last.diff match {
+       "#CRLastAction *" #> s"${cr.statusHistory.history.headOption.map(_.diff).getOrElse(cr.statusHistory.initialState) match {
          case ModifyToChangeRequestStatusDiff(_) => "Modified"
          case AddChangeRequestStatusDiff(_)    => "Created"
          case DeleteChangeRequestStatusDiff => "Deleted"}}") (header)
@@ -178,28 +193,119 @@ object ChangeRequestChangesForm {
     }) openOr Nil
  }
 
-class ChangeRequestChangesForm(changeRequest:ChangeRequest)  extends DispatchSnippet with Loggable {
+class ChangeRequestChangesForm(var changeRequest:ChangeRequest)  extends DispatchSnippet with Loggable {
 import ChangeRequestChangesForm._
 
+  val roDirectiveRepo = RudderConfig.roDirectiveRepository
+
   def dispatch = {
-    case "changes" => { _ => form }
+    case "changes" => { _ => ("#changeTree ul *" #> {changeRequest match {case cr: ConfigurationChangeRequest => treeNode(cr).toXml
+    case _ => Text("not implemented :(")}
+    }).apply(form) ++ Script(JsRaw(s"""buildChangesTree("#changeTree","${S.contextPath}");""")) }
 
 
   }
 
-}
-
-case class CRRootreeNode(changeRequest:ConfigurationChangeRequest) extends JsTreeNode{
-  val body = Text("Changes")
-  val children = if(changeRequest.directives.isEmpty) Nil else List(CRDirectivesTreeNode(changeRequest.directives))
-  override val attrs = List(( "rel" -> { "changeType" } ))
-}
+ def treeNode(changeRequest:ConfigurationChangeRequest) = new JsTreeNode{
 
 
-case class CRDirectivesTreeNode(directives:Map[DirectiveId,DirectiveChanges]) extends JsTreeNode{
-  val body = Text("Directives")
+  def directiveChild(directiveId:DirectiveId) = new JsTreeNode{
+    val directive= roDirectiveRepo.getDirective(directiveId)
+
+      val body =         SHtml.a(
+          {() => SetHtml("changeDisplay",displayHistory(List(changeRequest.directives(directiveId).changes)))}
+        , <span>{directive.map(_.name).getOrElse("Unknown Directive")}</span>
+        )
   val children = Nil
-    override val attrs = List(( "rel" -> { "changeType" } ))
+  }
+  val directivesChild = new JsTreeNode{
+      val body =         SHtml.a(
+          {() => SetHtml("changeDisplay",displayHistory() )}
+        , <span>Directives</span>
+        )
+  val children = changeRequest.directives.keys.map(directiveChild(_)).toList
+  }
+  val body =         SHtml.a(
+          {() => SetHtml("changeDisplay",displayHistory () )}
+        , <span>Changes</span>
+        )
+  val children = directivesChild :: Nil
+  val startStatusItem = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,changeRequest.statusHistory.initialState)
+  override val attrs = List(( "rel" -> { "changeType" } ))
+  def displayHistory (directives : List[DirectiveChange] = changeRequest.directives.values.map(_.changes).toList)= {
+  ( "#crBody" #> {(startStatusItem :: changeRequest.statusHistory.history).flatMap(CRLine(_)) ++ directives.flatMap(CRLine(_))}).
+  apply(CRTable) ++ Script(
+        JsRaw(s"""$$('#changeHistory').dataTable( {
+                    "asStripeClasses": [ 'color1', 'color2' ],
+                    "bAutoWidth": false,
+                    "bFilter" : true,
+                    "bPaginate" : true,
+                    "bLengthChange": true,
+                    "sPaginationType": "full_numbers",
+                    "bJQueryUI": true,
+                    "oLanguage": {
+                      "sSearch": ""
+                    },
+                    "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
+                    "aaSorting": [[ 1, "asc" ]],
+                    "aoColumns": [
+                      { "sWidth": "100px" },
+                      { "sWidth": "40px" },
+                      { "sWidth": "40px" }
+                    ],
+                  } );
+                  $$('.dataTables_filter input').attr("placeholder", "Search"); """))
+  }
+    val CRTable =
+    <table id="changeHistory">
+      <thead>
+       <tr class="head tablewidth">
+        <th>Action</th>
+        <th>Actor</th>
+        <th>Date</th>
+      </tr>
+      </thead>
+      <tbody >
+      <div id="crBody"/>
+      </tbody>
+    </table>
+
+
+  def CRLine(cr: ChangeRequestStatusItem)=
+    <tr>
+      <td id="action">
+         {cr.diff match {
+           case AddChangeRequestStatusDiff(_) => "Create"
+           case ModifyToChangeRequestStatusDiff(_) => "Modify"
+           case DeleteChangeRequestStatusDiff => "Delete"
+           case RebaseChangeRequestStatusDiff => "Rebased"
+         }}
+      </td>
+      <td id="actor">
+         {cr.actor}
+      </td>
+      <td id="date">
+         {cr.creationDate}
+      </td>
+   </tr>
+
+  def CRLine(cr: DirectiveChange)=
+    <tr>
+      <td id="action">
+         {cr.firstChange.diff}
+      </td>
+      <td id="actor">
+         {cr.firstChange.actor}
+      </td>
+      <td id="date">
+         {cr.firstChange.creationDate}
+      </td>
+   </tr>
+
+
 }
+
+}
+
 
 
