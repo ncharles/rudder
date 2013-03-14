@@ -110,6 +110,7 @@ import com.typesafe.config.ConfigFactory
 import scala.util.Try
 import com.normation.rudder.services.user.PersonIdentService
 import com.normation.rudder.services.workflows.WorkflowService
+import com.normation.rudder.services.modification.DiffService
 
 /**
  * Define a resource for configuration.
@@ -231,6 +232,10 @@ object RudderConfig extends Loggable {
   val groupLibraryDirectoryName = "groups"
   val rulesDirectoryName = "rules"
 
+
+  //workflows configuration
+  val RUDDER_ENABLE_APPROVAL_WORKFLOWS = true
+
   //deprecated
   val BASE_URL = Try(config.getString("base.url")).getOrElse("")
 
@@ -299,6 +304,7 @@ object RudderConfig extends Loggable {
 
   val woChangeRequestRepository: WoChangeRequestRepository = ???
   val workflowService: WorkflowService = ???
+  val diffService: DiffService = ???
 
 
   //////////////////////////////////////////////////////////////////////////////////////////

@@ -43,13 +43,38 @@ import com.normation.eventlog.EventActor
 import com.normation.rudder.domain.policies.DirectiveId
 
 
+/*
+ * Question:
+ * - do we need a ChangeRequestDraft object?
+ *   With a different ID type, perhaps different
+ *   draft type, etc. ?
+ */
+
 
 case class ChangeRequestId(value:String)
 
 
 sealed trait ChangeRequest {
-  def id     : ChangeRequestId //modification Id ?
-  def status : ChangeRequestStatusChange
+        def id     : ChangeRequestId //modification Id ?
+  final def status : ChangeRequestStatus = {
+    def recStatus(status:List[ChangeRequestStatusItem]) : ChangeRequestStatus = {
+      status match {
+        case Nil => statusHistory.initialState.status
+        case h :: t => h.diff match {
+          case DeleteChangeRequestStatusDiff | RebaseChangeRequestStatusDiff =>
+            recStatus(t)
+          case AddChangeRequestStatusDiff(s) => // ???
+            s
+          case ModifyToChangeRequestStatusDiff(s) =>
+            s
+        }
+      }
+    }
+    recStatus(statusHistory.history)
+  }
+
+  //most recent in head
+  def statusHistory: ChangeRequestStatusHistory
 }
 
 
@@ -70,19 +95,17 @@ case class ChangeRequestStatus(
 
 sealed trait ChangeRequestStatusDiff
 
-case object AddChangeRequestStatusDiff extends ChangeRequestStatusDiff
+case class AddChangeRequestStatusDiff(
+    status: ChangeRequestStatus
+)extends ChangeRequestStatusDiff
 
 case object DeleteChangeRequestStatusDiff extends ChangeRequestStatusDiff
 
-case class ModifyChangeRequestStatusDiff(
-    modName       : Option[SimpleDiff[String]]
-  , modDescription: Option[SimpleDiff[String]]
+case class ModifyToChangeRequestStatusDiff(
+    status: ChangeRequestStatus
 ) extends ChangeRequestStatusDiff
 
-case class RebaseChangeRequestStatusDiff(
-    modName       : Option[SimpleDiff[String]]
-  , modDescription: Option[SimpleDiff[String]]
-) extends ChangeRequestStatusDiff
+case object RebaseChangeRequestStatusDiff extends ChangeRequestStatusDiff
 
 case class ChangeRequestStatusItem(
     actor       : EventActor
@@ -91,14 +114,10 @@ case class ChangeRequestStatusItem(
   , diff        : ChangeRequestStatusDiff
 )
 
-case class ChangeRequestStatusChange(
-    initialState: ChangeRequestStatus
-  , firstChange : ChangeRequestStatusDiff
-    //the most recent change is in head,
-    //the older in tail.
-  , nextChanges : Seq[ChangeRequestStatusDiff]
+case class ChangeRequestStatusHistory(
+    initialState: AddChangeRequestStatusDiff
+  , history     : List[ChangeRequestStatusItem] = Nil
 )
-
 
 ////////////////////////////////////////
 ///// Some types of change request /////
@@ -110,17 +129,17 @@ case class ChangeRequestStatusChange(
  * Rules and Group.
  */
 case class ConfigurationChangeRequest(
-    id        : ChangeRequestId //modification Id ?
-  , status    : ChangeRequestStatusChange
-  , directives: Map[DirectiveId, DirectiveChanges]
+    id           : ChangeRequestId //modification Id ?
+  , statusHistory: ChangeRequestStatusHistory
+  , directives   : Map[DirectiveId, DirectiveChanges]
   // ... TODO: complete for groups and rules
 ) extends ChangeRequest
 
 
 case class RollbackChangeRequest(
-    id      : ChangeRequestId //modification Id ?
-  , status  : ChangeRequestStatusChange
-  , rollback: Null // TODO: rollback change request
+    id           : ChangeRequestId //modification Id ?
+  , statusHistory: ChangeRequestStatusHistory
+  , rollback     : Null // TODO: rollback change request
 ) extends ChangeRequest
 
 

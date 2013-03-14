@@ -703,14 +703,14 @@ class DirectiveEditForm(
     val uuid = ChangeRequestId(uuidGen.newUuid)
     val cr = ConfigurationChangeRequest(
                  uuid
-               , ChangeRequestStatusChange(
+               , ChangeRequestStatusHistory(
+                   AddChangeRequestStatusDiff(
                      ChangeRequestStatus(
                          s"Directive change request ${uuid.value}"
                        , ""
                        , false
                      )
-                   , AddChangeRequestStatusDiff
-                   , Seq()
+                   )
                  )
                , Map( directive.id  -> dc )
              )
