@@ -51,6 +51,7 @@ import net.liftweb.http.SHtml
 import com.normation.rudder.domain.workflows._
 import org.joda.time.DateTime
 import com.normation.rudder.web.model._
+import com.normation.rudder.domain.policies.DirectiveId
 
 
 object ChangeRequestDetails {
@@ -94,19 +95,20 @@ import ChangeRequestDetails._
     case "details" => xml =>
     Cr match { case eb:EmptyBox => <div> Error {eb}</div>
 
-     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>  {val newCR = Cr
+     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>  {
+       val newCR = Cr//.map(_.changeStatus(statusUpdate))
        Cr = newCR
        logger.warn(Cr)
        SetHtml("changeRequestHeader",displayHeader(newCR.get))}).display
-
     }
-    case "display" => xml => CrId match { case eb:EmptyBox => <div> Error</div>
+    case "changes" => xml => Cr match { case eb:EmptyBox => <div> Error</div>
 
-     case Full(id) => <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
+     case Full(id) => <div>{new ChangeRequestChangesForm(id).dispatch("changes")(NodeSeq.Empty)}</div>
     }
   }
 
-  def displayHeader(cr:ChangeRequest) =       ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
+  def displayHeader(cr:ChangeRequest) =
+    ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
        "#CRName *" #> cr.status.name &
        "#CRStatus *" #> "status" &
        "#CRLastAction *" #> s"${cr.statusHistory.history.last.diff match {
@@ -164,6 +166,39 @@ import ChangeRequestEditForm._
     changeRequest = changeRequest.copy(name=changeRequestName.is, description = changeRequestDescription.is)
     SuccessCallback(changeRequest) & SetHtml("changeRequestDetails",display)
   }
+}
+
+object ChangeRequestChangesForm {
+  def form =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
+    } yield {
+      chooseTemplate("component", "changes", xml)
+    }) openOr Nil
+ }
+
+class ChangeRequestChangesForm(changeRequest:ChangeRequest)  extends DispatchSnippet with Loggable {
+import ChangeRequestChangesForm._
+
+  def dispatch = {
+    case "changes" => { _ => form }
+
+
+  }
+
+}
+
+case class CRRootreeNode(changeRequest:ConfigurationChangeRequest) extends JsTreeNode{
+  val body = Text("Changes")
+  val children = if(changeRequest.directives.isEmpty) Nil else List(CRDirectivesTreeNode(changeRequest.directives))
+  override val attrs = List(( "rel" -> { "changeType" } ))
+}
+
+
+case class CRDirectivesTreeNode(directives:Map[DirectiveId,DirectiveChanges]) extends JsTreeNode{
+  val body = Text("Directives")
+  val children = Nil
+    override val attrs = List(( "rel" -> { "changeType" } ))
 }
 
 
