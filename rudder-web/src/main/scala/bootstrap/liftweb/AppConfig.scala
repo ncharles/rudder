@@ -111,6 +111,7 @@ import scala.util.Try
 import com.normation.rudder.services.user.PersonIdentService
 import com.normation.rudder.services.workflows.WorkflowService
 import com.normation.rudder.services.modification.DiffService
+import com.normation.rudder.services.workflows.ChangeRequestService
 
 /**
  * Define a resource for configuration.
@@ -306,6 +307,7 @@ object RudderConfig extends Loggable {
   val woChangeRequestRepository: WoChangeRequestRepository = ???
   val workflowService: WorkflowService = ???
   val diffService: DiffService = ???
+  val changeRequestService: ChangeRequestService = ???
 
 
   //////////////////////////////////////////////////////////////////////////////////////////

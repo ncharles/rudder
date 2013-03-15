@@ -58,6 +58,10 @@ import com.normation.rudder.domain.nodes.AddNodeGroupDiff
 import com.normation.rudder.web.model.CurrentUser
 import org.joda.time.DateTime
 import com.normation.rudder.domain.nodes.ModifyToNodeGroupDiff
+import com.normation.rudder.domain.nodes.NodeGroupId
+import com.normation.rudder.web.components.RuleGrid
+import com.normation.rudder.services.policies.OnlyDisableable
+import com.normation.rudder.services.policies.OnlyEnableable
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -78,7 +82,7 @@ object ModificationValidationPopup extends Loggable {
     (for {
       xml <- Templates(path)
     } yield {
-      SHtml.ajaxForm(chooseTemplate("component", "validationPopup", xml))
+      chooseTemplate("component", "validationPopup", xml)
     }) openOr {
       logger.error("Missing template <component:validationPopup> at path: %s.html".format(path.mkString("/")))
       <div/>
@@ -151,8 +155,8 @@ class ModificationValidationPopup(
                           , (NodeGroup, Option[NodeGroup])
                         ]
   , action            : String //one among: save, delete, enable, disable
-  , onSuccessCallback : (Directive) => JsCmd = { (directive : Directive) => Noop }
-  , onFailureCallback : () => JsCmd = { () => Noop }
+  , onSuccessCallback : NodeSeq => JsCmd = { x => Noop }
+  , onFailureCallback : NodeSeq => JsCmd = { x => Noop }
 ) extends DispatchSnippet with Loggable {
 
   import ModificationValidationPopup._
@@ -161,6 +165,10 @@ class ModificationValidationPopup(
   private[this] val userPropertyService = RudderConfig.userPropertyService
   private[this] val roChangeRequestRepo = RudderConfig.roChangeRequestRepository
   private[this] val woChangeRequestRepo = RudderConfig.woChangeRequestRepository
+  private[this] val changeRequestService = RudderConfig.changeRequestService
+  private[this] val workflowService = RudderConfig.workflowService
+  private[this] val dependencyService      = RudderConfig.dependencyAndDeletionService
+
 
   def dispatch = {
     case "popupContent" => { _ => popupContent }
@@ -171,9 +179,10 @@ class ModificationValidationPopup(
     val name = if(item.isLeft) "Directive" else "Group"
 
     (
+      "#validationForm" #> { (xml:NodeSeq) => SHtml.ajaxForm(xml) } &
       "#dialogTitle" #> titles(name)(action) &
       "#explanationMessageZone" #> explanationMessages(name)(action) &
-     // "#reasonField" #> updateAndDisplayNotifications() &
+      "#disableItemDependencies" #> showDependentRules() &
       ".reasonsFieldsetPopup" #> {
         crReasons.map { f =>
           "#explanationMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
@@ -183,10 +192,44 @@ class ModificationValidationPopup(
           "#reasonsField" #> f.toForm_!
         }
       } &
-      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","4"))&
-      "#save" #> (SHtml.ajaxSubmit("Configure", onSubmit _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
+      "#radioQuick" #> radioQuick &
+      "#radioNew" #> radioNew &
+      "#radioExisting" #> radioExisting &
+      "#changeRequestName" #> changeRequestName.toForm &
+      "#changeRequestDescription" #> changeRequestDescription.toForm &
+      "#existingChangeRequest" #> existingChangeRequest &
+      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
+      "#saveKeepOpen" #> (SHtml.ajaxSubmit("Configure", onSubmitKeepOpen) % ("id", "createDirectiveSaveButton") % ("tabindex","4")) &
+      "#saveStartWorkflow" #> (SHtml.ajaxSubmit("Configure", onSubmitStartWorkflow _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
     )(html ++ Script(OnLoad(JsRaw("correctButtons();"))))
 
+  }
+
+  private[this] def showDependentRules() : NodeSeq = {
+    if(action == "create") {
+      NodeSeq.Empty
+    } else {
+
+      val rules = item match {
+        case Left((_, directive, _)) =>
+          action match {
+            case "delete" => dependencyService.directiveDependencies(directive.id).map(_.rules)
+            case "disable" => dependencyService.directiveDependencies(directive.id, OnlyEnableable).map(_.rules)
+            case "enable" => dependencyService.directiveDependencies(directive.id, OnlyDisableable).map(_.rules)
+          }
+
+        case Right((nodeGroup, _)) => dependencyService.targetDependencies(GroupTarget(nodeGroup.id)).map( _.rules)
+      }
+
+      rules match {
+        case e: EmptyBox =>
+          <div class="error">An error occurred while trying to find dependent item</div>
+        case Full(rules) => {
+          val cmp = new RuleGrid("remove_popup_grid", rules, None, false)
+          cmp.rulesGrid(popup = true,linkCompliancePopup = false)
+        }
+      }
+    }
   }
 
   ///////////// fields for category settings ///////////////////
@@ -270,94 +313,104 @@ class ModificationValidationPopup(
     SetHtml(htmlId_popupContainer, popupContent())
   }
 
-  //create the change item
-  private[this] def buildChange() : Either[DirectiveChange, NodeGroupChange] = {
-    val why = crReasons.map( _.get)
 
-    item match {
-      case Left((techniqueName, directive, optModified)) =>
-        val (diff, initialState) = optModified match {
-          case None =>
-            (AddDirectiveDiff(techniqueName, directive), None)
-          case Some(x) =>
-            (ModifyToDirectiveDiff(techniqueName, directive), Some(x))
-        }
-
-        val change = DirectiveChange(
-                     initialState = initialState
-                   , firstChange = DirectiveChangeItem(CurrentUser.getActor, DateTime.now, why, diff)
-                   , Seq()
-                 )
-        Left(change)
-
-
-      case Right((nodeGroup, optModified)) =>
-        val (diff, initialState) = optModified match {
-          case None =>
-            (AddNodeGroupDiff(nodeGroup), None)
-          case Some(x) =>
-            (ModifyToNodeGroupDiff(nodeGroup), Some(x))
-        }
-
-        val change = NodeGroupChange(
-                         initialState = initialState
-                       , firstChange = NodeGroupChangeItem(CurrentUser.getActor, DateTime.now, why, diff)
-                       , Seq()
-                     )
-
-        Right(change)
-    }
+  private[this] def onSubmitStartWorkflow() : JsCmd = {
+    onSubmit(keepOpen = false)
   }
 
+  private[this] def onSubmitKeepOpen() : JsCmd = {
+    onSubmit(keepOpen = true)
+  }
 
   private[this] def onSubmit(keepOpen:Boolean) : JsCmd = {
 
     if(formTracker.hasErrors) {
-      onFailure & onFailureCallback()
+      onFailure
     } else {
+
       //based on the choice of the user, create or update a Change request
-      val newChangeRequest = {
+      val savedChangeRequest = {
         currentRadio match {
           case "quick" | "new" =>
+            val cr = item match {
+              case Left((techniqueName, directive, optOriginal)) =>
+                changeRequestService.createChangeRequestFromDirective(
+                    changeRequestName.get
+                  , changeRequestDescription.get
+                  , techniqueName
+                  , directive
+                  , optOriginal
+                  , CurrentUser.getActor
+                  , crReasons.map( _.get )
+                )
+              case Right((nodeGroup, optOriginal)) =>
+                changeRequestService.createChangeRequestFromNodeGroup(
+                    changeRequestName.get
+                  , changeRequestDescription.get
+                  , nodeGroup
+                  , optOriginal
+                  , CurrentUser.getActor
+                  , crReasons.map( _.get )
+                )
+            }
+            woChangeRequestRepo.createChangeRequest(cr)
 
-            ???
-
-//            // Create the directive change list (a unique one)
-//            val dc = DirectiveChanges(
-//                 DirectiveChange(
-//                     initialState = if(directiveCurrentStatusCreationStatus) None else Some(this.directive)
-//                   , firstChange = DirectiveChangeItem(CurrentUser.getActor, DateTime.now, why, directiveDiff)
-//                   , Seq()
-//                 )
-//               , Seq()
-//             )
-//
-//    //create the change request
-//    val uuid = ChangeRequestId(uuidGen.newUuid)
-//    val cr = ConfigurationChangeRequest(
-//                 uuid
-//               , ChangeRequestStatusHistory(
-//                   AddChangeRequestStatusDiff(
-//                     ChangeRequestStatus(
-//                         s"Directive change request ${uuid.value}"
-//                       , ""
-//                       , false
-//                     )
-//                   )
-//                 )
-//               , Map( directive.id  -> dc )
-//             )
-
-
-
-        case "existing" =>
-
-            ???
-
+          case "existing" =>
+            for {
+              cr    <- roChangeRequestRepo.get(ChangeRequestId(existingChangeRequest.get))
+              ccr   <- cr match {
+                         case x:ConfigurationChangeRequest => Full(x)
+                         case x => Failure(s"ChangeRequest of type ${x.getClass} can not be updated with a node group or a directive, only ConfigurationChangeRequest can")
+                       }
+              newCr =  item match {
+                         case Left((techniqueName, directive, optOriginal)) =>
+                           changeRequestService.updateChangeRequestWithDirective(
+                               ccr
+                             , techniqueName
+                             , directive
+                             , optOriginal
+                             , CurrentUser.getActor
+                             , crReasons.map( _.get )
+                           )
+                         case Right((nodeGroup, optOriginal)) =>
+                           changeRequestService.updateChangeRequestWithNodeGroup(
+                               ccr
+                             , nodeGroup
+                             , optOriginal
+                             , CurrentUser.getActor
+                             , crReasons.map( _.get )
+                           )
+                       }
+              saved <- woChangeRequestRepo.updateChangeRequest(newCr)
+            } yield {
+              saved
+            }
+        }
       }
 
+      //other steps based on user choice: close the ChangeRequest and start the wf
+      val res = if(keepOpen) savedChangeRequest else {
+        for {
+          saved     <- savedChangeRequest
+          closed    <- woChangeRequestRepo.setReadOnly(saved.id)
+          wfStarted <- workflowService.startWorkflow(closed)
+        } yield {
+          wfStarted
+        }
+      }
+
+      res match {
+        case Full(_) => onSuccessCallback(Text("TODO: a custom message if in Draft, or a workflow status"))
+        case eb:EmptyBox =>
+          val e = (eb ?~! "Error when trying to save you modification")
+          e.rootExceptionCause.foreach { ex =>
+            logger.error(s"Exception when trying to update a change request:", ex)
+          }
+          onFailureCallback(Text(e.messageChain))
+      }
     }
   }
+
 
   private[this] def onFailure : JsCmd = {
     formTracker.addFormError(error("The form contains some errors, please correct them"))

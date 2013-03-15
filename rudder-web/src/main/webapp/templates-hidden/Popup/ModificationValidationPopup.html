@@ -23,54 +23,55 @@
       Here comes the grid of Rules that will be removed
     </div>
     <br />
-    <div class="reasonsFieldsetPopup">
-      <h3>Change message</h3>
-      <p id="reasonMessage">[Please enter a message explaining the reason for this change.]</p>
-      <span id="reasonFieldError">[error]</span>
-      <input type="textarea" id="reasonField" />
-    </div>
-    <hr class="spacer" />
-  </div>
-  <div id="changeRequestZone">
-    <h3>Change Request</h3>
-    <div id="changeRequestType">
-      <input type="radio">A quick change request</input>
-      <input type="radio">A new change request</input>
-      <input type="radio">An existing change request</input>
-    </div>
-    <span id="changeRequestErrors">[error]</span>
-    <div id="changeRequestInputs">
-      <div id="newChangeRequest">
-          <table>
-            <tr>
-              <td>Name:</td>
-              <td><input type="text" id="changeRequestName" /></td>
-            </tr>
-            <tr>
-              <td>Description:</td>
-              <td><input type="text" id="changeRequestDescription" /></td>
-            </tr>
-          </table>
+    <div id="validationForm">
+      <div class="reasonsFieldsetPopup">
+        <h3>Change message</h3>
+        <p id="reasonMessage">[Please enter a message explaining the reason for this change.]</p>
+        <span id="reasonFieldError">[error]</span>
+        <input type="textarea" id="reasonField" />
+      </div>
+      <hr class="spacer" />
+    <div id="changeRequestZone">
+      <h3>Change Request</h3>
+      <div id="changeRequestType">
+        <input type="radio" id="radioQuick" />A quick change request
+        <input type="radio" id="radioNew"/>A new change request
+        <input type="radio" id="radioExisting"/>An existing change request
+      </div>
+      <span id="changeRequestErrors">[error]</span>
+      <div id="changeRequestInputs">
+        <div id="newChangeRequest">
+            <table>
+              <tr>
+                <td>Name:</td>
+                <td><input type="text" id="changeRequestName" /></td>
+              </tr>
+              <tr>
+                <td>Description:</td>
+                <td><input type="text" id="changeRequestDescription" /></td>
+              </tr>
+            </table>
+          </div>
+        <div id="existingChangeRequest">
+          <select>
+            <option>Draft1 [private draft]</option>
+            <option>Draft2 [private draft]</option>
+            <option>Existing change request</option>
+            <option>An other one</option>
+            <option>...</option>
+          </select>
         </div>
-      <div id="existingChangeRequest">
-        <select>
-          <option>Draft1 [private draft]</option>
-          <option>Draft2 [private draft]</option>
-          <option>Existing change request</option>
-          <option>An other one</option>
-          <option>...</option>
-        </select>
       </div>
     </div>
-  </div>
-  <div class="simplemodal-bottom">
-    <hr />
-    <div class="popupButton">
-      <span>
-        <button class="simplemodal-close" onClick="$.modal.close();">Cancel</button>
-        <button id="createDraftSubmit">[Create Draft]</button>
-        <button id="defaultSubmit">[Submit Draft]</button>
-      </span>
+    <div class="simplemodal-bottom">
+      <hr />
+      <div class="popupButton">
+        <span>
+          <button class="simplemodal-close" onClick="$.modal.close();">Cancel</button>
+          <button id="createDraftSubmit">[Create Draft]</button>
+          <button id="defaultSubmit">[Submit Draft]</button>
+        </span>
+      </div>
     </div>
   </div>
 </div>
