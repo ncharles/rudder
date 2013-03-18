@@ -82,27 +82,18 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
     </table>
 
 
-  def changerUrl(id:String):JsCmd = {
-    JsRaw(s"""
-    pageurl = 'changeRequest/${id}';
-    //to get the ajax content and display in div with id 'content'
-    $$.ajax({url:pageurl,success: function(data){
-      $$('#content').html(pageurl);
-    }});
-    console.log(window.history)
-    //to change the browser URL to the given link location
-    if(pageurl!=window.location){
-      window.history.replaceState({path:pageurl},'',pageurl);
-    }
-  """)
-  }
   def CRLine(cr: ChangeRequest)=
     <tr>
       <td id="crId">
          {SHtml.a(() => S.redirectTo(s"changeRequest/${cr.id}"), Text(cr.id))}
       </td>
       <td id="crStatus">
-         {cr.statusHistory.headOption}
+         {cr.statusHistory.headOption.map(_.diff).get match {
+           case AddChangeRequestStatusDiff(_) => "Draft"
+           case ModifyToChangeRequestStatusDiff(_) => "Modify"
+           case DeleteChangeRequestStatusDiff => "Delete"
+           case RebaseChangeRequestStatusDiff => "Rebased"
+         }}
       </td>
       <td id="crName">
          {cr.status.name}
@@ -115,19 +106,11 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       </td>
    </tr>
   def dispatch = {
-    case "filter" => xml => CrId match { case eb:EmptyBox => <div id="content">
+    case "filter" => xml => <div id="content">
 
-      <div id="nameFilter"><span><b>Status</b><span id="actualFilter">{statusFilter}</span></span></div>
+      <div id="nameFilter" style="margin-left:40px;"><span><b style="vertical-align:top">Status:</b><span id="actualFilter" style="margin-left:10px">{statusFilter}</span></span></div>
     </div>
-      /* detail page */
-    case Full(id) =>
-      <div>
-        <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
-        <h2 style="float:left; margin-left:50px;font-size:60px;">{if (id=="1") dummyCR.status.name else if (id=="2") dummyCR2.status.name else "not a CR" }</h2>
-        <div class="statusdiv" style="float: right; color : #F79D10; font-size:30px; background-color:#111; margin-right:50px; padding:5px" >status</div>
-      </div>
-    }
-    case "display" => xml => CrId match { case eb:EmptyBox => <div> {
+    case "display" => xml =>  <div style="margin: 0 40px; overflow:auto;"> {
       ( "#crBody" #> Seq(dummyCR,dummyCR2).flatMap(CRLine(_)) ).apply(CRTable)
       }
     </div> ++ Script(OnLoad(
@@ -153,32 +136,30 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
                     ],
                   } );
                   $$('.dataTables_filter input').attr("placeholder", "Search"); """)))
-     case Full(id) => <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
-    }
   }
 
 
 
 
-  val noexpand:NodeSeq = SHtml.select(Seq(("Validation","Validation"),("Draft","Draft")), Full("Draft"), list => logger.info(list)) %
+  val noexpand:NodeSeq = SHtml.select(Seq(("","All"),("Validation","Validation"),("Draft","Draft")), Full("Draft"), list => logger.debug(list)) %
          ("onchange" ->
         JsRaw(s"""
         var filter = [];
         $$(this).children(":selected").each(function () {
-            filter.push($$(this).text());
+            filter.push($$(this).attr("value"));
                 });
 
-           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),2,true,false,true);  """)) ++
-       SHtml.ajaxButton("+", () => SetHtml("actualFilter",expand))
+           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
+       SHtml.ajaxButton("+", () => SetHtml("actualFilter",expand), ("style","margin-left:10px; vertical-align:top"))
 
-  val expand =  SHtml.multiSelect(Seq(("Validation","Validation"),("Draft","Draft")), List(), list => logger.info(list)) % ("onchange" ->
+  val expand =  SHtml.multiSelect(Seq(("Validation","Validation"),("Draft","Draft")), List(), list => logger.debug(list)) % ("onchange" ->
         JsRaw(s"""
         var filter = [];
         $$(this).children(":selected").each(function () {
-            filter.push($$(this).text());
+            filter.push($$(this).attr("value"));
                 });
-           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),2,true,false,true);  """)) ++
-       SHtml.ajaxButton("-", () => SetHtml("actualFilter",noexpand))
+           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
+       SHtml.ajaxButton("-", () => SetHtml("actualFilter",noexpand), ("style","margin-left:10px; vertical-align:top"))
 
    def statusFilter = {
            noexpand
