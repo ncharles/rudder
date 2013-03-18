@@ -57,6 +57,7 @@ import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.policies.AddDirectiveDiff
 import com.normation.rudder.domain.policies.DirectiveDiff
 import com.normation.rudder.domain.policies.AddDirectiveDiff
+import com.normation.rudder.web.components.DateFormaterService
 
 
 object ChangeRequestDetails {
@@ -118,7 +119,7 @@ import ChangeRequestDetails._
     case "details" => xml =>
     Cr match { case eb:EmptyBox => <div> Error {eb}</div>
 
-     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>  {
+     case Full(cr) => new ChangeRequestEditForm(cr.status,cr.id, (statusUpdate:ChangeRequestStatus) =>  {
        val newCR = Cr.map(_.updateStatus(statusUpdate,CurrentUser.getActor))
        Cr = newCR
        logger.warn(Cr)
@@ -137,13 +138,14 @@ import ChangeRequestDetails._
   }
 
   def displayHeader(cr:ChangeRequest) =
-    ("#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/administration/changeRequests")) &
-       "#CRName *" #> cr.status.name &
-       "#CRStatus *" #> "status" &
-       "#CRLastAction *" #> s"${cr.statusHistory.headOption.map(_.diff).get match {
+    ("#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
+       "#CRName *" #> s"CR#${cr.id}: ${cr.status.name}" &
+       "#CRStatus *" #> "Status" &
+       "#CRLastAction *" #> { val status = cr.statusHistory.head
+         s"${status.diff match {
          case ModifyToChangeRequestStatusDiff(_) => "Modified"
          case AddChangeRequestStatusDiff(_)    => "Created"
-         case DeleteChangeRequestStatusDiff => "Deleted"}}") (header)
+         case DeleteChangeRequestStatusDiff => "Deleted"}} on ${DateFormaterService.getFormatedDate(status.creationDate)} by ${status.actor.name}"}) (header)
 
 
 
@@ -159,7 +161,7 @@ object ChangeRequestEditForm {
     }) openOr Nil
  }
 
-class ChangeRequestEditForm (var changeRequest: ChangeRequestStatus,
+class ChangeRequestEditForm (var status: ChangeRequestStatus,crId:ChangeRequestId,
     SuccessCallback: ChangeRequestStatus => JsCmd)   extends DispatchSnippet with Loggable {
 import ChangeRequestEditForm._
 
@@ -167,7 +169,7 @@ import ChangeRequestEditForm._
     case "details" => { _ => display }
   }
   private[this] val changeRequestName =
-    new WBTextField("Name", changeRequest.name) {
+    new WBTextField("Name", status.name) {
     override def setFilter = notNull _ :: trim _ :: Nil
     override def className = "twoCol"
     override def validations =
@@ -175,7 +177,7 @@ import ChangeRequestEditForm._
   }
 
   private[this] val changeRequestDescription=
-    new WBTextAreaField("Description", changeRequest.description) {
+    new WBTextAreaField("Description", status.description) {
       override def className = "twoCol"
       override def setFilter = notNull _ :: trim _ :: Nil
       override val maxLen = 255
@@ -183,19 +185,21 @@ import ChangeRequestEditForm._
   }
 
 
-  def display: NodeSeq = { logger.info(changeRequest)
+  def display: NodeSeq = { logger.info(status)
     ("#detailsForm *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
         ClearClearable &
-        "#rebaseButton *" #> {if (changeRequest.readOnly) NodeSeq.Empty else SHtml.ajaxButton("Rebase", () => Noop)} &
+        "#rebaseButton *" #> {if (status.readOnly) NodeSeq.Empty else SHtml.ajaxButton("Rebase", () => Noop)} &
        "#warning [class+]" #> {if (true/* condition de rebase*/) "" else "nodisplay"} &
         "#CRName *" #> changeRequestName.toForm_! &
+        "#CRId *"   #> crId.value &
+        "#CRStatus *"   #> "Status" &
         "#CRDescription *" #> changeRequestDescription.toForm_! &
         "#CRSave" #> SHtml.ajaxSubmit("Save", () =>  submit)
         ) (form) ++ Script(JsRaw("correctButtons();"))}
 
   def submit = {
-    changeRequest = changeRequest.copy(name=changeRequestName.is, description = changeRequestDescription.is)
-    SuccessCallback(changeRequest) & SetHtml("changeRequestDetails",display)
+    status = status.copy(name=changeRequestName.is, description = changeRequestDescription.is)
+    SuccessCallback(status) & SetHtml("changeRequestDetails",display)
   }
 }
 
@@ -265,11 +269,11 @@ import ChangeRequestChangesForm._
                     "bLengthChange": true,
                     "sPaginationType": "full_numbers",
                     "bJQueryUI": true,
+                    "aaSorting": [[ 2, "desc" ]],
                     "oLanguage": {
                       "sSearch": ""
                     },
                     "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
-                    "aaSorting": [[ 1, "asc" ]],
                     "aoColumns": [
                       { "sWidth": "100px" },
                       { "sWidth": "40px" },
@@ -311,7 +315,7 @@ import ChangeRequestChangesForm._
          {cr.actor.name}
       </td>
       <td id="date">
-         {cr.creationDate}
+         {DateFormaterService.getFormatedDate(cr.creationDate)}
       </td>
    </tr>
 
@@ -327,7 +331,7 @@ import ChangeRequestChangesForm._
          {cr.firstChange.actor.name}
       </td>
       <td id="date">
-         {cr.firstChange.creationDate}
+         {DateFormaterService.getFormatedDate(cr.firstChange.creationDate)}
       </td>
    </tr>
 

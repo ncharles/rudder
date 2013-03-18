@@ -72,8 +72,8 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
         <th>ID</th>
         <th>Status</th>
         <th>Name</th>
-        <th>Owner</th>
-        <th>last modified date</th>
+        <th>Creator</th>
+        <th>Last modification</th>
       </tr>
       </thead>
       <tbody >
@@ -150,7 +150,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
                 });
 
            $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
-       SHtml.ajaxButton("+", () => SetHtml("actualFilter",expand), ("class","expand"), ("style","margin: 0 10px; vertical-align:top; height:15px; width: 15px;  padding: 1px; border-radius:25px")) ++ Script(JsRaw("correctButtons()"))
+       SHtml.ajaxButton("...", () => SetHtml("actualFilter",expand), ("class","expand"), ("style","margin: 0 10px; vertical-align:top; height:15px; width:auto;  padding: 1px; border-radius:25px")) ++ Script(JsRaw("correctButtons()"))
 
   val expand =  SHtml.multiSelect(Seq(("Validation","Validation"),("Draft","Draft")), List(), list => logger.debug(list)) % ("onchange" ->
         JsRaw(s"""
