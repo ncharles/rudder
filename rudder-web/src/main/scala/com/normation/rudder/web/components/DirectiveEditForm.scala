@@ -150,9 +150,11 @@ class DirectiveEditForm(
   private[this] val asyncDeploymentAgent   = RudderConfig.asyncDeploymentAgent
   private[this] val userPropertyService    = RudderConfig.userPropertyService
   private[this] val uuidGen                = RudderConfig.stringUuidGenerator
-  private[this] val workflowEngine         = RudderConfig.workflowService
-  private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
+  private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
 
+  /*private[this] val workflowEngine         = RudderConfig.workflowService
+  private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
+*/
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"
   private[this] val parameterEditor = {
@@ -694,7 +696,6 @@ class DirectiveEditForm(
 //    SetHtml("confirmUpdateActionDialog", showUpdatePopupForm(saveAndDeployDirective(directive, why))) &
 //    createPopup("updateActionDialog",140,850)
 //  }
-
 
 
   private[this] def updateAndDisplayNotifications() : NodeSeq = {

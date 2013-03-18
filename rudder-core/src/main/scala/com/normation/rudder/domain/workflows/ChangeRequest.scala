@@ -48,15 +48,20 @@ import com.normation.rudder.domain.nodes._
  */
 
 
-case class ChangeRequestId(value:String)
+case class ChangeRequestId(value:String) {
+  override def toString = value
+}
 
-
+object ChangeRequestId {
+  implicit def displayCRId (CRId:ChangeRequestId):String= CRId.value
+}
 sealed trait ChangeRequest {
         def id     : ChangeRequestId //modification Id ?
   final def status : ChangeRequestStatus = {
     def recStatus(status:List[ChangeRequestStatusItem]) : ChangeRequestStatus = {
       status match {
-        case Nil => throw new IllegalStateException("A change request must have at least a creation status")
+        case Nil => statusHistory.initialState.status
+          //throw new IllegalStateException("A change request must have at least a creation status")
         case h :: t => h.diff match {
           case DeleteChangeRequestStatusDiff | RebaseChangeRequestStatusDiff =>
             recStatus(t)
@@ -68,20 +73,31 @@ sealed trait ChangeRequest {
       }
     }
 
-    recStatus(statusHistory)
+    recStatus(statusHistory.history)
   }
+
+
+  protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest
+
+  def updateStatus(update:ChangeRequestStatus,actor : EventActor) : ChangeRequest = {
+    if (update == status)
+      this
+    else {
+      val change = ChangeRequestStatusItem(actor,DateTime.now,None,ModifyToChangeRequestStatusDiff(update))
+      val newHistory = this.statusHistory.copy(history = change :: this.statusHistory.history)
+      copyWithNewHistory(newHistory)
+    }
+
+  }
+
+  //most recent in head
+  def statusHistory: ChangeRequestStatusHistory
 
   //most recent in head
   //must be non empty and ends with an item containing*
   //an AddChangeRequestStatusDiff
-  def statusHistory: List[ChangeRequestStatusItem]
+//  def statusHistory: List[ChangeRequestStatusItem]
 }
-
-
-///////////////////////////////////////////
-///// About the change request status /////
-///////////////////////////////////////////
-
 
 case class ChangeRequestStatus(
     name       : String
@@ -118,6 +134,11 @@ case class ChangeRequestStatusItem(
 ///// Some types of change request /////
 ////////////////////////////////////////
 
+case class ChangeRequestStatusHistory(
+    initialState: AddChangeRequestStatusDiff
+  , history     : List[ChangeRequestStatusItem] = Nil
+)
+
 /**
  * A global configuration change request.
  * Can modify any number of Directives,
@@ -125,18 +146,22 @@ case class ChangeRequestStatusItem(
  */
 case class ConfigurationChangeRequest(
     id           : ChangeRequestId //modification Id ?
-  , statusHistory: List[ChangeRequestStatusItem]
+  , statusHistory: ChangeRequestStatusHistory
   , directives   : Map[DirectiveId, DirectiveChanges]
   , nodeGroups   : Map[NodeGroupId, NodeGroupChanges]
   // ... TODO: complete for groups and rules
-) extends ChangeRequest
+) extends ChangeRequest {
+    protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest = this.copy(statusHistory = newHistory)
+}
 
 
 case class RollbackChangeRequest(
     id           : ChangeRequestId //modification Id ?
-  , statusHistory: List[ChangeRequestStatusItem]
+  , statusHistory: ChangeRequestStatusHistory
   , rollback     : Null // TODO: rollback change request
-) extends ChangeRequest
+) extends ChangeRequest {
+    protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest = this.copy(statusHistory = newHistory)
+}
 
 
 //////////////////////////////////
