@@ -96,10 +96,10 @@ class Boot extends Loggable {
         RewriteResponse("secure" :: "configurationManager" :: "techniqueLibraryManagement" :: Nil, Map("techniqueId" -> activeTechniqueId))
       case RewriteRequest(ParsePath("secure"::"nodeManager"::"searchNodes"::nodeId::Nil, _, _, _), GetRequest, _) =>
         RewriteResponse("secure"::"nodeManager"::"searchNodes"::Nil, Map("nodeId" -> nodeId))
-      case RewriteRequest(ParsePath("secure"::"administration"::"changeRequests"::crId::Nil, _, _, _), GetRequest, _) =>
-        RewriteResponse("secure"::"administration"::"changeRequest"::Nil, Map("crId" -> crId))
-      case RewriteRequest(ParsePath("secure"::"administration"::"changeRequest"::crId::Nil, _, _, _), GetRequest, _) =>
-        RewriteResponse("secure"::"administration"::"changeRequest"::Nil, Map("crId" -> crId))
+      case RewriteRequest(ParsePath("secure"::"utilities"::"changeRequests"::crId::Nil, _, _, _), GetRequest, _) =>
+        RewriteResponse("secure"::"utilities"::"changeRequest"::Nil, Map("crId" -> crId))
+      case RewriteRequest(ParsePath("secure"::"utilities"::"changeRequest"::crId::Nil, _, _, _), GetRequest, _) =>
+        RewriteResponse("secure"::"utilities"::"changeRequest"::Nil, Map("crId" -> crId))
     }
 
     // Fix relative path to css resources
@@ -194,38 +194,45 @@ class Boot extends Loggable {
         "secure" / "administration" / "index" >> TestAccess ( ()
             => userIsAllowed(Read("administration")) ) submenus (
 
-          Menu("archivesManagement", <span>Archives</span>) /
-            "secure" / "administration" / "archiveManagement"
-            >> LocGroup("utilitiesGroup")
-            >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/eventLogs") )
-
-        , Menu("changeRequests", <span>Change requests</span>) /
-            "secure" / "administration" / "changeRequests"
-            >> LocGroup("utilitiesGroup")
-
-        , Menu("changeRequest", <span>Change request</span>) /
-            "secure" / "administration" / "changeRequest"
-            >> Hidden
-
-
-        , Menu("eventLogViewer", <span>Event Logs</span>) /
-            "secure" / "administration" / "eventLogs"
-            >> LocGroup("utilitiesGroup")
-
-        , Menu("policyServerManagement", <span>Policy Server</span>) /
+          Menu("policyServerManagement", <span>Policy Server</span>) /
             "secure" / "administration" / "policyServerManagement"
             >> LocGroup("administrationGroup")
-            >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/eventLogs") )
+            >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/policyServerManagement") )
 
         , Menu("pluginManagement", <span>Plugins</span>) /
             "secure" / "administration" / "pluginManagement"
             >> LocGroup("administrationGroup")
-            >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/eventLogs") )
+            >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/policyServerManagement") )
 
         , Menu("databaseManagement", <span>Reports Database</span>) /
             "secure" / "administration" / "databaseManagement"
             >> LocGroup("administrationGroup")
-            >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/eventLogs") )
+            >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/policyServerManagement") )
+      )
+
+    def utilitiesMenu =
+      Menu("UtilitiesHome", <span>Utilities</span>) /
+        "secure" / "utilities" / "index" >> TestAccess ( ()
+            => userIsAllowed(Read("administration")) ) submenus (
+
+          Menu("archivesManagement", <span>Archives</span>) /
+            "secure" / "utilities" / "archiveManagement"
+            >> LocGroup("utilitiesGroup")
+            >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/utilities/eventLogs") )
+
+        , Menu("changeRequests", <span>Change requests</span>) /
+            "secure" / "utilities" / "changeRequests"
+            >> LocGroup("utilitiesGroup")
+
+        , Menu("changeRequest", <span>Change request</span>) /
+            "secure" / "utilities" / "changeRequest"
+            >> Hidden
+
+
+        , Menu("eventLogViewer", <span>Event Logs</span>) /
+            "secure" / "utilities" / "eventLogs"
+            >> LocGroup("utilitiesGroup")
+
       )
 
 
@@ -235,6 +242,7 @@ class Boot extends Loggable {
       , nodeManagerMenu
       , buildManagerMenu("configuration")
       , administrationMenu
+      , utilitiesMenu
     ).map( _.toMenu )
 
 
