@@ -150,7 +150,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
                 });
 
            $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
-       SHtml.ajaxButton("+", () => SetHtml("actualFilter",expand), ("style","margin-left:10px; vertical-align:top"))
+       SHtml.ajaxButton("+", () => SetHtml("actualFilter",expand), ("class","expand"), ("style","margin: 0 10px; vertical-align:top; height:15px; width: 15px;  padding: 1px; border-radius:25px")) ++ Script(JsRaw("correctButtons()"))
 
   val expand =  SHtml.multiSelect(Seq(("Validation","Validation"),("Draft","Draft")), List(), list => logger.debug(list)) % ("onchange" ->
         JsRaw(s"""
@@ -159,7 +159,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
             filter.push($$(this).attr("value"));
                 });
            $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
-       SHtml.ajaxButton("-", () => SetHtml("actualFilter",noexpand), ("style","margin-left:10px; vertical-align:top"))
+       SHtml.ajaxButton("-", () => SetHtml("actualFilter",noexpand),("class","expand"), ("style","margin: 0 10px; vertical-align:top; height:15px; width: 15px;  padding: 1px; border-radius:25px")) ++ Script(JsRaw("correctButtons()"))
 
    def statusFilter = {
            noexpand
