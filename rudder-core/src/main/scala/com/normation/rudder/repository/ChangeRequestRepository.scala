@@ -74,6 +74,11 @@ trait WoChangeRequestRepository {
   def updateChangeRequest(changeRequest:ChangeRequest) : Box[ChangeRequest]
 
   /**
+   * Delete a change request.
+   */
+  def deleteChangeRequest(changeRequest:ChangeRequest) : Box[ChangeRequest]
+
+  /**
    * Unlock the Change Request so that subsequent call to updateChangeRequest
    * can be made (and succeed).
    * If the Change Request is already in Read/Write mode, that operation

@@ -427,7 +427,6 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
     val dirEditForm = new DirectiveEditForm(
       htmlId_policyConf, technique, activeTechnique, directive,
       onSuccessCallback = directiveEditFormSuccessCallBack,
-      onRemoveSuccessCallback = onRemoveSuccessCallBack,
       isADirectiveCreation = isADirectiveCreation
     )
 
