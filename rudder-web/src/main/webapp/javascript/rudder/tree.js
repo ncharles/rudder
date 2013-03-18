@@ -454,7 +454,7 @@ var buildChangesTree = function(id,appContext) {
       "core" : { 
       "animation" : 400,
       "html_titles" : true,
-      "initially_open" : [ "changes" ]
+      "initially_open" : [ "changes","directives" ]
       },
      "ui" : { 
         "select_limit" : 1,
@@ -468,11 +468,7 @@ var buildChangesTree = function(id,appContext) {
         "valid_children" : [ "changeType" ],
           "types" : {
             "changeType" : {
-              "valid_children" : [ "changeType", "change" ],
-              "select_node" : function(e) {
-            	  this.toggle_node(e);
-            	  return false;
-              }
+              "valid_children" : [ "changeType", "change" ]
             },
             "change" : {
               "valid_children" : "none",
@@ -489,8 +485,6 @@ var buildChangesTree = function(id,appContext) {
       },
       "plugins" : [ "themes", "html_data", "ui", "types" ]      
   })
-  
-  $(id).removeClass('nodisplay');
 
 }
 

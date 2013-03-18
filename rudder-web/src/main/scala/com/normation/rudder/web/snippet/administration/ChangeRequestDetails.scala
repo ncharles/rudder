@@ -247,13 +247,32 @@ import ChangeRequestChangesForm._
         , <span>Directives</span>
         )
   val children = changeRequest.directives.keys.map(directiveChild(_)).toList
+    override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "directives"}))
+  }
+
+  val rulesChild = new JsTreeNode{
+      val body =         SHtml.a(
+          {() => SetHtml("history",displayHistory(Nil) )}
+        , <span>Rules</span>
+        )
+  val children = Nil
+    override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "directives"}))
+  }
+
+  val groupsChild = new JsTreeNode{
+      val body =         SHtml.a(
+          {() => SetHtml("history",displayHistory(Nil ))}
+        , <span>Groups</span>
+        )
+  val children = Nil
+    override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "directives"}))
   }
 
   val body =         SHtml.a(
           {() => SetHtml("history",displayHistory (changeRequest.directives.values.map(_.changes).toList) )}
         , <span>Changes</span>
         )
-  val children = directivesChild :: Nil
+  val children = directivesChild :: rulesChild :: groupsChild ::  Nil
 
   override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "changes"}))
 
@@ -305,9 +324,9 @@ import ChangeRequestChangesForm._
     <tr>
       <td id="action">
          {cr.diff match {
-           case AddChangeRequestStatusDiff(_) => "Create"
-           case ModifyToChangeRequestStatusDiff(_) => "Modify"
-           case DeleteChangeRequestStatusDiff => "Delete"
+           case AddChangeRequestStatusDiff(_) => "Change request created"
+           case ModifyToChangeRequestStatusDiff(_) => "Change request details changed"
+           case DeleteChangeRequestStatusDiff => "Change request deleted"
            case RebaseChangeRequestStatusDiff => "Rebased"
          }}
       </td>
