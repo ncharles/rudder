@@ -56,6 +56,7 @@ import org.joda.time.DateTime
 import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.policies.AddDirectiveDiff
 import com.normation.rudder.domain.policies.DirectiveDiff
+import com.normation.rudder.domain.policies.AddDirectiveDiff
 
 
 object ChangeRequestDetails {
@@ -65,9 +66,10 @@ object ChangeRequestDetails {
     } yield {
       chooseTemplate("component", "header", xml)
     }) openOr Nil
- }
+}
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
 import ChangeRequestDetails._
+
 
   val techRepo = RudderConfig.techniqueRepository
   val rodirective = RudderConfig.roDirectiveRepository
@@ -78,12 +80,20 @@ import ChangeRequestDetails._
   val aDirectiveChangeItem =  DirectiveChangeItem(CurrentUser.getActor,DateTime.now.minusHours(6),None,aDirectiveAddDiff)
   val aDirectiveChange = DirectiveChange(Some(directive),aDirectiveChangeItem,Seq())
   val aDirectiveChanges = DirectiveChanges(aDirectiveChange,Seq())
+
+  val adirectiveId2 = DirectiveId("E7221865-CEB6-46BB-B621-AA2B2E1466F1".toLowerCase())
+  val directive2 = rodirective.getDirective(adirectiveId2).get
+  val tech2 = rodirective.getActiveTechnique(adirectiveId2).get.techniqueName
+  val aDirectiveAddDiff2 = AddDirectiveDiff(tech2,directive2)
+  val aDirectiveChangeItem2 =  DirectiveChangeItem(CurrentUser.getActor,DateTime.now.minusHours(4),None,aDirectiveAddDiff2)
+  val aDirectiveChange2 = DirectiveChange(Some(directive2),aDirectiveChangeItem2,Seq())
+  val aDirectiveChanges2 = DirectiveChanges(aDirectiveChange2,Seq())
   var dummyStatus = ChangeRequestStatus("Draft","blablabla",false)
   var dummyStatus2 = ChangeRequestStatus("Validation","blablabla",false)
   var dummyStatusChange = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,AddChangeRequestStatusDiff(dummyStatus))
   var dummyStatusChange2 = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusHours(9),None,AddChangeRequestStatusDiff(dummyStatus2))
-  var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),List(dummyStatusChange),Map((adirectiveId,aDirectiveChanges)),Map())
-  var dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),List(dummyStatusChange2),Map((adirectiveId,aDirectiveChanges)),Map())
+  var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),List(dummyStatusChange),Map((adirectiveId,aDirectiveChanges),(adirectiveId2,aDirectiveChanges2)),Map())
+  var dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),List(dummyStatusChange2),Map((adirectiveId,aDirectiveChanges),(adirectiveId2,aDirectiveChanges2)),Map())
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val changeRequestTableId = "ChangeRequestId"
@@ -118,10 +128,16 @@ import ChangeRequestDetails._
 
      case Full(id) => <div id="changeRequestChanges">{new ChangeRequestChangesForm(id).dispatch("changes")(NodeSeq.Empty)}</div>
     }
+   case "actions" => xml => Cr match { case eb:EmptyBox => NodeSeq.Empty
+
+     case Full(id) => ("#backStep" #> SHtml.ajaxButton("Refuse", () => Noop) &
+         "#nextStep" #> SHtml.ajaxButton("Valid", () => Noop))(xml)
+
+    }
   }
 
   def displayHeader(cr:ChangeRequest) =
-    ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
+    ("#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/administration/changeRequests")) &
        "#CRName *" #> cr.status.name &
        "#CRStatus *" #> "status" &
        "#CRLastAction *" #> s"${cr.statusHistory.headOption.map(_.diff).get match {
@@ -170,6 +186,8 @@ import ChangeRequestEditForm._
   def display: NodeSeq = { logger.info(changeRequest)
     ("#detailsForm *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
         ClearClearable &
+        "#rebaseButton *" #> {if (changeRequest.readOnly) NodeSeq.Empty else SHtml.ajaxButton("Rebase", () => Noop)} &
+       "#warning [class+]" #> {if (true/* condition de rebase*/) "" else "nodisplay"} &
         "#CRName *" #> changeRequestName.toForm_! &
         "#CRDescription *" #> changeRequestDescription.toForm_! &
         "#CRSave" #> SHtml.ajaxSubmit("Save", () =>  submit)
@@ -196,9 +214,13 @@ import ChangeRequestChangesForm._
   val roDirectiveRepo = RudderConfig.roDirectiveRepository
 
   def dispatch = {
-    case "changes" => { _ => ("#changeTree ul *" #> {changeRequest match {case cr: ConfigurationChangeRequest => treeNode(cr).toXml
-    case _ => Text("not implemented :(")}
-    }).apply(form) ++ Script(JsRaw(s"""buildChangesTree("#changeTree","${S.contextPath}");""")) }
+    case "changes" => { _ => changeRequest match {case cr: ConfigurationChangeRequest => ("#changeTree ul *" #>  treeNode(cr).toXml &
+      "#history *" #> displayHistory (cr.directives.values.map(_.changes).toList) &
+      "#diff *" #> diff(cr.directives.values.map(_.changes).toList)).apply(form) ++ Script(JsRaw(s"""buildChangesTree("#changeTree","${S.contextPath}");
+    $$( "#changeDisplay" ).tabs();"""))
+    case _ => Text("not implemented :(")
+    }
+    }
 
 
   }
@@ -210,27 +232,31 @@ import ChangeRequestChangesForm._
     val directive= roDirectiveRepo.getDirective(directiveId)
 
       val body =         SHtml.a(
-          {() => SetHtml("changeDisplay",displayHistory(List(changeRequest.directives(directiveId).changes)))}
+          {() => SetHtml("history",displayHistory(List(changeRequest.directives(directiveId).changes)))}
         , <span>{directive.map(_.name).getOrElse("Unknown Directive")}</span>
         )
   val children = Nil
   }
   val directivesChild = new JsTreeNode{
       val body =         SHtml.a(
-          {() => SetHtml("changeDisplay",displayHistory() )}
+          {() => SetHtml("history",displayHistory(changeRequest.directives.values.map(_.changes).toList) )}
         , <span>Directives</span>
         )
   val children = changeRequest.directives.keys.map(directiveChild(_)).toList
   }
+
   val body =         SHtml.a(
-          {() => SetHtml("changeDisplay",displayHistory () )}
+          {() => SetHtml("history",displayHistory (changeRequest.directives.values.map(_.changes).toList) )}
         , <span>Changes</span>
         )
   val children = directivesChild :: Nil
-  override val attrs = List(( "rel" -> { "changeType" } ))
-  def displayHistory (directives : List[DirectiveChange] = changeRequest.directives.values.map(_.changes).toList)= {
+
+  override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "changes"}))
+
+}
+ def displayHistory (directives : List[DirectiveChange])= {
   ( "#crBody" #> { changeRequest.statusHistory.flatMap(CRLine(_)) ++ directives.flatMap(CRLine(_))}).
-  apply(CRTable) ++ Script(
+  apply(CRTable) ++ Script(SetHtml("diff",diff(directives)) &
         JsRaw(s"""$$('#changeHistory').dataTable( {
                     "asStripeClasses": [ 'color1', 'color2' ],
                     "bAutoWidth": false,
@@ -266,7 +292,11 @@ import ChangeRequestChangesForm._
       </tbody>
     </table>
 
-
+  def diff(cr : List[DirectiveChange]) = cr match {
+      case directive::Nil => Text(directive.initialState.get.name)
+      case Nil => Text("Nothing to show")
+      case list => <ul>{list.flatMap(directive => <li>{directive.initialState.get.name}</li>)}</ul>
+    }
   def CRLine(cr: ChangeRequestStatusItem)=
     <tr>
       <td id="action">
@@ -278,7 +308,7 @@ import ChangeRequestChangesForm._
          }}
       </td>
       <td id="actor">
-         {cr.actor}
+         {cr.actor.name}
       </td>
       <td id="date">
          {cr.creationDate}
@@ -288,10 +318,13 @@ import ChangeRequestChangesForm._
   def CRLine(cr: DirectiveChange)=
     <tr>
       <td id="action">
-         {cr.firstChange.diff}
+         {cr.firstChange.diff match {
+           case a :AddDirectiveDiff => s"Create Directive ${a.directive.name}"
+           case _ => "another change ..."
+         }}
       </td>
       <td id="actor">
-         {cr.firstChange.actor}
+         {cr.firstChange.actor.name}
       </td>
       <td id="date">
          {cr.firstChange.creationDate}
@@ -299,7 +332,6 @@ import ChangeRequestChangesForm._
    </tr>
 
 
-}
 
 }
 

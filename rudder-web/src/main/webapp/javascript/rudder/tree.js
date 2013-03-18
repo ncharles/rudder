@@ -452,13 +452,13 @@ var buildRulePIdepTree = function(id, initially_select, appContext) {
 var buildChangesTree = function(id,appContext) {
   $(id).jstree({ 
       "core" : { 
-      "animation" : 0,
+      "animation" : 400,
       "html_titles" : true,
-      "initially_open" : [ "jstn_0" ]
+      "initially_open" : [ "changes" ]
       },
      "ui" : { 
         "select_limit" : 1,
-        "initially_select" : []
+        "initially_select" : [ "changes"]
       },
       // I set both options to -2, as I do not need depth and children count checking
       // Those two checks may slow jstree a lot, so use only when needed
@@ -484,7 +484,8 @@ var buildChangesTree = function(id,appContext) {
       },
       "themes" : { 
     	  "theme" : "rudder",
-    	  "url" : appContext+"/javascript/jstree/themes/rudder/style.css"
+    	  "url" : appContext+"/javascript/jstree/themes/rudder/style.css",
+    	  "icons" : false
       },
       "plugins" : [ "themes", "html_data", "ui", "types" ]      
   })

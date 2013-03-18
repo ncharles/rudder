@@ -2,32 +2,55 @@
 
 
 <component:header>
-        <div id="backButton"/>
-        <h2  id="CRName" style="float:left; margin-left:50px;font-size:60px;"/>
-        <div id="CRStatus" class="statusdiv" style="float: right; color : #F79D10; font-size:30px; background-color:#111; margin-right:50px; padding:5px" />
+        <div id="backButton" style ="float: left; margin-left: 40px;"/>
+        <div id="CRStatus" class="statusdiv" style="float: right; color: rgb(247, 157, 16); background-color: #2E2D2D; border-radius: 6px 6px 6px 6px; font-size: 15px; font-weight: bold; padding: 7px; border: 2px ridge rgb(247, 157, 16); margin-right: 40px;" />
+             <hr class="spacer"/>
+        <div id="CRName" style="margin-left: 40px; font-weight: bold; font-size: 25px;"/>
+        
         <hr class="spacer"/>
-        <i id="CRLastAction" style="margin-left:125px;" />
+        <i id="CRLastAction" style="margin-left: 75px; font-size: 15px;" />
 </component:header>
 
 <component:details>
-    <div id="detailsForm" class="object-details">
+ 
+
+    <div id="detailsForm" class="object-details" style="margin:0 40px">
+            <div id="warning">
+                      <div id="rebaseButton" style="float:right"/>
+             <img src="/images/icWarn.png" alt="Warning!" height="32" width="32" class="warnicon"/>
+          <h3>The initial state of your change request has changed. Please apply your changes on the current state</h3>
+
+          </div>
+                    <hr class="spacer"/>
         <div id="CRName"/>
+        <hr class="spacer"/>
         <div id="CRDescription"/>
         <div id="CRSave"/>
+
 	</div>
 </component:details>
 
 <component:changes>
-    <div id="changes"  style=" margin-left:50px; clear:both; padding-top:5px">
-      <div id="changeSelector" style="float:left; border-right: 2px ridge; min-height:200px;max-width:150px; overflow:auto; padding-right:10px;">
+    <div id="changes"  style=" margin: 0 40px; clear:both;  max-height:400px; border-radius:6px; border:2px ridge; position:relative; overflow:hidden;">
+      <div id="changeSelector" style="float:left; border-right: 2px ridge; max-height:390px; height:100%; width:125px; overflow:auto; padding:5px; position:absolute; padding-bottom:0">
         <div id="changeTree">
           <ul/>
         </div>
       </div>
-      <div id="changeDisplay"  style="float:left; min-height:200px;"/>
+      <div id="changeDisplay"  style="margin: 10px 10px 10px 150px;">
+        <ul id="changeRequestTabMenu" style="height:30px">
+            <li><a href="#historyTab">Changes history</a></li>
+            <li><a href="#diffTab">Diff</a></li>
+        </ul>
+        <div id="historyTab" style ="max-height:345px; overflow: auto">
+          <div id="history"></div>
+        </div>
+        <div id="diffTab" style="max-height:345px; overflow: auto">
+        <div id="diff"></div>
+        </div>
+      </div>
     </div>
             <hr class="spacer"/>
 </component:changes>
-
 
 </xml:group>
