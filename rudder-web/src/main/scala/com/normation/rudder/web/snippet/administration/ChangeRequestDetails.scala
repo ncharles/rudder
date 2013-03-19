@@ -60,6 +60,13 @@ object ChangeRequestDetails {
     } yield {
       chooseTemplate("component", "header", xml)
     }) openOr Nil
+
+ def popup =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
+    } yield {
+      chooseTemplate("component", "popup", xml)
+    }) openOr Nil
 }
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
 import ChangeRequestDetails._
@@ -124,8 +131,8 @@ import ChangeRequestDetails._
     }
    case "actions" => xml => Cr match { case eb:EmptyBox => NodeSeq.Empty
 
-     case Full(id) => ("#backStep" #> SHtml.ajaxButton("Refuse", () => Noop) &
-         "#nextStep" #> SHtml.ajaxButton("Valid", () => Noop))(xml)
+     case Full(cr) => ("#backStep" #> SHtml.ajaxButton("Refuse", () => ChangeStepPopup("Refuse",List("Draft"),cr)) &
+         "#nextStep" #> SHtml.ajaxButton("Valid", () => ChangeStepPopup("Accept",List("Deploy Later","Deploy Directly"),cr)))(xml)
 
     }
   }
@@ -142,6 +149,34 @@ import ChangeRequestDetails._
 
 
 
+  def ChangeStepPopup(action:String,nextStep:List[String],cr:ChangeRequest) = {
+      val closePopup : JsCmd = JsRaw(""" $.modal.close();""")
+      val nextSelect = new WBSelectField("Next", nextStep.map(v => (v,v)))
+      def nextOne(next:String) : NodeSeq= <div class="wbBaseField">
+          <b class="threeCol">Next: </b>
+          <span id="CRStatus">
+            {next}
+           </span>
+        </div>
+      val description = new WBTextAreaField("Message", "") {
+      override def setFilter = notNull _ :: trim _ :: Nil
+      override def inputField = super.inputField  % ("style" -> "height:5em;")
+      override def errorClassName = ""
+      override def validations() = valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
+    }
+      SetHtml("popupContent",("#header" #>  s"${action} CR#${cr.id}: ${cr.status.name}" &
+          "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message." &
+          "#reason" #> description.toForm_! &
+          "#next" #> {nextStep match {
+            case Nil => <span>Error</span>
+            case head :: Nil => nextOne(head)
+            case _ => nextSelect.toForm_!
+          }} &
+          "#cancel" #> SHtml.ajaxButton("Cancel", () => closePopup ) &
+          "#confirm" #> SHtml.ajaxSubmit("Confirm", () => closePopup)
+          )( SHtml.ajaxForm(popup) ++ Script((JsRaw("correctButtons();"))))) &  JsRaw("createPopup('changeStatePopup', 150, 850)")
+
+  }
 
 }
 

@@ -67,4 +67,37 @@
             <hr class="spacer"/>
 </component:changes>
 
+<component:popup>
+    <div id="changeStatePopup" class="nodisplay" style="overflow: auto; max-height:500px;">
+      <div class="simplemodal-title">
+        <h1 ><span id="header"></span></h1>
+        <hr/>
+      </div>
+      <div class="simplemodal-content">
+       <br />
+       <div class="popupContent" id="intro"/>
+       <hr class="spacer" />
+       <div id="next">
+       </div>
+       <hr class="spacer" />
+       <div id ="reason">
+       </div>
+      </div>
+      <div class="simplemodal-bottom">
+      <div style="float:left; padding:5px;">
+             <button class="simplemodal-close" id="cancel">
+            Cancel
+          </button>
+          </div>
+        <div class="popupButton">
+        <span>
+         <button id="confirm">
+            Confirm
+          </button>
+        </span>
+        </div>
+      </div>
+    </div>
+</component:popup>
+
 </xml:group>

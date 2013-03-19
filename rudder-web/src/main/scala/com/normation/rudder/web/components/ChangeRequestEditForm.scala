@@ -1,15 +1,15 @@
 package com.normation.rudder.web.components
 
+import scala.xml._
 import com.normation.rudder.domain.workflows._
-import net.liftweb.http.js.JsCmd
-import net.liftweb.http._
 import com.normation.rudder.web.model._
 import net.liftweb.common._
+import net.liftweb.http._
+import net.liftweb.http.js._
 import net.liftweb.http.js.JsCmds._
-import scala.xml._
+import net.liftweb.http.js.JE._
 import net.liftweb.util._
 import net.liftweb.util.Helpers._
-import net.liftweb.http.js.JE._
 
 object ChangeRequestEditForm {
   def form =

@@ -1,16 +1,14 @@
 package com.normation.rudder.web.components
 
-import com.normation.rudder.domain.workflows._
-import net.liftweb.http._
-import net.liftweb.http.js._
-import JE._
-import JsCmds._
-import net.liftweb.common._
-import bootstrap.liftweb._
 import scala.xml._
-import com.normation.rudder.web.model._
 import com.normation.rudder.domain.policies._
-import net.liftweb.util._
+import com.normation.rudder.domain.workflows._
+import com.normation.rudder.web.model._
+import bootstrap.liftweb._
+import net.liftweb.common._
+import net.liftweb.http._
+import net.liftweb.http.js.JE._
+import net.liftweb.http.js.JsCmds._
 import net.liftweb.util.Helpers._
 
 
