@@ -89,8 +89,8 @@ import ChangeRequestDetails._
   val aDirectiveChangeItem2 =  DirectiveChangeItem(CurrentUser.getActor,DateTime.now.minusHours(4),None,aDirectiveAddDiff2)
   val aDirectiveChange2 = DirectiveChange(Some(directive2),aDirectiveChangeItem2,Seq())
   val aDirectiveChanges2 = DirectiveChanges(aDirectiveChange2,Seq())
-  var dummyStatus = ChangeRequestStatus("Draft","blablabla",false)
-  var dummyStatus2 = ChangeRequestStatus("Validation","blablabla",false)
+  var dummyStatus = ChangeRequestStatus("MyFirstChangeRequest","blablabla",false)
+  var dummyStatus2 = ChangeRequestStatus("MySecondChangeRequest","blablabla",false)
   var dummyStatusChange = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,AddChangeRequestStatusDiff(dummyStatus))
   var dummyStatusChange2 = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusHours(9),None,AddChangeRequestStatusDiff(dummyStatus2))
   var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),List(dummyStatusChange),Map((adirectiveId,aDirectiveChanges),(adirectiveId2,aDirectiveChanges2)),Map())
@@ -188,7 +188,7 @@ import ChangeRequestEditForm._
   def display: NodeSeq = { logger.info(status)
     ("#detailsForm *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
         ClearClearable &
-        "#rebaseButton *" #> {if (status.readOnly) NodeSeq.Empty else SHtml.ajaxButton("Rebase", () => Noop)} &
+        "#rebaseButton *" #> {if (status.readOnly) Text("you can't apply those change on actual state anymore") else <span>Reprepare your change request over the current configuration?</span>++SHtml.ajaxButton("Reprepare", () => Noop,("style","margin-left:10px;"))} &
        "#warning [class+]" #> {if (true/* condition de rebase*/) "" else "nodisplay"} &
         "#CRName *" #> changeRequestName.toForm_! &
         "#CRId *"   #> crId.value &
