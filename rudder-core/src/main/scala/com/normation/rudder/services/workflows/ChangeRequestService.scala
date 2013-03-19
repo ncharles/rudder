@@ -34,27 +34,17 @@
 
 package com.normation.rudder.services.workflows
 
-import com.normation.cfclerk.domain.TechniqueName
-import com.normation.rudder.domain.policies.Directive
-import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
-import com.normation.rudder.domain.nodes.NodeGroup
-import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
-import com.normation.utils.StringUuidGenerator
-import com.normation.rudder.domain.nodes.ModifyToNodeGroupDiff
-import com.normation.rudder.domain.workflows.DirectiveChange
-import com.normation.rudder.domain.workflows.NodeGroupChanges
-import com.normation.rudder.domain.workflows.NodeGroupChange
-import com.normation.rudder.domain.policies.ModifyToDirectiveDiff
-import com.normation.rudder.domain.workflows.ChangeRequestId
-import com.normation.rudder.domain.nodes.AddNodeGroupDiff
-import com.normation.rudder.domain.workflows.DirectiveChanges
-import com.normation.rudder.domain.policies.AddDirectiveDiff
-import com.normation.rudder.domain.workflows.DirectiveChangeItem
-import com.normation.eventlog.EventActor
 import org.joda.time.DateTime
-import com.normation.rudder.domain.workflows.ChangeRequestStatusItem
-import com.normation.rudder.domain.workflows.AddChangeRequestStatusDiff
-import com.normation.rudder.domain.workflows.ChangeRequestStatus
+import com.normation.cfclerk.domain.TechniqueName
+import com.normation.eventlog.EventActor
+import com.normation.rudder.domain.nodes.NodeGroup
+import com.normation.rudder.domain.policies.{ AddDirectiveDiff, Directive, ModifyToDirectiveDiff }
+import com.normation.rudder.domain.workflows.{ ConfigurationChangeRequest, DirectiveChange, DirectiveChangeItem, DirectiveChanges }
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.utils.StringUuidGenerator
+import com.normation.rudder.domain.workflows.ChangeRequestInfo
+
+
 
 /**
  * A service that handle all the logic about how
@@ -62,10 +52,10 @@ import com.normation.rudder.domain.workflows.ChangeRequestStatus
  */
 trait ChangeRequestService {
 
-
   def createChangeRequestFromDirective(
       changeRequestName: String
     , changeRequestDesc: String
+    , readOnly         : Boolean
     , techniqueName    : TechniqueName
     , directive        : Directive
     , originalDirective: Option[Directive]
@@ -105,11 +95,12 @@ trait ChangeRequestService {
 
 class ChangeRequestServiceImpl(
     uuidGen: StringUuidGenerator
-){
+) extends ChangeRequestService {
 
   def createChangeRequestFromDirective(
       changeRequestName: String
     , changeRequestDesc: String
+    , readOnly         : Boolean
     , techniqueName    : TechniqueName
     , directive        : Directive
     , originalDirective: Option[Directive]
@@ -132,16 +123,19 @@ class ChangeRequestServiceImpl(
 
       ConfigurationChangeRequest(
           ChangeRequestId(uuidGen.newUuid)
-        , List(
-            ChangeRequestStatusItem(
-                actor, DateTime.now, reason
-              , AddChangeRequestStatusDiff(ChangeRequestStatus(
-                    changeRequestName
-                  , changeRequestDesc
-                  , true
-                ))
-            )
+        , ChangeRequestInfo(
+              changeRequestName
+            , changeRequestDesc
+            , readOnly
           )
+//        , List(ChangeRequestStatusItem(
+//              actor, DateTime.now, reason
+//            , AddChangeRequestStatusDiff(ChangeRequestStatus(
+//                  changeRequestName
+//                , changeRequestDesc
+//                , true
+//              ))
+//          ))
         , Map(directive.id -> DirectiveChanges(change, Seq()))
         , Map()
       )

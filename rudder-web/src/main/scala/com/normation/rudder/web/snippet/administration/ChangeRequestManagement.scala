@@ -48,6 +48,8 @@ import net.liftweb.http.SHtml
 import scala.xml.Text
 import scala.xml.NodeSeq
 import net.liftweb.http.SHtml
+import com.normation.rudder.web.model.CurrentUser
+import org.joda.time.DateTime
 
 class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
@@ -56,14 +58,12 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
   private[this] val CrId: Box[String] = S.param("crId")
 
-  val dummyStatus = ChangeRequestStatus("MyFirstChangeRequest","blablabla",false)
-  val dummyStatus2 = ChangeRequestStatus("MySecondChangeRequest","blablabla",false)
-  val startStatus = AddChangeRequestStatusDiff(dummyStatus)
-  val startStatus2 = AddChangeRequestStatusDiff(dummyStatus2)
-  val dummyStatusChange = ChangeRequestStatusHistory(startStatus)
-  val dummyStatusChange2 = ChangeRequestStatusHistory(startStatus2)
-  val dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map())
-  val dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map())
+  val dummyStatus = ChangeRequestInfo("MyFirstChangeRequest","blablabla",false)
+  val dummyStatus2 = ChangeRequestInfo("MySecondChangeRequest","blablabla",false)
+//  val startStatus = ChangeRequestStatusItem(CurrentUser.getActor, DateTime.now, None, AddChangeRequestStatusDiff(dummyStatus))
+//  val startStatus2 = ChangeRequestStatusItem(CurrentUser.getActor, DateTime.now, None, AddChangeRequestStatusDiff(dummyStatus2))
+  val dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"), dummyStatus, Map(), Map())
+  val dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"), dummyStatus2,Map(), Map())
 
     val CRTable =
     <table id={changeRequestTableId}>
@@ -99,13 +99,13 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   def CRLine(cr: ChangeRequest)=
     <tr>
       <td id="crId">
-         {SHtml.a(() => S.redirectTo(s"changeRequest/${cr.id}"), Text(cr.id))}
+         {SHtml.a(() => S.redirectTo(s"changeRequest/${cr.id}"), Text(cr.id.value))}
       </td>
       <td id="crStatus">
-         {cr.statusHistory.history.lastOption.getOrElse(cr.statusHistory.initialState)}
+         {cr.info}
       </td>
       <td id="crName">
-         {cr.status.name}
+         {cr.info.name}
       </td>
       <td id="crOwner">
          {"someone"}
@@ -123,7 +123,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
     case Full(id) =>
       <div>
         <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
-        <h2 style="float:left; margin-left:50px;font-size:60px;">{if (id=="1") dummyCR.status.name else if (id=="2") dummyCR2.status.name else "not a CR" }</h2>
+        <h2 style="float:left; margin-left:50px;font-size:60px;">{if (id=="1") dummyCR.info.name else if (id=="2") dummyCR2.info.name else "not a CR" }</h2>
         <div class="statusdiv" style="float: right; color : #F79D10; font-size:30px; background-color:#111; margin-right:50px; padding:5px" >status</div>
       </div>
     }

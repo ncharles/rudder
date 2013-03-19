@@ -32,38 +32,52 @@
 *************************************************************************************
 */
 
-package com.normation.rudder.services.workflows
+package com.normation.rudder.services.eventlog
 
-import com.normation.rudder.domain.workflows.{ ChangeRequestId, WorkflowProcessId }
-import net.liftweb.common.Box
+import scala.collection.mutable.{ Buffer, Map => MutMap }
+import com.normation.rudder.domain.workflows.{ ChangeRequestEventLog, ChangeRequestId }
+import net.liftweb.common._
+
 
 /**
- * That service allows to glue Rudder with the
- * workflows engine.
- * It allows to send new ChangeRequest to the engine,
- * and to be notified when one of them reach the end.
+ * Allow to query relevant information about change request
+ * status.
  */
-trait WorkflowService {
+trait ChangeRequestEventLogService {
+
+  //we certainly won't keep that one in the end
+  def saveChangeRequestLog(crId: ChangeRequestId, log:ChangeRequestEventLog) : Box[ChangeRequestEventLog]
+
+  def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[ChangeRequestEventLog]]
 
   /**
-   * Start a new workflow process with the given
-   * change request or continue an existing
-   * wf for that change request
-   * (one change request can not have more than
-   * one wf at the same time).
+   * Return the last logged action for the given ChangeRequest.
+   * If the change request is not find, a Full(None) is returned.
+   * Else, Full(Some(action)) in case of success, and a Failure
+   * describing what happened in other cases.
    */
-  def startWorkflow(changeRequestId: ChangeRequestId) : Box[WorkflowProcessId]
-
-  /**
-   * Notify who wants to know about the successful ending of the workflow
-   * process for the given change request
-   */
-  def onSuccessWorkflow(changeRequestId: ChangeRequestId) : Box[ChangeRequestId]
-
+  def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]]
 }
 
-class WorkflowServiceImpl extends WorkflowService {
+class InMemoryChangeRequestEventLogService extends ChangeRequestEventLogService {
+  import scala.collection.mutable.{Map => MutMap, Buffer}
 
-  def startWorkflow(changeRequestId: ChangeRequestId) : Box[WorkflowProcessId] = ???
-  def onSuccessWorkflow(changeRequestId: ChangeRequestId) : Box[ChangeRequestId] = ???
+  private[this] val repo = MutMap[ChangeRequestId, Buffer[ChangeRequestEventLog]]()
+
+
+  def saveChangeRequestLog(crId: ChangeRequestId, log:ChangeRequestEventLog) : Box[ChangeRequestEventLog] = {
+    val buf = repo.getOrElse(crId, Buffer[ChangeRequestEventLog]())
+    buf += log
+    repo += (crId -> buf)
+
+    Full(log)
+  }
+
+  def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[ChangeRequestEventLog]] = {
+    Full(repo.getOrElse(id, Seq()))
+  }
+
+  def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]] = {
+    Full(repo.getOrElse(id, Seq()).headOption)
+  }
 }

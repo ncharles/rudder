@@ -38,6 +38,37 @@ import com.normation.rudder.domain.workflows.ChangeRequest
 import net.liftweb.common.Box
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.eventlog.EventActor
+import com.normation.eventlog.EventActor
+
+/**
+ * Before going wild, change request are in Draft
+ * Draft are private, by user
+ */
+trait RoDraftChangeRequestRepository {
+
+  def getAll() : Box[Seq[(ChangeRequest, EventActor, Option[String])]]
+
+  def get(changeRequestId:ChangeRequestId) : Box[Option[(ChangeRequest, EventActor, Option[String])]]
+
+  def getAll(actor:EventActor) : Box[Seq[(ChangeRequest, EventActor, Option[String])]]
+
+}
+
+trait WoDraftChangeRequestRepository {
+
+  /**
+   * A draft take care of the actor and the reason: they will be
+   * used when the change request is submitted in the wf engine
+   * (for the AddChangeRequestEventLog).
+   */
+  def saveDraftChangeRequest(cr:ChangeRequest, actor:EventActor, reason: Option[String]): Box[ChangeRequest]
+
+  /**
+   * A user can do what he wants with it's own draft, and delete them.
+   */
+  def deleteDraftChangeRequest(id:ChangeRequestId, actor:EventActor) : Box[ChangeRequestId]
+}
 
 /**
  * Read access to change request
@@ -47,7 +78,7 @@ trait RoChangeRequestRepository {
 
   def getAll() : Box[Seq[ChangeRequest]]
 
-  def get(changeRequestId:ChangeRequestId) : Box[ChangeRequest]
+  def get(changeRequestId:ChangeRequestId) : Box[Option[ChangeRequest]]
 }
 
 /**
@@ -56,27 +87,27 @@ trait RoChangeRequestRepository {
 trait WoChangeRequestRepository {
 
   /**
+   *
    * Save a new change request in the back-end.
-   * The change request will be created in read-write
-   * mode, whateever the value of read-only was.
-   * An explicit call to {setWriteOnly} will have to be made
-   * to lock the changerequest.
+   * The idea is ignored, and a new one will be attributed
+   * to the change request.
    */
-  def createChangeRequest(changeRequest:ChangeRequest) : Box[ChangeRequest]
+  def createChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest]
 
   /**
    * Update a change request. The change request must not
-   * be in read-only mode.
+   * be in read-only mode and must exists.
    * The update can not change the read/write mode (such a change
    * will be ignore), an explicit call to setWriteOnly must be
    * done for that.
    */
-  def updateChangeRequest(changeRequest:ChangeRequest) : Box[ChangeRequest]
+  def updateChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest]
 
   /**
    * Delete a change request.
+   * (whatever the read/write mode is).
    */
-  def deleteChangeRequest(changeRequest:ChangeRequest) : Box[ChangeRequest]
+  def deleteChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest]
 
   /**
    * Unlock the Change Request so that subsequent call to updateChangeRequest
@@ -84,7 +115,7 @@ trait WoChangeRequestRepository {
    * If the Change Request is already in Read/Write mode, that operation
    * is a no-op.
    */
-  def setReadWrite(changeRequestId:ChangeRequestId) : Box[ChangeRequestId]
+  def setReadWrite(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
 
   /**
    * Lock the Change Request so that subsequent call to updateChangeRequest
@@ -92,5 +123,5 @@ trait WoChangeRequestRepository {
    * If the Change Request is already in Read Only mode, that operation
    * is a no-op.
    */
-  def setReadOnly(changeRequestId:ChangeRequestId) : Box[ChangeRequestId]
+  def setReadOnly(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
 }

@@ -112,6 +112,10 @@ import com.normation.rudder.services.user.PersonIdentService
 import com.normation.rudder.services.workflows.WorkflowService
 import com.normation.rudder.services.modification.DiffService
 import com.normation.rudder.services.workflows.ChangeRequestService
+import com.normation.rudder.repository.inmemory.InMemoryDraftChangeRequestRepository
+import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
+import com.normation.rudder.services.workflows.ChangeRequestServiceImpl
+import com.normation.rudder.services.workflows.WorkflowServiceImpl
 
 /**
  * Define a resource for configuration.
@@ -303,11 +307,16 @@ object RudderConfig extends Loggable {
   val allBootstrapChecks : BootstrapChecks = allChecks
   val srvGrid = new SrvGrid
 
-  val roChangeRequestRepository: RoChangeRequestRepository = ???
-  val woChangeRequestRepository: WoChangeRequestRepository = ???
-  val workflowService: WorkflowService = ???
-  val diffService: DiffService = ???
-  val changeRequestService: ChangeRequestService = ???
+  val changeRequestEventLogService : ChangeRequestEventLogService = new InMemoryChangeRequestEventLogService
+  private[this] val crRepo = new InMemoryChangeRequestRepository(changeRequestEventLogService)
+  val roChangeRequestRepository: RoChangeRequestRepository = crRepo
+  val woChangeRequestRepository: WoChangeRequestRepository = crRepo
+  private[this] val draftRepo = new InMemoryDraftChangeRequestRepository
+  val roDraftChangeRequestRepository: RoDraftChangeRequestRepository = draftRepo
+  val woDraftChangeRequestRepository: WoDraftChangeRequestRepository = draftRepo
+  val workflowService: WorkflowService = new WorkflowServiceImpl
+ // val diffService: DiffService = ???
+  val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl(uuidGen)
 
 
   //////////////////////////////////////////////////////////////////////////////////////////

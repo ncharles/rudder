@@ -34,46 +34,107 @@
 
 package com.normation.rudder.repository.inmemory
 
-import com.normation.rudder.repository.RoChangeRequestRepository
-import com.normation.rudder.repository.WoChangeRequestRepository
-import com.normation.rudder.domain.workflows.ChangeRequestId
-import com.normation.rudder.domain.workflows.ChangeRequest
-import net.liftweb.common._
 import scala.collection.mutable.{ Map => MutMap }
-import com.normation.rudder.domain.workflows.ChangeRequestId
-import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
+import com.normation.eventlog.EventActor
+import com.normation.rudder.domain.workflows.{ ChangeRequest, ChangeRequestId }
+import com.normation.rudder.repository.{ RoChangeRequestRepository, RoDraftChangeRequestRepository, WoChangeRequestRepository, WoDraftChangeRequestRepository }
+import net.liftweb.common._
+import com.normation.rudder.services.eventlog.ChangeRequestEventLogService
+import com.normation.eventlog.EventActor
+import com.normation.rudder.domain.workflows.ChangeRequestEventLog
+import com.normation.rudder.domain.workflows.ChangeRequestEventLog
+import org.joda.time.DateTime
+import com.normation.rudder.domain.workflows.AddChangeRequestDiff
+import com.normation.rudder.domain.workflows.DeleteChangeRequestDiff
 
-class InMemoryChangeRequestRepository extends RoChangeRequestRepository with WoChangeRequestRepository {
+class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepository with WoDraftChangeRequestRepository {
+
+  private[this] val repo = MutMap[ChangeRequestId, (ChangeRequest, EventActor, Option[String])]()
+
+
+  def get(changeRequestId:ChangeRequestId) : Box[Option[(ChangeRequest, EventActor, Option[String])]] = {
+    Full(repo.get(changeRequestId))
+  }
+
+  def getAll() : Box[Seq[(ChangeRequest, EventActor, Option[String])]] = Full(repo.values.toSeq)
+
+  def getAll(actor:EventActor) : Box[Seq[(ChangeRequest, EventActor, Option[String])]] = {
+    Full(repo.values.toSeq.filter { case (_,a, _) => actor == a } )
+  }
+
+  def deleteDraftChangeRequest(id: ChangeRequestId, actor: EventActor): Box[ChangeRequestId] = {
+    repo.get(id) match {
+      case None => Full(id)
+      case Some((cr,a,reason)) =>
+        if(actor != a) Failure("You can only delete you change request drafts")
+        else {
+          repo -= id
+          Full(id)
+        }
+
+    }
+  }
+
+  def saveDraftChangeRequest(cr: ChangeRequest,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
+    repo += (cr.id -> (cr,actor,reason))
+    Full(cr)
+  }
+}
+
+class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends RoChangeRequestRepository with WoChangeRequestRepository {
 
   private[this] val repo = MutMap[ChangeRequestId, ChangeRequest]()
 
-  def get(changeRequestId: ChangeRequestId): Box[ChangeRequest] = Box(repo.get(changeRequestId))
-  def getAll(): Box[Seq[ChangeRequest]] = Full(repo.values.toSeq)
-  def createChangeRequest(changeRequest: ChangeRequest): Box[ChangeRequest] = repo.get(changeRequest.id) match {
-    case Some(_) => Failure(s"Error, the change request with ID '${changeRequest.id.value}' already exists, it can not be created")
-    case None =>
-      repo += (changeRequest.id -> changeRequest)
-      Full(changeRequest)
+  /** As seen from class InMemoryChangeRequestRepository, the missing signatures are as follows.
+   *  For convenience, these are usable as stub implementations.
+   */
+  // Members declared in com.normation.rudder.repository.RoChangeRequestRepository
+  def get(changeRequestId: ChangeRequestId): Box[Option[ChangeRequest]] = {
+    Full(repo.get(changeRequestId))
   }
-  def updateChangeRequest(changeRequest: ChangeRequest): Box[ChangeRequest] = repo.get(changeRequest.id) match {
-    case Some(x) =>
-      if(x.status.readOnly) {
-        Failure(s"Error, the change request with ID '${changeRequest.id.value}' can not be updated because it is read-only")
-      } else {
-        repo += (changeRequest.id -> changeRequest)
-        Full(changeRequest)
+  def getAll(): Box[Seq[ChangeRequest]] = {
+    Full(repo.values.toSeq)
+  }
+
+  def createChangeRequest(changeRequest: ChangeRequest,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
+      repo.get(changeRequest.id) match {
+        case Some(x) => Failure(s"Change request with ID ${changeRequest.id} is already created")
+        case None =>
+          repo += (changeRequest.id-> changeRequest)
+          log.saveChangeRequestLog(
+              changeRequest.id
+            , ChangeRequestEventLog(actor, DateTime.now, reason, AddChangeRequestDiff(changeRequest))
+          ).map( _ => changeRequest)
       }
 
-    case None => Failure(s"Error, the change request with ID '${changeRequest.id.value}' does not exist, it can not be updated")
-  }
-  def setReadOnly(changeRequestId: ChangeRequestId): Box[ChangeRequestId] = repo.get(changeRequestId) match {
-    case None => Failure(s"No change request with ID '${changeRequestId.value}' exists, can not set it read-only")
-    case Some(cr) => ???
-  }
-  def deleteChangeRequest(changeRequest: ChangeRequest): Box[ChangeRequest] = {
-    repo -= changeRequest.id
-    Full(changeRequest)
   }
 
-  def setReadWrite(changeRequestId: ChangeRequestId): Box[ChangeRequestId] = ???
+  def deleteChangeRequest(changeRequest: ChangeRequest,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
+      repo.get(changeRequest.id) match {
+        case None => Full(changeRequest)
+        case Some(_) =>
+           repo -= changeRequest.id
+          log.saveChangeRequestLog(
+              changeRequest.id
+            , ChangeRequestEventLog(actor, DateTime.now, reason, DeleteChangeRequestDiff(changeRequest))
+          ).map( _ => changeRequest)
+      }
+  }
+
+  def setReadOnly(changeRequestId: ChangeRequestId,actor: EventActor,reason: Option[String]): Box[ChangeRequestId] = ???
+  def setReadWrite(changeRequestId: ChangeRequestId,actor: EventActor,reason: Option[String]): Box[ChangeRequestId] = ???
+
+  def updateChangeRequest(changeRequest: ChangeRequest,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
+      repo.get(changeRequest.id) match {
+        case None => Failure(s"Change request with ID ${changeRequest.id} does not exists")
+        case Some(_) =>
+          repo += (changeRequest.id-> changeRequest)
+          log.saveChangeRequestLog(
+              changeRequest.id
+            , ChangeRequestEventLog(actor, DateTime.now, reason, AddChangeRequestDiff(changeRequest))
+          ).map( _ => changeRequest)
+      }
+
+  }
+
 }

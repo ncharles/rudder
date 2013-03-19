@@ -38,6 +38,36 @@ import org.joda.time.DateTime
 import com.normation.eventlog.EventActor
 import com.normation.rudder.domain.policies._
 import com.normation.rudder.domain.nodes._
+import com.normation.eventlog.EventActor
+
+
+/*
+ * Event log on change request
+ */
+sealed trait ChangeRequestDiff
+
+case class AddChangeRequestDiff(
+    changeRequest: ChangeRequest
+)extends ChangeRequestDiff
+
+case class DeleteChangeRequestDiff(
+    changeRequest: ChangeRequest
+) extends ChangeRequestDiff
+
+case class ModifyToChangeRequestDiff(
+    changeRequest: ChangeRequest
+) extends ChangeRequestDiff
+
+case class RebaseChangeRequestDiff(
+    changeRequest: ChangeRequest
+) extends ChangeRequestDiff
+
+case class ChangeRequestEventLog(
+    actor       : EventActor
+  , creationDate: DateTime
+  , reason      : Option[String]
+  , diff        : ChangeRequestDiff
+)
 
 
 /*
@@ -52,54 +82,9 @@ case class ChangeRequestId(value:String) {
   override def toString = value
 }
 
-object ChangeRequestId {
-  implicit def displayCRId (CRId:ChangeRequestId):String= CRId.value
-}
-sealed trait ChangeRequest {
-        def id     : ChangeRequestId //modification Id ?
-  final def status : ChangeRequestStatus = {
-    def recStatus(status:List[ChangeRequestStatusItem]) : ChangeRequestStatus = {
-      status match {
-        case Nil => statusHistory.initialState.status
-          //throw new IllegalStateException("A change request must have at least a creation status")
-        case h :: t => h.diff match {
-          case DeleteChangeRequestStatusDiff | RebaseChangeRequestStatusDiff =>
-            recStatus(t)
-          case AddChangeRequestStatusDiff(s) => // ???
-            s
-          case ModifyToChangeRequestStatusDiff(s) =>
-            s
-        }
-      }
-    }
 
-    recStatus(statusHistory.history)
-  }
-
-
-  protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest
-
-  def updateStatus(update:ChangeRequestStatus,actor : EventActor) : ChangeRequest = {
-    if (update == status)
-      this
-    else {
-      val change = ChangeRequestStatusItem(actor,DateTime.now,None,ModifyToChangeRequestStatusDiff(update))
-      val newHistory = this.statusHistory.copy(history = change :: this.statusHistory.history)
-      copyWithNewHistory(newHistory)
-    }
-
-  }
-
-  //most recent in head
-  def statusHistory: ChangeRequestStatusHistory
-
-  //most recent in head
-  //must be non empty and ends with an item containing*
-  //an AddChangeRequestStatusDiff
-//  def statusHistory: List[ChangeRequestStatusItem]
-}
-
-case class ChangeRequestStatus(
+//a container for changer request infos
+final case class ChangeRequestInfo(
     name       : String
   , description: String
   // A marker to know if the ChangeRequest can be modified or not.
@@ -109,35 +94,32 @@ case class ChangeRequestStatus(
   , readOnly   : Boolean
 )
 
-sealed trait ChangeRequestStatusDiff
+object ChangeRequest {
 
-case class AddChangeRequestStatusDiff(
-    status: ChangeRequestStatus
-)extends ChangeRequestStatusDiff
+  def updateInfo[T <: ChangeRequest](cr:T, newInfo:ChangeRequestInfo): T = {
+    cr match {
+      case x:ConfigurationChangeRequest =>
+        x.copy(info = newInfo).asInstanceOf[T]
+      case x:RollbackChangeRequest =>
+        x.copy(info = newInfo).asInstanceOf[T]
+    }
+  }
 
-case object DeleteChangeRequestStatusDiff extends ChangeRequestStatusDiff
+}
 
-case class ModifyToChangeRequestStatusDiff(
-    status: ChangeRequestStatus
-) extends ChangeRequestStatusDiff
+sealed trait ChangeRequest {
 
-case object RebaseChangeRequestStatusDiff extends ChangeRequestStatusDiff
+  def id: ChangeRequestId //modification Id ?
 
-case class ChangeRequestStatusItem(
-    actor       : EventActor
-  , creationDate: DateTime
-  , reason      : Option[String]
-  , diff        : ChangeRequestStatusDiff
-)
+  def info: ChangeRequestInfo
+}
+
+
+
 
 ////////////////////////////////////////
 ///// Some types of change request /////
 ////////////////////////////////////////
-
-case class ChangeRequestStatusHistory(
-    initialState: AddChangeRequestStatusDiff
-  , history     : List[ChangeRequestStatusItem] = Nil
-)
 
 /**
  * A global configuration change request.
@@ -145,23 +127,19 @@ case class ChangeRequestStatusHistory(
  * Rules and Group.
  */
 case class ConfigurationChangeRequest(
-    id           : ChangeRequestId //modification Id ?
-  , statusHistory: ChangeRequestStatusHistory
-  , directives   : Map[DirectiveId, DirectiveChanges]
-  , nodeGroups   : Map[NodeGroupId, NodeGroupChanges]
+    id         : ChangeRequestId //modification Id ?
+  , info       : ChangeRequestInfo
+  , directives : Map[DirectiveId, DirectiveChanges]
+  , nodeGroups : Map[NodeGroupId, NodeGroupChanges]
   // ... TODO: complete for groups and rules
-) extends ChangeRequest {
-    protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest = this.copy(statusHistory = newHistory)
-}
+) extends ChangeRequest
 
 
 case class RollbackChangeRequest(
-    id           : ChangeRequestId //modification Id ?
-  , statusHistory: ChangeRequestStatusHistory
-  , rollback     : Null // TODO: rollback change request
-) extends ChangeRequest {
-    protected def copyWithNewHistory(newHistory : ChangeRequestStatusHistory):ChangeRequest = this.copy(statusHistory = newHistory)
-}
+    id         : ChangeRequestId //modification Id ?
+  , info       : ChangeRequestInfo
+  , rollback   : Null // TODO: rollback change request
+) extends ChangeRequest
 
 
 //////////////////////////////////

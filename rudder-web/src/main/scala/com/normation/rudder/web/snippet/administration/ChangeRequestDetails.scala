@@ -55,6 +55,8 @@ import org.joda.time.DateTime
 import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.policies.AddDirectiveDiff
 import com.normation.rudder.domain.policies.DirectiveDiff
+import com.normation.rudder.domain.workflows.ChangeRequestInfo
+import com.normation.rudder.services.eventlog.ChangeRequestEventLogService
 
 
 object ChangeRequestDetails {
@@ -65,8 +67,9 @@ object ChangeRequestDetails {
       chooseTemplate("component", "header", xml)
     }) openOr Nil
  }
+
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
-import ChangeRequestDetails._
+  import ChangeRequestDetails._
 
   val techRepo = RudderConfig.techniqueRepository
   val rodirective = RudderConfig.roDirectiveRepository
@@ -77,62 +80,121 @@ import ChangeRequestDetails._
   val aDirectiveChangeItem =  DirectiveChangeItem(CurrentUser.getActor,DateTime.now.minusHours(6),None,aDirectiveAddDiff)
   val aDirectiveChange = DirectiveChange(Some(directive),aDirectiveChangeItem,Seq())
   val aDirectiveChanges = DirectiveChanges(aDirectiveChange,Seq())
-  var dummyStatus = ChangeRequestStatus("MyFirstChangeRequest","blablabla",false)
-  var dummyStatus2 = ChangeRequestStatus("MySecondChangeRequest","blablabla",false)
-  val startStatus = AddChangeRequestStatusDiff(dummyStatus)
-  val startStatus2 = AddChangeRequestStatusDiff(dummyStatus2)
-  val startStatusItem = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,AddChangeRequestStatusDiff(dummyStatus))
-  val startStatusItem2 = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,AddChangeRequestStatusDiff(dummyStatus2))
-  var dummyStatusChange = ChangeRequestStatusHistory(startStatus)
-  var dummyStatusChange2 = ChangeRequestStatusHistory(startStatus2)
-  var dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"),dummyStatusChange,Map((adirectiveId,aDirectiveChanges)))
-  var dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"),dummyStatusChange2,Map((adirectiveId,aDirectiveChanges)))
+//  val dummyStatus = ChangeRequestInfo("MyFirstChangeRequest","blablabla",false)
+//  val dummyStatus2 = ChangeRequestInfo("MySecondChangeRequest","blablabla",false)
+//  val startStatus = AddChangeRequestStatusDiff(dummyStatus)
+//  val startStatus2 = AddChangeRequestStatusDiff(dummyStatus2)
+//  val startStatusItem = ChangeRequestStatusItem(
+//                            CurrentUser.getActor
+//                          , DateTime.now.minusDays(1)
+//                          , None
+//                          , AddChangeRequestStatusDiff(dummyStatus)
+//                        )
+//  val startStatusItem2 = ChangeRequestStatusItem(
+//                             CurrentUser.getActor
+//                           , DateTime.now.minusDays(1)
+//                           , None
+//                           , AddChangeRequestStatusDiff(dummyStatus2)
+//                         )
+
+  val dummyCR = ConfigurationChangeRequest(
+      ChangeRequestId("1")
+    , ChangeRequestInfo(
+          "MyFirstChangeRequest"
+        , "blablabla"
+        , false
+      )
+    , Map( adirectiveId -> aDirectiveChanges )
+    , Map()
+  )
+  val dummyCR2 = ConfigurationChangeRequest(
+      ChangeRequestId("2")
+    , ChangeRequestInfo(
+          "MyFirstChangeRequest"
+        , "blablabla"
+        , false
+      )
+    , Map( adirectiveId -> aDirectiveChanges )
+    , Map()
+  )
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
+  private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
+  private[this] val woChangeRequestRepository = RudderConfig.woChangeRequestRepository
+
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[String] = {S.param("crId") }
-  private[this] var Cr: Box[ChangeRequest] = CrId match {case Full("1") => Full(dummyCR)
-  case Full("2") => Full(dummyCR2)
-  case Full(id) => Failure(s"${id} is not a good Change request id")
-  case eb:EmptyBox => val fail = eb ?~ "no id selected"
-  Failure(s"Error in the cr id asked: ${fail.msg}")
+  private[this] var changeRequest: Box[ChangeRequest] = CrId match {case Full("1") => Full(dummyCR)
+    case Full("2") => Full(dummyCR2)
+    case Full(id) => Failure(s"${id} is not a good Change request id")
+    case eb:EmptyBox =>
+      val fail = eb ?~ "no id selected"
+      Failure(s"Error in the cr id asked: ${fail.msg}")
   }
-
 
   def dispatch = {
-    case "header" => xml => Cr match { case eb:EmptyBox => <div id="content">
+    case "header" => (xml => changeRequest match {
+        case eb:EmptyBox =>
+          <div id="content">
+            <div> Error</div>
+          </div>
+          /* detail page */
 
-      <div> Error</div>
-    </div>
-      /* detail page */
-    case Full(id) => displayHeader(id)
-    }
+        case Full(id) => displayHeader(id)
+      }
+    )
 
-    case "details" => xml =>
-    Cr match { case eb:EmptyBox => <div> Error {eb}</div>
+    case "details" => (xml => changeRequest match {
+        case eb:EmptyBox => <div> Error {eb}</div>
+        case Full(cr) =>
+          new ChangeRequestEditForm(
+              cr.info
+            , (statusUpdate:ChangeRequestInfo) =>  {
+                val newCR = ChangeRequest.updateInfo(
+                    cr
+                  , statusUpdate
+                )
+                changeRequest = Full(newCR)
+                logger.warn(changeRequest)
+                //todo: save update change request, that will create the event log,
+                //and so populate the eventlog history
+                woChangeRequestRepository.updateChangeRequest(newCR, CurrentUser.getActor, None)
 
-     case Full(cr) => new ChangeRequestEditForm(cr.status, (statusUpdate:ChangeRequestStatus) =>  {
-       val newCR = Cr.map(_.updateStatus(statusUpdate,CurrentUser.getActor))
-       Cr = newCR
-       logger.warn(Cr)
-       SetHtml("changeRequestHeader",displayHeader(newCR.get))& SetHtml("changeRequestChanges",new ChangeRequestChangesForm(newCR.get).dispatch("changes")(NodeSeq.Empty))
- }).display    }
-    case "changes" => xml => Cr match { case eb:EmptyBox => <div> Error</div>
+                SetHtml("changeRequestHeader", displayHeader(newCR)) &
+                SetHtml("changeRequestChanges", new ChangeRequestChangesForm(newCR).dispatch("changes")(NodeSeq.Empty))
+              }
+          ).display
+    })
 
-     case Full(id) => <div id="changeRequestChanges">{new ChangeRequestChangesForm(id).dispatch("changes")(NodeSeq.Empty)}</div>
-    }
+    case "changes" => (xml => changeRequest match {
+        case eb:EmptyBox => <div> Error</div>
+        case Full(id) =>
+          <div id="changeRequestChanges">{
+            new ChangeRequestChangesForm(id).dispatch("changes")(NodeSeq.Empty)
+          }</div>
+    })
   }
 
-  def displayHeader(cr:ChangeRequest) =
+  def displayHeader(cr:ChangeRequest) = {
+
+    //last action:
+    val action = changeRequestEventLogService.getLastLog(cr.id) match {
+      case eb:EmptyBox => "Error when retrieving the last action"
+      case Full(None)  => "Error, no action were recorded for that change request" //should not happen here !
+      case Full(Some(ChangeRequestEventLog(_,_,_,diff))) => diff match {
+        case ModifyToChangeRequestDiff(_) => "Modified"
+        case AddChangeRequestDiff(_)    => "Created"
+        case DeleteChangeRequestDiff(_) => "Deleted"
+        case RebaseChangeRequestDiff(_) => "Resynchronise with current values"
+      }
+    }
+
     ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
-       "#CRName *" #> cr.status.name &
+       "#CRName *" #> cr.info.name &
        "#CRStatus *" #> "status" &
-       "#CRLastAction *" #> s"${cr.statusHistory.history.headOption.map(_.diff).getOrElse(cr.statusHistory.initialState) match {
-         case ModifyToChangeRequestStatusDiff(_) => "Modified"
-         case AddChangeRequestStatusDiff(_)    => "Created"
-         case DeleteChangeRequestStatusDiff => "Deleted"}}") (header)
+       "#CRLastAction *" #> s"${ action }") (header)
 
-
+  }
 
 
 }
@@ -146,9 +208,12 @@ object ChangeRequestEditForm {
     }) openOr Nil
  }
 
-class ChangeRequestEditForm (var changeRequest: ChangeRequestStatus,
-    SuccessCallback: ChangeRequestStatus => JsCmd)   extends DispatchSnippet with Loggable {
-import ChangeRequestEditForm._
+class ChangeRequestEditForm (
+    var changeRequest: ChangeRequestInfo
+  , SuccessCallback  : ChangeRequestInfo => JsCmd
+) extends DispatchSnippet with Loggable {
+
+  import ChangeRequestEditForm._
 
   def dispatch = {
     case "details" => { _ => display }
@@ -197,6 +262,7 @@ class ChangeRequestChangesForm(var changeRequest:ChangeRequest)  extends Dispatc
 import ChangeRequestChangesForm._
 
   val roDirectiveRepo = RudderConfig.roDirectiveRepository
+  val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
 
   def dispatch = {
     case "changes" => { _ => ("#changeTree ul *" #> {changeRequest match {case cr: ConfigurationChangeRequest => treeNode(cr).toXml
@@ -230,10 +296,13 @@ import ChangeRequestChangesForm._
         , <span>Changes</span>
         )
   val children = directivesChild :: Nil
-  val startStatusItem = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,changeRequest.statusHistory.initialState)
+//  val startStatusItem = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,changeRequest.originalStatusLog.diff)
+
+  val logs = changeRequestEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq())
+
   override val attrs = List(( "rel" -> { "changeType" } ))
   def displayHistory (directives : List[DirectiveChange] = changeRequest.directives.values.map(_.changes).toList)= {
-  ( "#crBody" #> {(startStatusItem :: changeRequest.statusHistory.history).flatMap(CRLine(_)) ++ directives.flatMap(CRLine(_))}).
+  ( "#crBody" #> {logs.flatMap(CRLine(_)) ++ directives.flatMap(CRLine(_))}).
   apply(CRTable) ++ Script(
         JsRaw(s"""$$('#changeHistory').dataTable( {
                     "asStripeClasses": [ 'color1', 'color2' ],
@@ -271,14 +340,14 @@ import ChangeRequestChangesForm._
     </table>
 
 
-  def CRLine(cr: ChangeRequestStatusItem)=
+  def CRLine(cr: ChangeRequestEventLog)=
     <tr>
       <td id="action">
          {cr.diff match {
-           case AddChangeRequestStatusDiff(_) => "Create"
-           case ModifyToChangeRequestStatusDiff(_) => "Modify"
-           case DeleteChangeRequestStatusDiff => "Delete"
-           case RebaseChangeRequestStatusDiff => "Rebased"
+           case AddChangeRequestDiff(_) => "Create"
+           case ModifyToChangeRequestDiff(_) => "Modify"
+           case DeleteChangeRequestDiff(_) => "Delete"
+           case RebaseChangeRequestDiff( _) => "Rebased"
          }}
       </td>
       <td id="actor">

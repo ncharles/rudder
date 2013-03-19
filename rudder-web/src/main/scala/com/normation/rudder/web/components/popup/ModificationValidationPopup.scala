@@ -62,6 +62,7 @@ import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.web.components.RuleGrid
 import com.normation.rudder.services.policies.OnlyDisableable
 import com.normation.rudder.services.policies.OnlyEnableable
+import com.normation.rudder.repository.WoDraftChangeRequestRepository
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -168,6 +169,7 @@ class ModificationValidationPopup(
   private[this] val changeRequestService = RudderConfig.changeRequestService
   private[this] val workflowService = RudderConfig.workflowService
   private[this] val dependencyService      = RudderConfig.dependencyAndDeletionService
+  private[this] val woDraftChangeRequestRepo : WoDraftChangeRequestRepository = ???
 
 
   def dispatch = {
@@ -353,7 +355,22 @@ class ModificationValidationPopup(
                   , crReasons.map( _.get )
                 )
             }
-            woChangeRequestRepo.createChangeRequest(cr)
+
+            currentRadio match {
+              case "quick" =>
+                for {
+                  saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map( _.get ))
+                  closed    <- woChangeRequestRepo.setReadOnly(saved.id, CurrentUser.getActor, crReasons.map( _.get ))
+                  wfStarted <- workflowService.startWorkflow(closed)
+                } yield {
+                  wfStarted
+                }
+
+              case "new" => //save in draft
+                woDraftChangeRequestRepo.saveDraftChangeRequest(cr, CurrentUser.getActor, crReasons.map( _.get ))
+            }
+
+
 
           case "existing" =>
             for {
@@ -381,25 +398,16 @@ class ModificationValidationPopup(
                              , crReasons.map( _.get )
                            )
                        }
-              saved <- woChangeRequestRepo.updateChangeRequest(newCr)
+              saved <- woChangeRequestRepo.updateChangeRequest(newCr, CurrentUser.getActor, crReasons.map( _.get ))
+              wf    <- workflowService.startWorkflow(saved.id)
             } yield {
               saved
             }
         }
       }
 
-      //other steps based on user choice: close the ChangeRequest and start the wf
-      val res = if(keepOpen) savedChangeRequest else {
-        for {
-          saved     <- savedChangeRequest
-          closed    <- woChangeRequestRepo.setReadOnly(saved.id)
-          wfStarted <- workflowService.startWorkflow(closed)
-        } yield {
-          wfStarted
-        }
-      }
 
-      res match {
+      savedChangeRequest match {
         case Full(_) => onSuccessCallback(Text("TODO: a custom message if in Draft, or a workflow status"))
         case eb:EmptyBox =>
           val e = (eb ?~! "Error when trying to save you modification")
