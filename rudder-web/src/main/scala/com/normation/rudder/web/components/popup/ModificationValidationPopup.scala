@@ -63,6 +63,10 @@ import com.normation.rudder.web.components.RuleGrid
 import com.normation.rudder.services.policies.OnlyDisableable
 import com.normation.rudder.services.policies.OnlyEnableable
 import com.normation.rudder.repository.WoDraftChangeRequestRepository
+import com.normation.rudder.services.workflows.ChangeRequestService
+import com.normation.rudder.repository.RoChangeRequestRepository
+import com.normation.rudder.repository.WoChangeRequestRepository
+import com.normation.rudder.services.workflows.WorkflowService
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -164,10 +168,10 @@ class ModificationValidationPopup(
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val userPropertyService = RudderConfig.userPropertyService
-  private[this] val roChangeRequestRepo = RudderConfig.roChangeRequestRepository
-  private[this] val woChangeRequestRepo = RudderConfig.woChangeRequestRepository
-  private[this] val changeRequestService = RudderConfig.changeRequestService
-  private[this] val workflowService = RudderConfig.workflowService
+  private[this] val roChangeRequestRepo:RoChangeRequestRepository = ???
+  private[this] val woChangeRequestRepo:WoChangeRequestRepository = ???
+  private[this] val changeRequestService:ChangeRequestService = ???
+  private[this] val workflowService:WorkflowService = ???
   private[this] val dependencyService      = RudderConfig.dependencyAndDeletionService
   private[this] val woDraftChangeRequestRepo : WoDraftChangeRequestRepository = ???
 
@@ -339,6 +343,7 @@ class ModificationValidationPopup(
                 changeRequestService.createChangeRequestFromDirective(
                     changeRequestName.get
                   , changeRequestDescription.get
+                  , false
                   , techniqueName
                   , directive
                   , optOriginal

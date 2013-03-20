@@ -69,7 +69,6 @@ case class ChangeRequestEventLog(
   , diff        : ChangeRequestDiff
 )
 
-
 /*
  * Question:
  * - do we need a ChangeRequestDraft object?

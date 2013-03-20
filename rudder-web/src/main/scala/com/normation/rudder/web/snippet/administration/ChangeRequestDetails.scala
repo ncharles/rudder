@@ -36,27 +36,21 @@ package com.normation.rudder.web.snippet.administration
 
 
 import net.liftweb.common._
-import net.liftweb.http.js.JsCmds._
-import net.liftweb.http.DispatchSnippet
 import bootstrap.liftweb.RudderConfig
 import net.liftweb.http._
 import net.liftweb.http.js._
 import JE._
+import JsCmds._
 import net.liftweb.util._
-import net.liftweb.util.Helpers._
-import net.liftweb.http.SHtml
+import Helpers._
 import scala.xml.Text
 import scala.xml.NodeSeq
-import net.liftweb.http.SHtml
 import com.normation.rudder.domain.workflows._
 import com.normation.rudder.web.model._
-import com.normation.rudder.domain.policies.DirectiveId
 import org.joda.time.DateTime
 import com.normation.cfclerk.domain.TechniqueId
-import com.normation.rudder.domain.policies.AddDirectiveDiff
-import com.normation.rudder.domain.policies.DirectiveDiff
-import com.normation.rudder.domain.workflows.ChangeRequestInfo
-import com.normation.rudder.services.eventlog.ChangeRequestEventLogService
+import com.normation.rudder.domain.policies._
+import com.normation.rudder.web.components._
 
 
 object ChangeRequestDetails {
@@ -66,10 +60,17 @@ object ChangeRequestDetails {
     } yield {
       chooseTemplate("component", "header", xml)
     }) openOr Nil
- }
 
+ def popup =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
+    } yield {
+      chooseTemplate("component", "popup", xml)
+    }) openOr Nil
+}
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
-  import ChangeRequestDetails._
+import ChangeRequestDetails._
+
 
   val techRepo = RudderConfig.techniqueRepository
   val rodirective = RudderConfig.roDirectiveRepository
@@ -173,6 +174,13 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
             new ChangeRequestChangesForm(id).dispatch("changes")(NodeSeq.Empty)
           }</div>
     })
+
+    case "actions" => (xml => changeRequest match {
+      case eb:EmptyBox => NodeSeq.Empty
+      case Full(cr) => ("#backStep" #> SHtml.ajaxButton("Refuse", () => ChangeStepPopup("Refuse",List("Draft"),cr)) &
+         "#nextStep" #> SHtml.ajaxButton("Valid", () => ChangeStepPopup("Accept",List("Deploy Later","Deploy Directly"),cr)))(xml)
+
+    })
   }
 
   def displayHeader(cr:ChangeRequest) = {
@@ -181,22 +189,51 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     val action = changeRequestEventLogService.getLastLog(cr.id) match {
       case eb:EmptyBox => "Error when retrieving the last action"
       case Full(None)  => "Error, no action were recorded for that change request" //should not happen here !
-      case Full(Some(ChangeRequestEventLog(_,_,_,diff))) => diff match {
-        case ModifyToChangeRequestDiff(_) => "Modified"
-        case AddChangeRequestDiff(_)    => "Created"
-        case DeleteChangeRequestDiff(_) => "Deleted"
-        case RebaseChangeRequestDiff(_) => "Resynchronise with current values"
-      }
+      case Full(Some(ChangeRequestEventLog(actor,date,reason,diff))) =>
+        val actionName = diff match {
+          case ModifyToChangeRequestDiff(_) => "Modified"
+          case AddChangeRequestDiff(_)    => "Created"
+          case DeleteChangeRequestDiff(_) => "Deleted"
+          case RebaseChangeRequestDiff(_) => "Resynchronise with current values"
+        }
+        s"${actionName} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}"
     }
 
-    ("#backButton *" #> SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequests")) &
-       "#CRName *" #> cr.info.name &
-       "#CRStatus *" #> "status" &
+    ("#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
+       "#CRName *" #> s"CR#${cr.id}: ${cr.info.name}" &
+       "#CRStatus *" #> "Status" &
        "#CRLastAction *" #> s"${ action }") (header)
 
   }
 
+  def ChangeStepPopup(action:String,nextStep:List[String],cr:ChangeRequest) = {
+      val closePopup : JsCmd = JsRaw(""" $.modal.close();""")
+      val nextSelect = new WBSelectField("Next", nextStep.map(v => (v,v)))
+      def nextOne(next:String) : NodeSeq= <div class="wbBaseField">
+          <b class="threeCol">Next: </b>
+          <span id="CRStatus">
+            {next}
+           </span>
+        </div>
+      val description = new WBTextAreaField("Message", "") {
+      override def setFilter = notNull _ :: trim _ :: Nil
+      override def inputField = super.inputField  % ("style" -> "height:5em;")
+      override def errorClassName = ""
+      override def validations() = valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
+    }
+      SetHtml("popupContent",("#header" #>  s"${action} CR#${cr.id}: ${cr.info.name}" &
+          "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message." &
+          "#reason" #> description.toForm_! &
+          "#next" #> {nextStep match {
+            case Nil => <span>Error</span>
+            case head :: Nil => nextOne(head)
+            case _ => nextSelect.toForm_!
+          }} &
+          "#cancel" #> SHtml.ajaxButton("Cancel", () => closePopup ) &
+          "#confirm" #> SHtml.ajaxSubmit("Confirm", () => closePopup)
+          )( SHtml.ajaxForm(popup) ++ Script((JsRaw("correctButtons();"))))) &  JsRaw("createPopup('changeStatePopup', 150, 850)")
 
+  }
 }
 
 object ChangeRequestEditForm {
@@ -206,7 +243,7 @@ object ChangeRequestEditForm {
     } yield {
       chooseTemplate("component", "details", xml)
     }) openOr Nil
- }
+}
 
 class ChangeRequestEditForm (
     var changeRequest: ChangeRequestInfo
@@ -248,133 +285,3 @@ class ChangeRequestEditForm (
     SuccessCallback(changeRequest) & SetHtml("changeRequestDetails",display)
   }
 }
-
-object ChangeRequestChangesForm {
-  def form =
-    (for {
-      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
-    } yield {
-      chooseTemplate("component", "changes", xml)
-    }) openOr Nil
- }
-
-class ChangeRequestChangesForm(var changeRequest:ChangeRequest)  extends DispatchSnippet with Loggable {
-import ChangeRequestChangesForm._
-
-  val roDirectiveRepo = RudderConfig.roDirectiveRepository
-  val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
-
-  def dispatch = {
-    case "changes" => { _ => ("#changeTree ul *" #> {changeRequest match {case cr: ConfigurationChangeRequest => treeNode(cr).toXml
-    case _ => Text("not implemented :(")}
-    }).apply(form) ++ Script(JsRaw(s"""buildChangesTree("#changeTree","${S.contextPath}");""")) }
-
-
-  }
-
- def treeNode(changeRequest:ConfigurationChangeRequest) = new JsTreeNode{
-
-
-  def directiveChild(directiveId:DirectiveId) = new JsTreeNode{
-    val directive= roDirectiveRepo.getDirective(directiveId)
-
-      val body =         SHtml.a(
-          {() => SetHtml("changeDisplay",displayHistory(List(changeRequest.directives(directiveId).changes)))}
-        , <span>{directive.map(_.name).getOrElse("Unknown Directive")}</span>
-        )
-  val children = Nil
-  }
-  val directivesChild = new JsTreeNode{
-      val body =         SHtml.a(
-          {() => SetHtml("changeDisplay",displayHistory() )}
-        , <span>Directives</span>
-        )
-  val children = changeRequest.directives.keys.map(directiveChild(_)).toList
-  }
-  val body =         SHtml.a(
-          {() => SetHtml("changeDisplay",displayHistory () )}
-        , <span>Changes</span>
-        )
-  val children = directivesChild :: Nil
-//  val startStatusItem = ChangeRequestStatusItem(CurrentUser.getActor,DateTime.now.minusDays(1),None,changeRequest.originalStatusLog.diff)
-
-  val logs = changeRequestEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq())
-
-  override val attrs = List(( "rel" -> { "changeType" } ))
-  def displayHistory (directives : List[DirectiveChange] = changeRequest.directives.values.map(_.changes).toList)= {
-  ( "#crBody" #> {logs.flatMap(CRLine(_)) ++ directives.flatMap(CRLine(_))}).
-  apply(CRTable) ++ Script(
-        JsRaw(s"""$$('#changeHistory').dataTable( {
-                    "asStripeClasses": [ 'color1', 'color2' ],
-                    "bAutoWidth": false,
-                    "bFilter" : true,
-                    "bPaginate" : true,
-                    "bLengthChange": true,
-                    "sPaginationType": "full_numbers",
-                    "bJQueryUI": true,
-                    "oLanguage": {
-                      "sSearch": ""
-                    },
-                    "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
-                    "aaSorting": [[ 1, "asc" ]],
-                    "aoColumns": [
-                      { "sWidth": "100px" },
-                      { "sWidth": "40px" },
-                      { "sWidth": "40px" }
-                    ],
-                  } );
-                  $$('.dataTables_filter input').attr("placeholder", "Search"); """))
-  }
-    val CRTable =
-    <table id="changeHistory">
-      <thead>
-       <tr class="head tablewidth">
-        <th>Action</th>
-        <th>Actor</th>
-        <th>Date</th>
-      </tr>
-      </thead>
-      <tbody >
-      <div id="crBody"/>
-      </tbody>
-    </table>
-
-
-  def CRLine(cr: ChangeRequestEventLog)=
-    <tr>
-      <td id="action">
-         {cr.diff match {
-           case AddChangeRequestDiff(_) => "Create"
-           case ModifyToChangeRequestDiff(_) => "Modify"
-           case DeleteChangeRequestDiff(_) => "Delete"
-           case RebaseChangeRequestDiff( _) => "Rebased"
-         }}
-      </td>
-      <td id="actor">
-         {cr.actor}
-      </td>
-      <td id="date">
-         {cr.creationDate}
-      </td>
-   </tr>
-
-  def CRLine(cr: DirectiveChange)=
-    <tr>
-      <td id="action">
-         {cr.firstChange.diff}
-      </td>
-      <td id="actor">
-         {cr.firstChange.actor}
-      </td>
-      <td id="date">
-         {cr.firstChange.creationDate}
-      </td>
-   </tr>
-
-
-}
-
-}
-
-
-

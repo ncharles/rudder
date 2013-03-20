@@ -54,6 +54,7 @@ import org.joda.time.DateTime
 class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
+  private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val changeRequestTableId = "ChangeRequestId"
 
   private[this] val CrId: Box[String] = S.param("crId")
@@ -72,8 +73,8 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
         <th>ID</th>
         <th>Status</th>
         <th>Name</th>
-        <th>Owner</th>
-        <th>last modified date</th>
+        <th>Creator</th>
+        <th>Last modification</th>
       </tr>
       </thead>
       <tbody >
@@ -82,27 +83,19 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
     </table>
 
 
-  def changerUrl(id:String):JsCmd = {
-    JsRaw(s"""
-    pageurl = 'changeRequest/${id}';
-    //to get the ajax content and display in div with id 'content'
-    $$.ajax({url:pageurl,success: function(data){
-      $$('#content').html(pageurl);
-    }});
-    console.log(window.history)
-    //to change the browser URL to the given link location
-    if(pageurl!=window.location){
-      window.history.replaceState({path:pageurl},'',pageurl);
-    }
-  """)
-  }
   def CRLine(cr: ChangeRequest)=
     <tr>
       <td id="crId">
          {SHtml.a(() => S.redirectTo(s"changeRequest/${cr.id}"), Text(cr.id.value))}
       </td>
       <td id="crStatus">
-         {cr.info}
+         {changeRequestEventLogService.getChangeRequestHistory(cr.id).getOrElse(Seq()).headOption.map(_.diff) match {
+           case Some(AddChangeRequestDiff(_)) => "Draft"
+           case Some(ModifyToChangeRequestDiff(_)) => "Modify"
+           case Some(DeleteChangeRequestDiff(_)) => "Delete"
+           case Some(RebaseChangeRequestDiff(_)) => "Rebased"
+           case None => "Error"
+         }}
       </td>
       <td id="crName">
          {cr.info.name}
@@ -115,19 +108,11 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       </td>
    </tr>
   def dispatch = {
-    case "filter" => xml => CrId match { case eb:EmptyBox => <div id="content">
+    case "filter" => xml => <div id="content">
 
-      <div id="nameFilter"><span><b>Status</b><span id="actualFilter">{statusFilter}</span></span></div>
+      <div id="nameFilter" style="margin-left:40px;"><span><b style="vertical-align:top">Status:</b><span id="actualFilter" style="margin-left:10px">{statusFilter}</span></span></div>
     </div>
-      /* detail page */
-    case Full(id) =>
-      <div>
-        <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
-        <h2 style="float:left; margin-left:50px;font-size:60px;">{if (id=="1") dummyCR.info.name else if (id=="2") dummyCR2.info.name else "not a CR" }</h2>
-        <div class="statusdiv" style="float: right; color : #F79D10; font-size:30px; background-color:#111; margin-right:50px; padding:5px" >status</div>
-      </div>
-    }
-    case "display" => xml => CrId match { case eb:EmptyBox => <div> {
+    case "display" => xml =>  <div style="margin: 0 40px; overflow:auto;"> {
       ( "#crBody" #> Seq(dummyCR,dummyCR2).flatMap(CRLine(_)) ).apply(CRTable)
       }
     </div> ++ Script(OnLoad(
@@ -153,32 +138,30 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
                     ],
                   } );
                   $$('.dataTables_filter input').attr("placeholder", "Search"); """)))
-     case Full(id) => <div>{SHtml.ajaxButton("back",() => S.redirectTo("/secure/administration/changeRequest"))}</div>
-    }
   }
 
 
 
 
-  val noexpand:NodeSeq = SHtml.select(Seq(("Validation","Validation"),("Draft","Draft")), Full("Draft"), list => logger.info(list)) %
+  val noexpand:NodeSeq = SHtml.select(Seq(("","All"),("Validation","Validation"),("Draft","Draft")), Full("Draft"), list => logger.debug(list)) %
          ("onchange" ->
         JsRaw(s"""
         var filter = [];
         $$(this).children(":selected").each(function () {
-            filter.push($$(this).text());
+            filter.push($$(this).attr("value"));
                 });
 
-           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),2,true,false,true);  """)) ++
-       SHtml.ajaxButton("+", () => SetHtml("actualFilter",expand))
+           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
+       SHtml.ajaxButton("...", () => SetHtml("actualFilter",expand), ("class","expand"), ("style","margin: 0 10px; vertical-align:top; height:15px; width:auto;  padding: 1px; border-radius:25px")) ++ Script(JsRaw("correctButtons()"))
 
-  val expand =  SHtml.multiSelect(Seq(("Validation","Validation"),("Draft","Draft")), List(), list => logger.info(list)) % ("onchange" ->
+  val expand =  SHtml.multiSelect(Seq(("Validation","Validation"),("Draft","Draft")), List(), list => logger.debug(list)) % ("onchange" ->
         JsRaw(s"""
         var filter = [];
         $$(this).children(":selected").each(function () {
-            filter.push($$(this).text());
+            filter.push($$(this).attr("value"));
                 });
-           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),2,true,false,true);  """)) ++
-       SHtml.ajaxButton("-", () => SetHtml("actualFilter",noexpand))
+           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
+       SHtml.ajaxButton("-", () => SetHtml("actualFilter",noexpand),("class","expand"), ("style","margin: 0 10px; vertical-align:top; height:15px; width: 15px;  padding: 1px; border-radius:25px")) ++ Script(JsRaw("correctButtons()"))
 
    def statusFilter = {
            noexpand

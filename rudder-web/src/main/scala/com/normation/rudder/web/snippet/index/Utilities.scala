@@ -49,12 +49,14 @@ import com.normation.rudder.web.model.CurrentUser
 import com.normation.rudder.authorization._
 
 /**
- * Manage redirection for administration
- * home page
+ * Manage redirection for Utilities home page
  */
-class Administration {
+class Utilities {
 
   def index(xhtml:NodeSeq) : NodeSeq = {
-      S.redirectTo("policyServerManagement")
+    if ( CurrentUser.checkRights(Edit("administration")) || CurrentUser.checkRights(Write("administration")))
+      S.redirectTo("archiveManagement")
+    else
+      S.redirectTo("eventLogs")
   }
 }

@@ -1,0 +1,41 @@
+<lift:surround with="menu/menu-utilities" at="content">
+
+<head>
+<title>Rudder - Change requests</title>
+<style type="text/css">
+.expand .ui-button-text{
+padding:1px;
+line-height:1;
+}
+</style>
+</head>
+
+<div class="portlet">
+  <div class="portlet-header">Change requests</div>
+  <div class="portlet-content"> 
+   
+    <div class="intro">
+      <div>
+        All changes requested in Rudder can be consulted here.
+      </div>
+    </div>
+    <hr class="spacer"/>
+
+    <lift:lazy-load>
+    <div class="lift:administration.ChangeRequestManagement.filter">  
+    </div>
+    </lift:lazy-load>
+    <hr class="spacer"/>
+
+    <lift:lazy-load>
+    <div class="lift:administration.ChangeRequestManagement.display">  
+    </div>
+    </lift:lazy-load>
+    
+      
+  
+ </div>
+ <br/>
+</div>
+</lift:surround>
+
