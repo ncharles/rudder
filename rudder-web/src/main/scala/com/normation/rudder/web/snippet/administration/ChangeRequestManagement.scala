@@ -94,7 +94,8 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
            case Some(ModifyToChangeRequestDiff(_)) => "Modify"
            case Some(DeleteChangeRequestDiff(_)) => "Delete"
            case Some(RebaseChangeRequestDiff(_)) => "Rebased"
-           case None => "Error"
+           case None => //"Error"
+             if (cr.id.value=="1") "Draft" else "Validation"
          }}
       </td>
       <td id="crName">
@@ -110,7 +111,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   def dispatch = {
     case "filter" => xml => <div id="content">
 
-      <div id="nameFilter" style="margin-left:40px;"><span><b style="vertical-align:top">Status:</b><span id="actualFilter" style="margin-left:10px">{statusFilter}</span></span></div>
+      <div id="nameFilter" style="margin-left:40px;"><span><span id="actualFilter" style="margin-left:10px; display:inline-block">{statusFilter}</span></span></div>
     </div>
     case "display" => xml =>  <div style="margin: 0 40px; overflow:auto;"> {
       ( "#crBody" #> Seq(dummyCR,dummyCR2).flatMap(CRLine(_)) ).apply(CRTable)
@@ -143,27 +144,57 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
 
 
-  val noexpand:NodeSeq = SHtml.select(Seq(("","All"),("Validation","Validation"),("Draft","Draft")), Full("Draft"), list => logger.debug(list)) %
-         ("onchange" ->
-        JsRaw(s"""
-        var filter = [];
-        $$(this).children(":selected").each(function () {
-            filter.push($$(this).attr("value"));
-                });
-
-           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
-       SHtml.ajaxButton("...", () => SetHtml("actualFilter",expand), ("class","expand"), ("style","margin: 0 10px; vertical-align:top; height:15px; width:auto;  padding: 1px; border-radius:25px")) ++ Script(JsRaw("correctButtons()"))
-
-  val expand =  SHtml.multiSelect(Seq(("Validation","Validation"),("Draft","Draft")), List(), list => logger.debug(list)) % ("onchange" ->
-        JsRaw(s"""
-        var filter = [];
-        $$(this).children(":selected").each(function () {
-            filter.push($$(this).attr("value"));
-                });
-           $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);  """)) ++
-       SHtml.ajaxButton("-", () => SetHtml("actualFilter",noexpand),("class","expand"), ("style","margin: 0 10px; vertical-align:top; height:15px; width: 15px;  padding: 1px; border-radius:25px")) ++ Script(JsRaw("correctButtons()"))
 
    def statusFilter = {
-           noexpand
-   }
+     val values =  "Draft" :: "Validation" :: Nil
+     val selectValues =  values.map(x=> (x,x))
+     var value = ""
+     val onChange = (
+         "onchange" -> JsRaw(s"""
+             var filter = [];
+             $$(this).children(":selected").each(function () {
+               filter.push($$(this).attr("value"));
+             } );
+             $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);
+         """)
+     )
+
+     def submit(text:String, transform: String => NodeSeq) =
+       SHtml.ajaxSubmit(
+           text
+         , () => SetHtml("actualFilter",transform(value))
+         , ("class","expand")
+         , ("style","margin: 5px 10px; float:right; height:15px; width:18px;  padding: 0; border-radius:25px")
+       ) ++ Script(JsRaw("correctButtons()"))
+
+     def unexpandedFilter(default:String):NodeSeq = {
+    SHtml.ajaxForm(
+      <b style="float:left; margin: 5px 10px">Status:</b> ++
+      SHtml.select(
+          ("","All")::selectValues
+        , Full(default)
+        , list => {logger.info(list)
+          value = list}
+        , ("style","width:auto;")
+      ) % onChange  ++ submit("...",expandedFilter)
+
+    )
+  }
+
+    def expandedFilter(default:String) = {
+      val extendedDefault = if (values.exists(_ == default)) List(default) else Nil
+      SHtml.ajaxForm(
+        <b style="float:left; margin: 5px 10px">Status:</b> ++
+        SHtml.multiSelect(
+            selectValues
+          , extendedDefault
+          , list => {logger.warn(list)
+            value = if (list.size==1) list.head else "All"}
+          , ("style","width:auto;padding-right:3px;")
+        ) % onChange ++ submit(".",unexpandedFilter)
+      )
+    }
+
+  unexpandedFilter("All")
+  }
 }
