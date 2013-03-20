@@ -150,6 +150,7 @@ import ChangeRequestDetails._
         case Full(cr) =>
           new ChangeRequestEditForm(
               cr.info
+            , cr.id
             , (statusUpdate:ChangeRequestInfo) =>  {
                 val newCR = ChangeRequest.updateInfo(
                     cr
@@ -233,55 +234,5 @@ import ChangeRequestDetails._
           "#confirm" #> SHtml.ajaxSubmit("Confirm", () => closePopup)
           )( SHtml.ajaxForm(popup) ++ Script((JsRaw("correctButtons();"))))) &  JsRaw("createPopup('changeStatePopup', 150, 850)")
 
-  }
-}
-
-object ChangeRequestEditForm {
-  def form =
-    (for {
-      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
-    } yield {
-      chooseTemplate("component", "details", xml)
-    }) openOr Nil
-}
-
-class ChangeRequestEditForm (
-    var changeRequest: ChangeRequestInfo
-  , SuccessCallback  : ChangeRequestInfo => JsCmd
-) extends DispatchSnippet with Loggable {
-
-  import ChangeRequestEditForm._
-
-  def dispatch = {
-    case "details" => { _ => display }
-  }
-  private[this] val changeRequestName =
-    new WBTextField("Name", changeRequest.name) {
-    override def setFilter = notNull _ :: trim _ :: Nil
-    override def className = "twoCol"
-    override def validations =
-      valMinLen(3, "The name must have at least 3 characters") _ :: Nil
-  }
-
-  private[this] val changeRequestDescription=
-    new WBTextAreaField("Description", changeRequest.description) {
-      override def className = "twoCol"
-      override def setFilter = notNull _ :: trim _ :: Nil
-      override val maxLen = 255
-      override def validations = Nil
-  }
-
-
-  def display: NodeSeq = { logger.info(changeRequest)
-    ("#detailsForm *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
-        ClearClearable &
-        "#CRName *" #> changeRequestName.toForm_! &
-        "#CRDescription *" #> changeRequestDescription.toForm_! &
-        "#CRSave" #> SHtml.ajaxSubmit("Save", () =>  submit)
-        ) (form) ++ Script(JsRaw("correctButtons();"))}
-
-  def submit = {
-    changeRequest = changeRequest.copy(name=changeRequestName.is, description = changeRequestDescription.is)
-    SuccessCallback(changeRequest) & SetHtml("changeRequestDetails",display)
   }
 }
