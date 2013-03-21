@@ -63,6 +63,11 @@ import com.normation.eventlog.ModificationId
 import com.normation.rudder.domain.workflows.DirectiveChanges
 import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.workflows.NodeGroupChanges
+import com.normation.rudder.domain.policies.AddDirectiveDiff
+import com.normation.rudder.domain.policies.DeleteDirectiveDiff
+import com.normation.rudder.domain.policies.ModifyToDirectiveDiff
+import com.normation.rudder.repository.WoDirectiveRepository
+import com.normation.rudder.domain.workflows.ChangeRequestId
 
 /**
  * That service allows to glue Rudder with the
@@ -121,12 +126,7 @@ trait WorkflowService {
 }
 
 
-class WorkflowProcessLog extends Loggable {
 
-  def saveEventLog(log:StepWorkflowProcessEventLog) : Box[WorkflowProcessEventLog] = {
-    Full(log)
-  }
-}
 
 /**
  * A service that will do whatever is needed to commit
@@ -143,7 +143,7 @@ class CommitAndDeployChangeRequest(
     for {
       changeRequest <- roChangeRequestRepo.get(changeRequestId)
       saved         <- changeRequest match {
-                         case config:ConfigurationChangeRequest => saveConfigurationChangeRequest(config)
+                         case Some(config:ConfigurationChangeRequest) => saveConfigurationChangeRequest(config)
                          case x => Failure("We don't know how to deploy change request like this one: " + x)
                        }
     } yield {
@@ -158,9 +158,14 @@ class CommitAndDeployChangeRequest(
     import com.normation.utils.Control.sequence
 
     def doDirectiveChange(change:DirectiveChanges, modId: ModificationId) : Box[DirectiveId] = {
-      val id = change.changes.initialState.map( _.id.value).getOrElse("new directive")
+      val id = change.changes.firstChange.diff match {
+        case add:AddDirectiveDiff => add.directive.id
+        case del:DeleteDirectiveDiff => del.directive.id
+        case modTo: ModifyToDirectiveDiff => modTo.directive.id
+        case _ => change.changes.initialState.map( _.id).getOrElse(DirectiveId("should have been there"))
+      }
       logger.info(s"Save directive with id '${id}'")
-      Full(DirectiveId(id))
+      Full(id)
     }
     def doNodeGroupChange(change:NodeGroupChanges, modId: ModificationId) : Box[NodeGroupId] = {
       val id = change.changes.initialState.map( _.id.value).getOrElse("new group")
@@ -185,7 +190,7 @@ class CommitAndDeployChangeRequest(
 }
 
 class WorkflowServiceImpl(
-    log   : WorkflowProcessLog
+    log   : WorkflowProcessEventLogService
   , commit: CommitAndDeployChangeRequest
 ) extends WorkflowService with Loggable {
   private[this] sealed trait MyWorkflowNode extends WorkflowNode
@@ -261,7 +266,7 @@ class WorkflowServiceImpl(
     if(from.requests.contains(changeRequestId)) {
       from.requests -= changeRequestId
       to.requests += changeRequestId
-      log.saveEventLog(StepWorkflowProcessEventLog(actor, DateTime.now, reason, from, to))
+      log.saveEventLog(StepWorkflowProcessEventLog(actor, DateTime.now, reason, from, to),changeRequestId)
       Full(changeRequestId)
     } else {
       Failure(s"The workflow step ${from.id.value} does not contain the change request with ID ${changeRequestId.value}")
@@ -350,4 +355,34 @@ class WorkflowServiceImpl(
   def getCorrection : Box[Seq[ChangeRequestId]] = Full(Correction.requests)
   def getDeployed : Box[Seq[ChangeRequestId]] = Full(Deployed.requests)
   def getRejected : Box[Seq[ChangeRequestId]] = Full(Rejected.requests)
+}
+
+
+trait WorkflowProcessEventLogService {
+
+  def saveEventLog(log:StepWorkflowProcessEventLog, crId:ChangeRequestId) : Box[WorkflowProcessEventLog]
+
+  def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[WorkflowProcessEventLog]]
+
+  def getLastLog(id:ChangeRequestId) : Box[Option[WorkflowProcessEventLog]]
+}
+
+class InMemoryWorkflowProcessEventLogService extends WorkflowProcessEventLogService with Loggable {
+  import scala.collection.mutable.{Map => MutMap, Buffer}
+  private[this] val repo = MutMap[ChangeRequestId, Buffer[WorkflowProcessEventLog]]()
+  def saveEventLog(log:StepWorkflowProcessEventLog, crId:ChangeRequestId) : Box[WorkflowProcessEventLog] = {
+    val buf = repo.getOrElse(crId, Buffer[WorkflowProcessEventLog]())
+    buf += log
+    repo += (crId -> buf)
+
+    Full(log)
+  }
+
+  def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[WorkflowProcessEventLog]] = {
+    Full(repo.getOrElse(id, Seq()))
+  }
+
+  def getLastLog(id:ChangeRequestId) : Box[Option[WorkflowProcessEventLog]] = {
+        Full(repo.getOrElse(id, Seq()).lastOption)
+  }
 }
