@@ -170,9 +170,13 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService {
     stepStartToValidation(changeRequestId, actor, reason)
   }
 
-  def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    ???
+  }
 
-  def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    ???
+  }
 
   //allowed workflow steps
 

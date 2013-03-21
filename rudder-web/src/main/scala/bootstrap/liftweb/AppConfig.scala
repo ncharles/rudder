@@ -315,7 +315,7 @@ object RudderConfig extends Loggable {
   private[this] val draftRepo = new InMemoryDraftChangeRequestRepository
   val roDraftChangeRequestRepository: RoDraftChangeRequestRepository = draftRepo
   val woDraftChangeRequestRepository: WoDraftChangeRequestRepository = draftRepo
-  val workflowService: WorkflowService = new WorkflowServiceImpl
+  val workflowService: WorkflowService = new WorkflowServiceImpl(new WorkflowProcessLog)
  // val diffService: DiffService = ???
   val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl(uuidGen)
 
