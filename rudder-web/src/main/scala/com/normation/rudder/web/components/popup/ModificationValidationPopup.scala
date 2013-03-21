@@ -68,6 +68,7 @@ import com.normation.rudder.repository.RoChangeRequestRepository
 import com.normation.rudder.repository.WoChangeRequestRepository
 import com.normation.rudder.services.workflows.WorkflowService
 import com.normation.cfclerk.domain.SectionSpec
+import com.normation.rudder.web.model.RudderBaseField
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -83,8 +84,28 @@ import com.normation.cfclerk.domain.SectionSpec
 object ModificationValidationPopup extends Loggable {
   val htmlId_popupContainer = "validationContainer"
 
+  def staticInit() : NodeSeq = {
+    //a method to display the content matching the selected radio
+    <head>{Script(
+     JsRaw("""var displayCrInput = function(name) {
+       if(name == 'existing') {
+          $('#existingChangeRequest').show();
+          $('#newChangeRequest').hide();
+        } else if(name == 'new') {
+          $('#existingChangeRequest').hide();
+          $('#newChangeRequest').show();
+          $('#changeRequestDescription').show();
+        } else {
+          $('#existingChangeRequest').hide();
+          $('#newChangeRequest').show();
+          $('#changeRequestDescription').hide();
+        }
+     };""")
+    )}</head>
+  }
+
   private def html = {
-    val path = "templates-hidden" :: "components" :: "ModificationValidationPopup" :: Nil
+    val path = "templates-hidden" :: "Popup" :: "ModificationValidationPopup" :: Nil
     (for {
       xml <- Templates(path)
     } yield {
@@ -161,42 +182,39 @@ class ModificationValidationPopup(
                           , (NodeGroup, Option[NodeGroup])
                         ]
   , action            : String //one among: save, delete, enable, disable
+  , isANewItem        : Boolean
   , onSuccessCallback : NodeSeq => JsCmd = { x => Noop }
   , onFailureCallback : NodeSeq => JsCmd = { x => Noop }
 ) extends DispatchSnippet with Loggable {
 
   import ModificationValidationPopup._
 
-  private[this] val uuidGen = RudderConfig.stringUuidGenerator
-  private[this] val userPropertyService = RudderConfig.userPropertyService
-  private[this] val roChangeRequestRepo:RoChangeRequestRepository = ???
-  private[this] val woChangeRequestRepo:WoChangeRequestRepository = ???
-  private[this] val changeRequestService:ChangeRequestService = ???
-  private[this] val workflowService:WorkflowService = ???
-  private[this] val dependencyService      = RudderConfig.dependencyAndDeletionService
-  private[this] val woDraftChangeRequestRepo : WoDraftChangeRequestRepository = ???
+  private[this] val uuidGen                  = RudderConfig.stringUuidGenerator
+  private[this] val userPropertyService      = RudderConfig.userPropertyService
+  private[this] val roChangeRequestRepo      = RudderConfig.roChangeRequestRepository
+  private[this] val woChangeRequestRepo      = RudderConfig.woChangeRequestRepository
+  private[this] val changeRequestService     = RudderConfig.changeRequestService
+  private[this] val workflowService          = RudderConfig.workflowService
+  private[this] val dependencyService        = RudderConfig.dependencyAndDeletionService
+  private[this] val woDraftChangeRequestRepo = RudderConfig.woDraftChangeRequestRepository
 
 
   def dispatch = {
     case "popupContent" => { _ => popupContent }
   }
 
-
   def popupContent() : NodeSeq = {
     val name = if(item.isLeft) "Directive" else "Group"
-
     (
-      "#validationForm" #> { (xml:NodeSeq) => SHtml.ajaxForm(xml) } &
-      "#dialogTitle" #> titles(name)(action) &
+      "#validationForm" #> { (xml:NodeSeq) => SHtml.ajaxForm(xml) } andThen
+      "#dialogTitle *" #> titles(name)(action) &
       "#explanationMessageZone" #> explanationMessages(name)(action) &
       "#disableItemDependencies" #> showDependentRules() &
       ".reasonsFieldsetPopup" #> {
         crReasons.map { f =>
-          "#explanationMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
-          "#reasonFieldError" #> (if(f.hasErrors) {
-                                   <ul>{f.errors.map { e => <li>{e}</li> }}</ul>
-                                 } else { NodeSeq.Empty } ) &
-          "#reasonsField" #> f.toForm_!
+          "#reasonMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
+          "#reasonFieldError" #> showError(f) &
+          "#reasonField" #> f.toForm_!
         }
       } &
       "#radioQuick" #> radioQuick &
@@ -204,16 +222,22 @@ class ModificationValidationPopup(
       "#radioExisting" #> radioExisting &
       "#changeRequestName" #> changeRequestName.toForm &
       "#changeRequestDescription" #> changeRequestDescription.toForm &
-      "#existingChangeRequest" #> existingChangeRequest &
-      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
-      "#saveKeepOpen" #> (SHtml.ajaxSubmit("Configure", onSubmitKeepOpen) % ("id", "createDirectiveSaveButton") % ("tabindex","4")) &
-      "#saveStartWorkflow" #> (SHtml.ajaxSubmit("Configure", onSubmitStartWorkflow _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
-    )(html ++ Script(OnLoad(JsRaw("correctButtons();"))))
+      "#existingChangeRequest" #> existingChangeRequest.toForm &
+//      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
+      "#saveCreateDraft" #> (SHtml.ajaxSubmit("Submit Draft", onSubmitKeepOpen) % ("id", "createDirectiveSaveButton") % ("tabindex","4") % ("class","nodisplay")) &
+      "#saveStartWorkflow" #> (SHtml.ajaxSubmit("Create Draft", onSubmitStartWorkflow _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
+    )(html ++ Script(OnLoad(
+        JsRaw("correctButtons();"))))
+  }
 
+  private[this] def showError(field:RudderBaseField) : NodeSeq = {
+    if(field.hasErrors) {
+      <ul>{field.errors.map { e => <li>{e}</li> }}</ul>
+    } else { NodeSeq.Empty }
   }
 
   private[this] def showDependentRules() : NodeSeq = {
-    if(action == "create") {
+    if(isANewItem) {
       NodeSeq.Empty
     } else {
 
@@ -221,7 +245,7 @@ class ModificationValidationPopup(
         case Left((_, _, directive, _)) =>
           action match {
             case "delete" => dependencyService.directiveDependencies(directive.id).map(_.rules)
-            case "disable" => dependencyService.directiveDependencies(directive.id, OnlyEnableable).map(_.rules)
+            case "disable" | "save" => dependencyService.directiveDependencies(directive.id, OnlyEnableable).map(_.rules)
             case "enable" => dependencyService.directiveDependencies(directive.id, OnlyDisableable).map(_.rules)
           }
 
@@ -240,14 +264,20 @@ class ModificationValidationPopup(
   }
 
   ///////////// fields for category settings ///////////////////
+  private[this] var currentRadio : String = "quick"
+
   val (radioQuick, radioNew, radioExisting) = {
-    val radios : ChoiceHolder[String] = SHtml.radio(Seq("quick","new", "existing"), Full(currentRadio), { s =>
+    val radios = SHtml.radio(Seq("quick","new", "existing"), Full(currentRadio), { s =>
       currentRadio = s
-    } )
+    } ).map { choice =>
+      choice.xhtml match {
+        case e:Elem => e % ("onclick", s"displayCrInput('${choice.key}');")
+        case x => x
+      }
+    }
     (radios(0),radios(1),radios(2))
   }
 
-  private[this] var currentRadio : String = "quick"
 
   private[this] val crReasons = {
     import com.normation.rudder.web.services.ReasonBehavior._
@@ -274,7 +304,12 @@ class ModificationValidationPopup(
     }
   }
 
-  private[this] val changeRequestName = new WBTextField("Name", "") {
+  private[this] val defaultRequestName = item match {
+    case Left((t,r,d,opt)) => s"Update Directive ${d.name}"
+    case Right((g,opt)) => s"Update Group ${g.name}"
+  }
+
+  private[this] val changeRequestName = new WBTextField("Name", defaultRequestName) {
     override def setFilter = notNull _ :: trim _ :: Nil
     override def errorClassName = ""
     override def inputField = super.inputField % ("onkeydown" , "return processKey(event , 'createDirectiveSaveButton')") % ("tabindex","1")
@@ -282,9 +317,9 @@ class ModificationValidationPopup(
       valMinLen(3, "The name must have at least 3 characters") _ :: Nil
   }
 
-  private[this] val changeRequestDescription = new WBTextAreaField("Short description", "") {
+  private[this] val changeRequestDescription = new WBTextAreaField("Description", "") {
     override def setFilter = notNull _ :: trim _ :: Nil
-    override def inputField = super.inputField  % ("style" -> "height:7em") % ("tabindex","2")
+    override def inputField = super.inputField  % ("style" -> "height:7em") % ("tabindex","2") % ("class" -> "nodisplay")
     override def errorClassName = ""
     override def validations = Nil
 
@@ -293,7 +328,7 @@ class ModificationValidationPopup(
   //TODO : get existing change request
   private[this] val changeRequestList = Seq(("Private Draft 1", "pvd1"), ("Change Request 42", "cr42"))
   private[this] val existingChangeRequest = new WBSelectField("Existing change requests", changeRequestList, "") {
-
+    override def inputField = super.inputField % ("class" -> "nodisplay")
   }
 
   private[this] val formTracker = new FormTracker(
@@ -368,7 +403,7 @@ class ModificationValidationPopup(
                 for {
                   saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map( _.get ))
                   closed    <- woChangeRequestRepo.setReadOnly(saved.id, CurrentUser.getActor, crReasons.map( _.get ))
-                  wfStarted <- workflowService.startWorkflow(closed)
+                  wfStarted <- workflowService.startWorkflow(closed,CurrentUser.getActor, crReasons.map( _.get ))
                 } yield {
                   wfStarted
                 }
@@ -407,7 +442,7 @@ class ModificationValidationPopup(
                            )
                        }
               saved <- woChangeRequestRepo.updateChangeRequest(newCr, CurrentUser.getActor, crReasons.map( _.get ))
-              wf    <- workflowService.startWorkflow(saved.id)
+              wf    <- workflowService.startWorkflow(saved.id,CurrentUser.getActor, crReasons.map( _.get ))
             } yield {
               saved
             }

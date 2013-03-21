@@ -34,8 +34,22 @@
 
 package com.normation.rudder.services.workflows
 
-import com.normation.rudder.domain.workflows.{ ChangeRequestId, WorkflowProcessId }
+import com.normation.rudder.domain.workflows.{ ChangeRequestId }
 import net.liftweb.common.Box
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import scala.collection.mutable.Buffer
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import net.liftweb.common.Failure
+import net.liftweb.common.Loggable
+import net.liftweb.common.Full
+import com.normation.rudder.domain.workflows.WorkflowProcessEventLog
+import com.normation.rudder.domain.workflows.StepWorkflowProcessEventLog
+import com.normation.eventlog.EventActor
+import org.joda.time.DateTime
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.rudder.domain.workflows.WorkflowNodeId
+import com.normation.rudder.domain.workflows.WorkflowNode
 
 /**
  * That service allows to glue Rudder with the
@@ -51,19 +65,164 @@ trait WorkflowService {
    * wf for that change request
    * (one change request can not have more than
    * one wf at the same time).
+   *
+   * So for now, a workflow process id IS a changeRequestId.
+   * That abstraction is likelly to leak.
+   *
    */
-  def startWorkflow(changeRequestId: ChangeRequestId) : Box[WorkflowProcessId]
+  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
 
   /**
    * Notify who wants to know about the successful ending of the workflow
    * process for the given change request
    */
-  def onSuccessWorkflow(changeRequestId: ChangeRequestId) : Box[ChangeRequestId]
+  def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+
+  def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+
+  //allowed workflow steps
+
+  def stepStartToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepValidationToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepValidationToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepDeploymentToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepDeploymentToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepCorrectionToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepCorrectionToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+
+  def getValidation : Box[Seq[ChangeRequestId]]
+  def getDeployment : Box[Seq[ChangeRequestId]]
+  def getCorrection : Box[Seq[ChangeRequestId]]
+  def getDeployed : Box[Seq[ChangeRequestId]]
+  def getRejected : Box[Seq[ChangeRequestId]]
 
 }
 
-class WorkflowServiceImpl extends WorkflowService {
 
-  def startWorkflow(changeRequestId: ChangeRequestId) : Box[WorkflowProcessId] = ???
-  def onSuccessWorkflow(changeRequestId: ChangeRequestId) : Box[ChangeRequestId] = ???
+class WorkflowProcessLog extends Loggable {
+
+  def saveEventLog(log:StepWorkflowProcessEventLog) : Box[WorkflowProcessEventLog] = {
+    logger.info(s"[${log.date.toString()}] Actor ${log.actor}Workflow step from ${log.from.id.value} to ${log.to.id.value}")
+    Full(log)
+  }
+
+}
+
+class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService {
+  private[this] sealed trait MyWorkflowNode extends WorkflowNode
+
+  //buffers for Workflow process
+  private[this] case object Start extends MyWorkflowNode {
+    val id = WorkflowNodeId("Start")
+    val requests = Buffer[ChangeRequestId]()
+  }
+
+  private[this] case object Correction extends MyWorkflowNode {
+    val id = WorkflowNodeId("Correction")
+    val requests = Buffer[ChangeRequestId]()
+  }
+
+  private[this] case object Validation extends MyWorkflowNode {
+    val id = WorkflowNodeId("Validation")
+    val requests = Buffer[ChangeRequestId]()
+  }
+
+  private[this] case object Deployment extends MyWorkflowNode {
+    val id = WorkflowNodeId("Deployment")
+    val requests = Buffer[ChangeRequestId]()
+  }
+
+  private[this] case object Deployed extends MyWorkflowNode {
+    val id = WorkflowNodeId("Deployed")
+    val requests = Buffer[ChangeRequestId]()
+  }
+
+  private[this] case object Rejected extends MyWorkflowNode {
+    val id = WorkflowNodeId("Rejected")
+    val requests = Buffer[ChangeRequestId]()
+  }
+
+  private[this] def changeStep(
+      from           : MyWorkflowNode
+    , to             : MyWorkflowNode
+    , changeRequestId: ChangeRequestId
+    , actor          : EventActor
+    , reason         : Option[String]
+  ) : Box[ChangeRequestId] = {
+    //check the presence of the changeRequest in the first state, and migrate
+    //it, logging
+    if(from.requests.contains(changeRequestId)) {
+      from.requests -= changeRequestId
+      to.requests += changeRequestId
+      log.saveEventLog(StepWorkflowProcessEventLog(actor, DateTime.now, reason, from, to))
+      Full(changeRequestId)
+    } else {
+      Failure(s"The workflow step ${from.id.value} does not contain the change request with ID ${changeRequestId.value}")
+    }
+  }
+
+
+  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    Start.requests += changeRequestId
+    stepStartToValidation(changeRequestId, actor, reason)
+  }
+
+  def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    ???
+  }
+
+  def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    ???
+  }
+
+  //allowed workflow steps
+
+  def stepStartToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Start, Validation, changeRequestId, actor, reason)
+  }
+
+  def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Validation, Deployment, changeRequestId, actor, reason)
+  }
+
+  def stepValidationToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Validation, Correction, changeRequestId, actor, reason)
+  }
+
+  def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Validation, Deployed, changeRequestId, actor, reason)
+  }
+
+  def stepValidationToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Validation, Rejected, changeRequestId, actor, reason)
+  }
+
+  def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Deployment, Deployed, changeRequestId, actor, reason)
+  }
+
+  def stepDeploymentToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Deployment, Correction, changeRequestId, actor, reason)
+  }
+
+  def stepDeploymentToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Deployment, Rejected, changeRequestId, actor, reason)
+  }
+
+  def stepCorrectionToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Correction, Rejected, changeRequestId, actor, reason)
+  }
+
+  def stepCorrectionToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    changeStep(Start, Validation, changeRequestId, actor, reason)
+  }
+
+  def getValidation : Box[Seq[ChangeRequestId]] = Full(Validation.requests)
+  def getDeployment : Box[Seq[ChangeRequestId]] = Full(Deployment.requests)
+  def getCorrection : Box[Seq[ChangeRequestId]] = Full(Correction.requests)
+  def getDeployed : Box[Seq[ChangeRequestId]] = Full(Deployed.requests)
+  def getRejected : Box[Seq[ChangeRequestId]] = Full(Rejected.requests)
 }

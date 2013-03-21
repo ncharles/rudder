@@ -80,7 +80,7 @@ object DirectiveEditForm {
       xml <- Templates("templates-hidden" :: "components" :: "ComponentDirectiveEditForm" :: Nil)
     } yield {
       chooseTemplate("component", "staticInit", xml) ++
-        RuleGrid.staticInit
+        RuleGrid.staticInit ++ ModificationValidationPopup.staticInit
     }) openOr Nil
 
   private def body =
@@ -151,9 +151,9 @@ class DirectiveEditForm(
   private[this] val asyncDeploymentAgent   = RudderConfig.asyncDeploymentAgent
   private[this] val userPropertyService    = RudderConfig.userPropertyService
   private[this] val uuidGen                = RudderConfig.stringUuidGenerator
-  private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
   private[this] val workflowEngine         = RudderConfig.workflowService
   private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
+  private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"
   private[this] val parameterEditor = {
@@ -681,12 +681,13 @@ class DirectiveEditForm(
     val popup = new ModificationValidationPopup(
         Left(technique.id.name,technique.rootSection,  directive, optOriginal)
       , action
+      , isADirectiveCreation
       , xml => JsRaw("$.modal.close();") & onSuccessCallback(directive) & successPopup(xml)
       , xml => onFailureCallback() & failurePopup(xml)
     )
 
     SetHtml("confirmUpdateActionDialog", popup.popupContent) &
-    createPopup("updateActionDialog",140,850)
+    createPopup("confirmUpdateActionDialog",450,850)
   }
 
   // Fill the content of the popup with the list of dependant rules (this list is computed
