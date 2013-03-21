@@ -151,13 +151,9 @@ class DirectiveEditForm(
   private[this] val asyncDeploymentAgent   = RudderConfig.asyncDeploymentAgent
   private[this] val userPropertyService    = RudderConfig.userPropertyService
   private[this] val uuidGen                = RudderConfig.stringUuidGenerator
-  private[this] val workflowEngine:WorkflowService         = ???
-  private[this] val woChangeRequestRepo:WoChangeRequestRepository    = ???
   private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
-
-  /*private[this] val workflowEngine         = RudderConfig.workflowService
+  private[this] val workflowEngine         = RudderConfig.workflowService
   private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
-*/
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"
   private[this] val parameterEditor = {
@@ -683,7 +679,7 @@ class DirectiveEditForm(
   ) : JsCmd = {
     val optOriginal = { if(isADirectiveCreation) None else Some(directive) }
     val popup = new ModificationValidationPopup(
-        Left(technique.id.name, directive, optOriginal)
+        Left(technique.id.name,technique.rootSection,  directive, optOriginal)
       , action
       , xml => JsRaw("$.modal.close();") & onSuccessCallback(directive) & successPopup(xml)
       , xml => onFailureCallback() & failurePopup(xml)

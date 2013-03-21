@@ -77,4 +77,5 @@ final case class ModifyDirectiveDiff(
 final case class ModifyToDirectiveDiff(
     techniqueName: TechniqueName
   , directive    : Directive
+  , rootSection  : SectionSpec
 ) extends DirectiveSaveDiff with HashcodeCaching

@@ -43,6 +43,7 @@ import com.normation.rudder.domain.workflows.{ ConfigurationChangeRequest, Direc
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.utils.StringUuidGenerator
 import com.normation.rudder.domain.workflows.ChangeRequestInfo
+import com.normation.cfclerk.domain.SectionSpec
 
 
 
@@ -57,6 +58,7 @@ trait ChangeRequestService {
     , changeRequestDesc: String
     , readOnly         : Boolean
     , techniqueName    : TechniqueName
+    , rootSection      : SectionSpec
     , directive        : Directive
     , originalDirective: Option[Directive]
     , actor            : EventActor
@@ -75,6 +77,7 @@ trait ChangeRequestService {
   def updateChangeRequestWithDirective(
       changeRequest: ConfigurationChangeRequest
     , techniqueName: TechniqueName
+    , rootSection      : SectionSpec
     , directive    : Directive
     , originalDirective: Option[Directive]
     , actor            : EventActor
@@ -102,6 +105,7 @@ class ChangeRequestServiceImpl(
     , changeRequestDesc: String
     , readOnly         : Boolean
     , techniqueName    : TechniqueName
+    , rootSection      : SectionSpec
     , directive        : Directive
     , originalDirective: Option[Directive]
     , actor            : EventActor
@@ -112,7 +116,7 @@ class ChangeRequestServiceImpl(
       case None =>
       (AddDirectiveDiff(techniqueName, directive), None)
       case Some(x) =>
-      (ModifyToDirectiveDiff(techniqueName, directive), Some(x))
+      (ModifyToDirectiveDiff(techniqueName, directive, rootSection), Some(x))
       }
 
       val change = DirectiveChange(
@@ -155,6 +159,7 @@ class ChangeRequestServiceImpl(
   def updateChangeRequestWithDirective(
       changeRequest: ConfigurationChangeRequest
     , techniqueName: TechniqueName
+    , rootSection      : SectionSpec
     , directive    : Directive
     , originalDirective: Option[Directive]
     , actor            : EventActor

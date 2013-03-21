@@ -67,6 +67,7 @@ import com.normation.rudder.services.workflows.ChangeRequestService
 import com.normation.rudder.repository.RoChangeRequestRepository
 import com.normation.rudder.repository.WoChangeRequestRepository
 import com.normation.rudder.services.workflows.WorkflowService
+import com.normation.cfclerk.domain.SectionSpec
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -156,7 +157,7 @@ object ModificationValidationPopup extends Loggable {
 class ModificationValidationPopup(
     //if we are creating a new item, then None, else Some(x)
     item              : Either[
-                            (TechniqueName, Directive, Option[Directive])
+                            (TechniqueName, SectionSpec ,Directive, Option[Directive])
                           , (NodeGroup, Option[NodeGroup])
                         ]
   , action            : String //one among: save, delete, enable, disable
@@ -217,7 +218,7 @@ class ModificationValidationPopup(
     } else {
 
       val rules = item match {
-        case Left((_, directive, _)) =>
+        case Left((_, _, directive, _)) =>
           action match {
             case "delete" => dependencyService.directiveDependencies(directive.id).map(_.rules)
             case "disable" => dependencyService.directiveDependencies(directive.id, OnlyEnableable).map(_.rules)
@@ -339,12 +340,13 @@ class ModificationValidationPopup(
         currentRadio match {
           case "quick" | "new" =>
             val cr = item match {
-              case Left((techniqueName, directive, optOriginal)) =>
+              case Left((techniqueName, rootSection, directive, optOriginal)) =>
                 changeRequestService.createChangeRequestFromDirective(
                     changeRequestName.get
                   , changeRequestDescription.get
                   , false
                   , techniqueName
+                  , rootSection
                   , directive
                   , optOriginal
                   , CurrentUser.getActor
@@ -385,10 +387,11 @@ class ModificationValidationPopup(
                          case x => Failure(s"ChangeRequest of type ${x.getClass} can not be updated with a node group or a directive, only ConfigurationChangeRequest can")
                        }
               newCr =  item match {
-                         case Left((techniqueName, directive, optOriginal)) =>
+                         case Left((techniqueName, rootSection, directive, optOriginal)) =>
                            changeRequestService.updateChangeRequestWithDirective(
                                ccr
                              , techniqueName
+                             , rootSection
                              , directive
                              , optOriginal
                              , CurrentUser.getActor

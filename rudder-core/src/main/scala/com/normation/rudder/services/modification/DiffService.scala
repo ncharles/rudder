@@ -37,6 +37,8 @@ package com.normation.rudder.services.modification
 import com.normation.rudder.domain.policies._
 import com.normation.rudder.domain.nodes.NodeGroup
 import com.normation.rudder.domain.nodes.NodeGroupDiff
+import com.normation.rudder.repository.RoDirectiveRepository
+import com.normation.cfclerk.domain.SectionSpec
 
 /**
  * A service that allows to build diff between
@@ -44,7 +46,12 @@ import com.normation.rudder.domain.nodes.NodeGroupDiff
  */
 trait DiffService {
 
-  def diffDirective(reference:Directive, newItem:Directive) : DirectiveDiff
+  def diffDirective(
+      reference:Directive
+    , refRootSection : SectionSpec
+    , newItem:Directive
+    , newRootSection : SectionSpec
+  ) : DirectiveDiff
 
   def diffNodeGroup(reference:NodeGroup, newItem:NodeGroup) : NodeGroupDiff
 
@@ -52,9 +59,42 @@ trait DiffService {
 
 }
 
-class DiffServiceImpl extends DiffService {
+class DiffServiceImpl (
+    roDirectiveRepo : RoDirectiveRepository
+) extends DiffService {
 
-  def diffDirective(reference:Directive, newItem:Directive) : DirectiveDiff = ???
+  def diffDirective(
+      reference:Directive
+    , refRootSection : SectionSpec
+    , newItem:Directive
+    , newRootSection : SectionSpec) : ModifyDirectiveDiff = {
+    import SectionVal._
+    val refSectionVal = directiveValToSectionVal(refRootSection,reference.parameters)
+    val newSectionVal = directiveValToSectionVal(newRootSection,newItem.parameters)
+    val diffName = if (reference.name == newItem.name) None else Some(SimpleDiff(reference.name,newItem.name))
+    val diffShortDescription = if (reference.shortDescription == newItem.shortDescription) None else Some(SimpleDiff(reference.shortDescription,newItem.shortDescription))
+    val diffLongDescription = if (reference.longDescription == newItem.longDescription) None else Some(SimpleDiff(reference.longDescription,newItem.longDescription))
+    val diffTechniqueVersion = if (reference.techniqueVersion == newItem.techniqueVersion) None else Some(SimpleDiff(reference.techniqueVersion,newItem.techniqueVersion))
+    val diffPriority  = if (reference.priority == newItem.priority) None else Some(SimpleDiff(reference.priority,newItem.priority))
+    val diffParameters = if (refSectionVal == newSectionVal) None else Some(SimpleDiff(refSectionVal,newSectionVal))
+    val diffSystem = if (reference.isSystem == newItem.isSystem) None else Some(SimpleDiff(reference.isSystem,newItem.isSystem))
+    val diffEnable = if (reference.isEnabled == newItem.isEnabled) None else Some(SimpleDiff(reference.isEnabled,newItem.isEnabled))
+    val techniqueName = roDirectiveRepo.getActiveTechnique(reference.id).map(_.techniqueName).get
+    ModifyDirectiveDiff(
+        techniqueName
+      , reference.id
+      , reference.name
+      , diffName
+      , diffTechniqueVersion
+      , diffParameters
+      , diffShortDescription
+      , diffLongDescription
+      , diffPriority
+      , diffEnable
+      , diffSystem
+      )
+  }
+
 
   def diffNodeGroup(reference:NodeGroup, newItem:NodeGroup) : NodeGroupDiff = ???
 
