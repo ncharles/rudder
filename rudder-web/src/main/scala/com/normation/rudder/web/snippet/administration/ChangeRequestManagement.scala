@@ -50,10 +50,12 @@ import scala.xml.NodeSeq
 import net.liftweb.http.SHtml
 import com.normation.rudder.web.model.CurrentUser
 import org.joda.time.DateTime
+import com.normation.rudder.services.workflows.ChangeRequestService
 
 class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
+  private[this] val roCrRepo = RudderConfig.roChangeRequestRepository
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val changeRequestTableId = "ChangeRequestId"
 
@@ -114,7 +116,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       <div id="nameFilter" style="margin-left:40px;"><span><span id="actualFilter" style="margin-left:10px; display:inline-block">{statusFilter}</span></span></div>
     </div>
     case "display" => xml =>  <div style="margin: 0 40px; overflow:auto;"> {
-      ( "#crBody" #> Seq(dummyCR,dummyCR2).flatMap(CRLine(_)) ).apply(CRTable)
+      ( "#crBody" #> /*Seq(dummyCR,dummyCR2)*/roCrRepo.getAll.get.flatMap(CRLine(_)) ).apply(CRTable)
       }
     </div> ++ Script(OnLoad(
         JsRaw(s"""$$('#${changeRequestTableId}').dataTable( {
