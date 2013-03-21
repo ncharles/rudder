@@ -44,6 +44,7 @@ import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.utils.StringUuidGenerator
 import com.normation.rudder.domain.workflows.ChangeRequestInfo
 import com.normation.cfclerk.domain.SectionSpec
+import net.liftweb.common.Loggable
 
 
 
@@ -98,7 +99,7 @@ trait ChangeRequestService {
 
 class ChangeRequestServiceImpl(
     uuidGen: StringUuidGenerator
-) extends ChangeRequestService {
+) extends ChangeRequestService with Loggable {
 
   def createChangeRequestFromDirective(
       changeRequestName: String
@@ -153,7 +154,8 @@ class ChangeRequestServiceImpl(
     , actor            : EventActor
     , reason           : Option[String]
   ) : ConfigurationChangeRequest = {
-      ???
+    logger.info("update")
+    ???
   }
 
   def updateChangeRequestWithDirective(
@@ -164,7 +166,10 @@ class ChangeRequestServiceImpl(
     , originalDirective: Option[Directive]
     , actor            : EventActor
     , reason           : Option[String]
-  ) = ???
+  ) = {
+    logger.info("update")
+    ???
+  }
 
   def updateChangeRequestWithNodeGroup(
       changeRequest    : ConfigurationChangeRequest
@@ -172,6 +177,9 @@ class ChangeRequestServiceImpl(
     , originalNodeGroup: Option[NodeGroup]
     , actor            : EventActor
     , reason           : Option[String]
-  ) : ConfigurationChangeRequest = ???
+  ) : ConfigurationChangeRequest = {
+    logger.info("update")
+    ???
+  }
 
 }

@@ -50,6 +50,8 @@ import org.joda.time.DateTime
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.rudder.domain.workflows.WorkflowNodeId
 import com.normation.rudder.domain.workflows.WorkflowNode
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.rudder.domain.workflows.WorkflowNode
 
 /**
  * That service allows to glue Rudder with the
@@ -99,6 +101,10 @@ trait WorkflowService {
   def getDeployed : Box[Seq[ChangeRequestId]]
   def getRejected : Box[Seq[ChangeRequestId]]
 
+
+  val stepsValue :List[String]
+
+  def findStep(changeRequestId: ChangeRequestId) :String
 }
 
 
@@ -111,7 +117,7 @@ class WorkflowProcessLog extends Loggable {
 
 }
 
-class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService {
+class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with Loggable {
   private[this] sealed trait MyWorkflowNode extends WorkflowNode
 
   //buffers for Workflow process
@@ -145,6 +151,13 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService {
     val requests = Buffer[ChangeRequestId]()
   }
 
+  private[this] val steps:List[WorkflowNode] = List(Start,Correction,Validation,Deployment,Deployed,Rejected)
+
+  val stepsValue = steps.map(_.id.value)
+
+  def findStep(changeRequestId: ChangeRequestId) = {
+    steps.find(_.requests.contains(changeRequestId)).map(_.id.value).getOrElse("Draft")
+  }
   private[this] def changeStep(
       from           : MyWorkflowNode
     , to             : MyWorkflowNode
@@ -166,15 +179,18 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService {
 
 
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.info("start")
     Start.requests += changeRequestId
     stepStartToValidation(changeRequestId, actor, reason)
   }
 
   def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.info("update")
     ???
   }
 
   def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.info("update")
     ???
   }
 

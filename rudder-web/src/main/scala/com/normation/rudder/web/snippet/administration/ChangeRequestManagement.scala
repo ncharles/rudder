@@ -56,6 +56,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val roCrRepo = RudderConfig.roChangeRequestRepository
+  private[this] val workflowService = RudderConfig.workflowService
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val changeRequestTableId = "ChangeRequestId"
 
@@ -91,14 +92,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          {SHtml.a(() => S.redirectTo(s"changeRequest/${cr.id}"), Text(cr.id.value))}
       </td>
       <td id="crStatus">
-         {changeRequestEventLogService.getChangeRequestHistory(cr.id).getOrElse(Seq()).headOption.map(_.diff) match {
-           case Some(AddChangeRequestDiff(_)) => "Draft"
-           case Some(ModifyToChangeRequestDiff(_)) => "Modify"
-           case Some(DeleteChangeRequestDiff(_)) => "Delete"
-           case Some(RebaseChangeRequestDiff(_)) => "Rebased"
-           case None => //"Error"
-             if (cr.id.value=="1") "Draft" else "Validation"
-         }}
+         {workflowService.findStep(cr.id)}
       </td>
       <td id="crName">
          {cr.info.name}

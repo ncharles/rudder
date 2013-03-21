@@ -46,6 +46,7 @@ import com.normation.rudder.domain.workflows.ChangeRequestEventLog
 import org.joda.time.DateTime
 import com.normation.rudder.domain.workflows.AddChangeRequestDiff
 import com.normation.rudder.domain.workflows.DeleteChangeRequestDiff
+import com.normation.rudder.domain.workflows.ModifyToChangeRequestDiff
 
 class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepository with WoDraftChangeRequestRepository {
 
@@ -81,7 +82,7 @@ class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepositor
   }
 }
 
-class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends RoChangeRequestRepository with WoChangeRequestRepository {
+class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends RoChangeRequestRepository with WoChangeRequestRepository with Loggable {
 
   private[this] val repo = MutMap[ChangeRequestId, ChangeRequest]()
 
@@ -121,8 +122,31 @@ class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends 
       }
   }
 
-  def setReadOnly(changeRequestId: ChangeRequestId,actor: EventActor,reason: Option[String]): Box[ChangeRequestId] = ???
-  def setReadWrite(changeRequestId: ChangeRequestId,actor: EventActor,reason: Option[String]): Box[ChangeRequestId] = ???
+  def setReadOnly(changeRequestId: ChangeRequestId,actor: EventActor,reason: Option[String]): Box[ChangeRequestId] = {
+    repo.get(changeRequestId) match {
+
+        case None => Failure(s"Change request with ID ${changeRequestId} does not exists")
+        case Some(cr) => val newCr = ChangeRequest.updateInfo(cr,cr.info.copy(readOnly=true))
+          repo += (changeRequestId -> newCr)
+          log.saveChangeRequestLog(
+              changeRequestId
+            , ChangeRequestEventLog(actor, DateTime.now, reason, ModifyToChangeRequestDiff(newCr))
+          ).map( _ => changeRequestId)
+    }
+
+  }
+  def setReadWrite(changeRequestId: ChangeRequestId,actor: EventActor,reason: Option[String]): Box[ChangeRequestId] = {
+    repo.get(changeRequestId) match {
+
+        case None => Failure(s"Change request with ID ${changeRequestId} does not exists")
+        case Some(cr) => val newCr = ChangeRequest.updateInfo(cr,cr.info.copy(readOnly=false))
+          repo += (changeRequestId -> newCr)
+          log.saveChangeRequestLog(
+              changeRequestId
+            , ChangeRequestEventLog(actor, DateTime.now, reason, ModifyToChangeRequestDiff(newCr))
+          ).map( _ => changeRequestId)
+    }
+  }
 
   def updateChangeRequest(changeRequest: ChangeRequest,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
       repo.get(changeRequest.id) match {

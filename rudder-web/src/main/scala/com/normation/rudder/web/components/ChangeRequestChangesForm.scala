@@ -183,9 +183,9 @@ import ChangeRequestChangesForm._
     </table>
 
   def diff(cr : List[DirectiveChange]) = cr match {
-      case directive::Nil => Text(directive.initialState.get.name)
+      case directive::Nil => Text(directive.initialState.map(_.name).getOrElse("Unknown Directive"))
       case Nil            => Text("Nothing to show")
-      case list           => <ul>{list.flatMap(directive => <li>{directive.initialState.get.name}</li>)}</ul>
+      case list           => <ul>{list.flatMap(directive => <li>{directive.initialState.map(_.name).getOrElse("Unknown Directive")}</li>)}</ul>
     }
 
   def CRLine(cr: ChangeRequestEventLog)=

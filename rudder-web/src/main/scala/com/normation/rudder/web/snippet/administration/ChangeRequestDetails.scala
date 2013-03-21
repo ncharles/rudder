@@ -122,12 +122,17 @@ import ChangeRequestDetails._
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val woChangeRequestRepository = RudderConfig.woChangeRequestRepository
-
+  private[this] val roChangeRequestRepository = RudderConfig.roChangeRequestRepository
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[String] = {S.param("crId") }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {case Full("1") => Full(dummyCR)
     case Full("2") => Full(dummyCR2)
-    case Full(id) => Failure(s"${id} is not a good Change request id")
+    case Full(id) => roChangeRequestRepository.get(ChangeRequestId(id)) match {
+      case Full(Some(cr)) => Full(cr)
+      case Full(None) => Failure(s"There is no Cr with id :${id}")
+      case eb:EmptyBox =>       val fail = eb ?~ "no id selected"
+      Failure(s"Error in the cr id asked: ${fail.msg}")
+    }
     case eb:EmptyBox =>
       val fail = eb ?~ "no id selected"
       Failure(s"Error in the cr id asked: ${fail.msg}")
