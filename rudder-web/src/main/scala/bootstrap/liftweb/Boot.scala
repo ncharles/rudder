@@ -182,6 +182,12 @@ class Boot extends Loggable {
             "secure" / (name+"Manager") / "techniqueLibraryManagement"
             >> LocGroup(name+"Group")
             >> TestAccess( () => userIsAllowed(Read("technique") ) )
+
+        , Menu(name+"ParameterManagement", <span>Parameters</span>) /
+            "secure" / (name+"Manager") / "parameterManagement"
+            >> LocGroup(name+"Group")
+            >> TestAccess( () => userIsAllowed(Read("directive") ) )
+
       )
 
 
