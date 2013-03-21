@@ -52,6 +52,16 @@ import com.normation.rudder.domain.workflows.WorkflowNodeId
 import com.normation.rudder.domain.workflows.WorkflowNode
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.rudder.domain.workflows.WorkflowNode
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.rudder.repository.RoChangeRequestRepository
+import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
+import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
+import com.normation.utils.StringUuidGenerator
+import com.normation.rudder.domain.policies.DirectiveId
+import com.normation.eventlog.ModificationId
+import com.normation.rudder.domain.workflows.DirectiveChanges
+import com.normation.rudder.domain.nodes.NodeGroupId
+import com.normation.rudder.domain.workflows.NodeGroupChanges
 
 /**
  * That service allows to glue Rudder with the
@@ -111,13 +121,70 @@ trait WorkflowService {
 class WorkflowProcessLog extends Loggable {
 
   def saveEventLog(log:StepWorkflowProcessEventLog) : Box[WorkflowProcessEventLog] = {
-    logger.info(s"[${log.date.toString()}] Actor ${log.actor}Workflow step from ${log.from.id.value} to ${log.to.id.value}")
     Full(log)
+  }
+}
+
+/**
+ * A service that will do whatever is needed to commit
+ * modification about a change request in LDAP and
+ * deploy them
+ */
+class CommitAndDeployChangeRequest(
+    uuidGen            : StringUuidGenerator
+  , roChangeRequestRepo: RoChangeRequestRepository
+) extends Loggable {
+
+  def save(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.info(s"Saving and deploying change request ${changeRequestId}")
+    for {
+      changeRequest <- roChangeRequestRepo.get(changeRequestId)
+      saved         <- changeRequest match {
+                         case config:ConfigurationChangeRequest => saveConfigurationChangeRequest(config)
+                         case x => Failure("We don't know how to deploy change request like this one: " + x)
+                       }
+    } yield {
+      saved
+    }
+  }
+
+  /*
+   * So, what to do ?
+   */
+  private[this] def saveConfigurationChangeRequest(cr:ConfigurationChangeRequest) : Box[ChangeRequestId] = {
+    import com.normation.utils.Control.sequence
+
+    def doDirectiveChange(change:DirectiveChanges, modId: ModificationId) : Box[DirectiveId] = {
+      val id = change.changes.initialState.map( _.id.value).getOrElse("new directive")
+      logger.info(s"Save directive with id '${id}'")
+      Full(DirectiveId(id))
+    }
+    def doNodeGroupChange(change:NodeGroupChanges, modId: ModificationId) : Box[NodeGroupId] = {
+      val id = change.changes.initialState.map( _.id.value).getOrElse("new group")
+      logger.info(s"Save group with id '${id}'")
+      Full(NodeGroupId(id))
+    }
+
+    val modId = ModificationId(uuidGen.newUuid)
+
+    for {
+      directives <- sequence(cr.directives.values.toSeq) { directiveChange =>
+                      doDirectiveChange(directiveChange, modId)
+                    }
+      groups     <- sequence(cr.nodeGroups.values.toSeq) { nodeGroupChange =>
+                      doNodeGroupChange(nodeGroupChange, modId)
+                    }
+    } yield {
+      cr.id
+    }
   }
 
 }
 
-class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with Loggable {
+class WorkflowServiceImpl(
+    log   : WorkflowProcessLog
+  , commit: CommitAndDeployChangeRequest
+) extends WorkflowService with Loggable {
   private[this] sealed trait MyWorkflowNode extends WorkflowNode
 
   //buffers for Workflow process
@@ -158,6 +225,7 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with L
   def findStep(changeRequestId: ChangeRequestId) = {
     steps.find(_.requests.contains(changeRequestId)).map(_.id.value).getOrElse("Draft")
   }
+
   private[this] def changeStep(
       from           : MyWorkflowNode
     , to             : MyWorkflowNode
@@ -177,6 +245,23 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with L
     }
   }
 
+  private[this] def toSuccess(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    for {
+      success <- changeStep(from, Deployed, changeRequestId, actor, reason)
+      saved   <- onSuccessWorkflow(changeRequestId, actor, reason)
+    } yield {
+      saved
+    }
+  }
+
+  private[this] def toFailure(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    for {
+      failure <- changeStep(from, Rejected, changeRequestId, actor, reason)
+      failed  <- onFailureWorkflow(changeRequestId, actor, reason)
+    } yield {
+      failed
+    }
+  }
 
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     logger.info("start")
@@ -186,12 +271,13 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with L
 
   def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     logger.info("update")
-    ???
+    commit.save(changeRequestId, actor, reason)
   }
 
   def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    logger.info("update")
-    ???
+    //Only log the fact that something happened
+    logger.info(s"Change request with ID ${changeRequestId.value} was rejected")
+    Full(changeRequestId)
   }
 
   //allowed workflow steps
@@ -209,15 +295,15 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with L
   }
 
   def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Validation, Deployed, changeRequestId, actor, reason)
+    toSuccess(Validation, changeRequestId, actor, reason)
   }
 
   def stepValidationToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Validation, Rejected, changeRequestId, actor, reason)
+    toFailure(Validation, changeRequestId, actor, reason)
   }
 
   def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Deployment, Deployed, changeRequestId, actor, reason)
+    toSuccess(Deployment, changeRequestId, actor, reason)
   }
 
   def stepDeploymentToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
@@ -225,11 +311,11 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with L
   }
 
   def stepDeploymentToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Deployment, Rejected, changeRequestId, actor, reason)
+    toFailure(Deployment, changeRequestId, actor, reason)
   }
 
   def stepCorrectionToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Correction, Rejected, changeRequestId, actor, reason)
+    toFailure(Correction, changeRequestId, actor, reason)
   }
 
   def stepCorrectionToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
