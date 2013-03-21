@@ -123,6 +123,7 @@ import ChangeRequestDetails._
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val woChangeRequestRepository = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepository = RudderConfig.roChangeRequestRepository
+  private[this] val workflowService = RudderConfig.workflowService
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[String] = {S.param("crId") }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {case Full("1") => Full(dummyCR)
@@ -155,6 +156,7 @@ import ChangeRequestDetails._
         case Full(cr) =>
           new ChangeRequestEditForm(
               cr.info
+            , workflowService
             , cr.id
             , (statusUpdate:ChangeRequestInfo) =>  {
                 val newCR = ChangeRequest.updateInfo(
@@ -207,7 +209,7 @@ import ChangeRequestDetails._
 
     ("#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
        "#CRName *" #> s"CR#${cr.id}: ${cr.info.name}" &
-       "#CRStatus *" #> "Status" &
+       "#CRStatus *" #> workflowService.findStep(cr.id) &
        "#CRLastAction *" #> s"${ action }") (header)
 
   }

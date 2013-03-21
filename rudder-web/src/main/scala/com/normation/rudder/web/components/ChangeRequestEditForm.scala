@@ -44,6 +44,7 @@ import net.liftweb.http.js.JsCmds._
 import net.liftweb.http.js.JE._
 import net.liftweb.util._
 import net.liftweb.util.Helpers._
+import com.normation.rudder.services.workflows.WorkflowService
 
 object ChangeRequestEditForm {
   def form =
@@ -56,6 +57,7 @@ object ChangeRequestEditForm {
 
 class ChangeRequestEditForm (
     var info: ChangeRequestInfo
+  , workflowService : WorkflowService
   , crId:ChangeRequestId
   , SuccessCallback: ChangeRequestInfo => JsCmd
 ) extends DispatchSnippet with Loggable {
@@ -86,7 +88,7 @@ import ChangeRequestEditForm._
       "#warning [class+]" #> {if (true/* condition de rebase*/) "" else "nodisplay"} &
       "#CRName *" #> changeRequestName.toForm_! &
       "#CRId *"   #> crId.value &
-      "#CRStatus *"   #> "Status" &
+      "#CRStatus *"   #> workflowService.findStep(crId) &
       "#CRDescription *" #> changeRequestDescription.toForm_! &
       "#CRSave" #> SHtml.ajaxSubmit("Save", () =>  submit)
     ) (form) ++ Script(JsRaw("correctButtons();"))
