@@ -36,76 +36,28 @@ package com.normation.rudder.domain.workflows
 
 import scala.collection.mutable.Buffer
 import net.liftweb.common._
+import com.normation.eventlog.EventActor
+import org.joda.time.DateTime
 
-case class WorkflowProcessId(value:String)
+case class WorkflowNodeId(value:String)
 
 
-
-object WorkflowProcess{
-
-  val steps:Map[WorkflowProcessId,WorkflowProcess] =
-    Map(Draft.id     -> Draft
-      , Validation.id -> Validation
-          , Deployment.id -> Deployment
-              , Deployed.id -> Validation
-                  , Rejected.id -> Rejected)
-
-}
 /**
  * TODO: the datastructure that allows to share
  * information between Rudder and the Workflow engine
  */
-trait WorkflowProcess {
-import WorkflowProcess._
-  def id  : WorkflowProcessId
+trait WorkflowNode {
+  def id  : WorkflowNodeId
   def requests: Buffer[ChangeRequestId]
-  def nextSteps: List[WorkflowProcessId]
-  def backSteps: List[WorkflowProcessId]
-  def next(request:ChangeRequestId,next:WorkflowProcessId) = {
-    if(nextSteps.contains(next)){
-      steps(next).requests += request
-      requests -= request
-      Full(request)
-    } else
-      Failure("not a good workflow")
-  }
-
 }
 
-case object Draft extends WorkflowProcess {
-  val id = WorkflowProcessId("Draft")
-  val requests = Buffer[ChangeRequestId]()
-  val nextSteps = List(Validation.id)
-  val backSteps = List(Rejected.id)
-}
+sealed trait WorkflowProcessEventLog
 
 
-case object Validation extends WorkflowProcess {
-  val id = WorkflowProcessId("Validation")
-  val requests = Buffer[ChangeRequestId]()
-  val nextSteps = List(Deployment.id,Deployed.id)
-  val backSteps = List(Draft.id,Rejected.id)
-
-}
-
-case object Deployment extends WorkflowProcess {
-  val id = WorkflowProcessId("Deployment")
-  val requests = Buffer[ChangeRequestId]()
-  val nextSteps = List(Deployed.id)
-  val backSteps = List(Draft.id,Rejected.id)
-}
-
-case object Deployed extends WorkflowProcess {
-  val id = WorkflowProcessId("Deployed")
-  val requests = Buffer[ChangeRequestId]()
-  val nextSteps = List()
-  val backSteps = List()
-}
-
-
-case object Rejected extends WorkflowProcess {
-  val id = WorkflowProcessId("Rejected")
-  val requests = Buffer[ChangeRequestId]()
-  val nextSteps = List()
-  val backSteps = List()
-}
+case class StepWorkflowProcessEventLog(
+    actor : EventActor
+  , date  : DateTime
+  , reason: Option[String]
+  , from  : WorkflowNode
+  , to    : WorkflowNode
+) extends WorkflowProcessEventLog

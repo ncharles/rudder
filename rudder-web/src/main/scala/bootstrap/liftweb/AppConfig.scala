@@ -239,6 +239,7 @@ object RudderConfig extends Loggable {
 
 
   //workflows configuration
+  //TODO: read that from a config file !
   val RUDDER_ENABLE_APPROVAL_WORKFLOWS = true
 
   //deprecated
