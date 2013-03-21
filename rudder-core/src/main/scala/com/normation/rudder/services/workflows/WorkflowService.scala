@@ -52,6 +52,7 @@ import com.normation.rudder.domain.workflows.WorkflowNodeId
 import com.normation.rudder.domain.workflows.WorkflowNode
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.rudder.domain.workflows.WorkflowNode
+import com.normation.rudder.domain.workflows.WorkflowNodeId
 
 /**
  * That service allows to glue Rudder with the
@@ -102,9 +103,11 @@ trait WorkflowService {
   def getRejected : Box[Seq[ChangeRequestId]]
 
 
-  val stepsValue :List[String]
+  val stepsValue :List[WorkflowNodeId]
 
-  def findStep(changeRequestId: ChangeRequestId) :String
+  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]]
+  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]]
+  def findStep(changeRequestId: ChangeRequestId) : WorkflowNodeId
 }
 
 
@@ -153,10 +156,30 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with L
 
   private[this] val steps:List[WorkflowNode] = List(Start,Correction,Validation,Deployment,Deployed,Rejected)
 
-  val stepsValue = steps.map(_.id.value)
+  val stepsValue = steps.map(_.id)
 
-  def findStep(changeRequestId: ChangeRequestId) = {
-    steps.find(_.requests.contains(changeRequestId)).map(_.id.value).getOrElse("Draft")
+  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
+    steps.map{
+    case Start      => Start.id -> Seq((Validation.id,stepStartToValidation _))
+    case Validation => Validation.id -> Seq((Deployment.id,stepValidationToDeployment _),(Deployed.id,stepValidationToDeployed _))
+    case Correction => Correction.id -> Seq((Validation.id,stepCorrectionToValidation _))
+    case Deployment => Deployment.id -> Seq((Deployed.id,stepDeploymentToDeployed _))
+    case Deployed   => Deployed.id -> Seq()
+    case Rejected   => Rejected.id -> Seq()
+   }.toMap
+
+  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
+    steps.map{
+    case Start      => Start.id -> Seq()
+    case Validation => Validation.id -> Seq((Correction.id,stepValidationToCorrection _),(Rejected.id,stepValidationToRejected _))
+    case Correction => Correction.id -> Seq((Rejected.id,stepCorrectionToRejected _))
+    case Deployment => Deployment.id -> Seq((Correction.id,stepDeploymentToCorrection _),(Rejected.id,stepDeploymentToRejected _))
+    case Deployed   => Deployed.id -> Seq()
+    case Rejected   => Rejected.id -> Seq()
+   }.toMap
+
+  def findStep(changeRequestId: ChangeRequestId) = { logger.warn(s"lookinf for cr $changeRequestId")
+    steps.find(_.requests.contains(changeRequestId)).map(_.id).getOrElse(Rejected.id)
   }
   private[this] def changeStep(
       from           : MyWorkflowNode
@@ -233,7 +256,7 @@ class WorkflowServiceImpl(log:WorkflowProcessLog) extends WorkflowService with L
   }
 
   def stepCorrectionToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Start, Validation, changeRequestId, actor, reason)
+    changeStep(Correction, Validation, changeRequestId, actor, reason)
   }
 
   def getValidation : Box[Seq[ChangeRequestId]] = Full(Validation.requests)

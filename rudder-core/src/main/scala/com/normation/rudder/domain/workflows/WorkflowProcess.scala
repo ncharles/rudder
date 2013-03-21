@@ -39,7 +39,10 @@ import net.liftweb.common._
 import com.normation.eventlog.EventActor
 import org.joda.time.DateTime
 
-case class WorkflowNodeId(value:String)
+case class WorkflowNodeId(value:String){
+  override def toString = value
+}
+
 
 
 /**

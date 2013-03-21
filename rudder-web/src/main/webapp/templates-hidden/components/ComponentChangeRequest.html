@@ -33,7 +33,7 @@
         </div>
         <div class="wbBaseField">
           <b class="threeCol">Status: </b>
-          <span id="CRStatus">
+          <span id="CRStatusDetails">
             Here comes change request status
            </span>
         </div>
@@ -68,21 +68,33 @@
 </component:changes>
 
 <component:popup>
-    <div id="changeStatePopup" class="nodisplay" style="overflow: auto; max-height:500px;">
+    <div id="changeStatePopup" class="nodisplay ui-widget" style="overflow: auto; max-height:500px;">
       <div class="simplemodal-title">
         <h1 ><span id="header"></span></h1>
         <hr/>
       </div>
       <div class="simplemodal-content">
        <br />
+      
        <div class="popupContent" id="intro"/>
-       <hr class="spacer" />
-       <div id="next">
-       </div>
+       <div id="form">
+  
+      </div>
+    </div>
+    </div>
+</component:popup>
+
+<component:popupContent>
+     <hr class="spacer" />
+             <div class="wbBaseField">
+          <b class="threeCol">Next: </b>
+          <span id="next">
+            Here comes change request status
+           </span>
+        </div>
        <hr class="spacer" />
        <div id ="reason">
        </div>
-      </div>
       <div class="simplemodal-bottom">
       <div style="float:left; padding:5px;">
              <button class="simplemodal-close" id="cancel">
@@ -97,7 +109,5 @@
         </span>
         </div>
       </div>
-    </div>
-</component:popup>
-
+</component:popupContent>
 </xml:group>

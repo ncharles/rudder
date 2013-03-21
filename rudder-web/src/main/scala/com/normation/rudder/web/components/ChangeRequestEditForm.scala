@@ -88,7 +88,7 @@ import ChangeRequestEditForm._
       "#warning [class+]" #> {if (true/* condition de rebase*/) "" else "nodisplay"} &
       "#CRName *" #> changeRequestName.toForm_! &
       "#CRId *"   #> crId.value &
-      "#CRStatus *"   #> workflowService.findStep(crId) &
+      "#CRStatus *"   #> workflowService.findStep(crId).value &
       "#CRDescription *" #> changeRequestDescription.toForm_! &
       "#CRSave" #> SHtml.ajaxSubmit("Save", () =>  submit)
     ) (form) ++ Script(JsRaw("correctButtons();"))

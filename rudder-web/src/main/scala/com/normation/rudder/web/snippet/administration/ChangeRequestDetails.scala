@@ -51,6 +51,7 @@ import org.joda.time.DateTime
 import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.policies._
 import com.normation.rudder.web.components._
+import com.normation.eventlog.EventActor
 
 
 object ChangeRequestDetails {
@@ -67,6 +68,14 @@ object ChangeRequestDetails {
     } yield {
       chooseTemplate("component", "popup", xml)
     }) openOr Nil
+
+     def popupContent =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
+    } yield {
+      chooseTemplate("component", "popupContent", xml)
+    }) openOr Nil
+
 }
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
 import ChangeRequestDetails._
@@ -185,14 +194,13 @@ import ChangeRequestDetails._
 
     case "actions" => (xml => changeRequest match {
       case eb:EmptyBox => NodeSeq.Empty
-      case Full(cr) => ("#backStep" #> SHtml.ajaxButton("Refuse", () => ChangeStepPopup("Refuse",List("Draft"),cr)) &
-         "#nextStep" #> SHtml.ajaxButton("Valid", () => ChangeStepPopup("Accept",List("Deploy Later","Deploy Directly"),cr)))(xml)
+      case Full(cr) => ("#backStep" #> SHtml.ajaxButton("Refuse", () => ChangeStepPopup("Refuse",workflowService.backSteps(workflowService.findStep(cr.id)),cr)) &
+         "#nextStep" #> SHtml.ajaxButton("Valid", () => ChangeStepPopup("Accept",workflowService.nextSteps(workflowService.findStep(cr.id)),cr)))(xml)
 
     })
   }
 
   def displayHeader(cr:ChangeRequest) = {
-
     //last action:
     val action = changeRequestEventLogService.getLastLog(cr.id) match {
       case eb:EmptyBox => "Error when retrieving the last action"
@@ -209,37 +217,53 @@ import ChangeRequestDetails._
 
     ("#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
        "#CRName *" #> s"CR#${cr.id}: ${cr.info.name}" &
-       "#CRStatus *" #> workflowService.findStep(cr.id) &
+       "#CRStatus *" #> workflowService.findStep(cr.id).value &
        "#CRLastAction *" #> s"${ action }") (header)
 
   }
 
-  def ChangeStepPopup(action:String,nextStep:List[String],cr:ChangeRequest) = {
-      val closePopup : JsCmd = JsRaw(""" $.modal.close();""")
-      val nextSelect = new WBSelectField("Next", nextStep.map(v => (v,v)))
+  def ChangeStepPopup(action:String,nextSteps:Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])],cr:ChangeRequest) = {
+    type functionType = (ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId]
+    def closePopup : JsCmd = SetHtml("changeRequestHeader", displayHeader(cr)) &
+                SetHtml("CRStatusDetails",Text(workflowService.findStep(cr.id).value )) &
+                SetHtml("changeRequestChanges", new ChangeRequestChangesForm(cr).dispatch("changes")(NodeSeq.Empty)) &JsRaw("""          correctButtons();
+                    $.modal.close();
+           """)
+      var nextChosen = nextSteps.head._2
+      val nextSelect = SHtml.selectObj(nextSteps.map(v => (v._2,v._1.value)), Full(nextChosen)
+          , {t:functionType => nextChosen = t})
       def nextOne(next:String) : NodeSeq= <div class="wbBaseField">
           <b class="threeCol">Next: </b>
           <span id="CRStatus">
             {next}
            </span>
         </div>
+
       val description = new WBTextAreaField("Message", "") {
       override def setFilter = notNull _ :: trim _ :: Nil
       override def inputField = super.inputField  % ("style" -> "height:5em;")
       override def errorClassName = ""
       override def validations() = valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
     }
-      SetHtml("popupContent",("#header" #>  s"${action} CR#${cr.id}: ${cr.info.name}" &
+          def confirm() : JsCmd = { val crId = nextChosen(cr.id,CurrentUser.getActor,Some(description.is))
+      logger.info(crId)
+              closePopup
+    }
+      SetHtml("popupContent",(
           "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message." &
-          "#reason" #> description.toForm_! &
-          "#next" #> {nextStep match {
-            case Nil => <span>Error</span>
-            case head :: Nil => nextOne(head)
-            case _ => nextSelect.toForm_!
-          }} &
-          "#cancel" #> SHtml.ajaxButton("Cancel", () => closePopup ) &
-          "#confirm" #> SHtml.ajaxSubmit("Confirm", () => closePopup)
-          )( SHtml.ajaxForm(popup) ++ Script((JsRaw("correctButtons();"))))) &  JsRaw("createPopup('changeStatePopup', 150, 850)")
+          "#header" #>  s"${action} CR#${cr.id}: ${cr.info.name}" &
+          "#form *+" #>
+            SHtml.ajaxForm(
+              ("#reason" #> description.toForm_! &
+               "#next" #> {nextSteps match {
+                 case Nil => <span>Error</span>
+                 case (head,_) :: Nil => nextOne(head.value)
+                 case _ => nextSelect
+               }} &
+               "#cancel" #> SHtml.ajaxButton("Cancel", () => closePopup ) &
+               "#confirm" #> SHtml.ajaxSubmit("Confirm", () => confirm())
+          )(popupContent)))(popup++ Script((JsRaw("correctButtons();"))))) &
+          JsRaw("createPopup('changeStatePopup', 150, 850)")
 
   }
 }
