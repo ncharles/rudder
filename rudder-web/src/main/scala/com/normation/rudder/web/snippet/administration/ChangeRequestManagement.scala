@@ -51,6 +51,7 @@ import net.liftweb.http.SHtml
 import com.normation.rudder.web.model.CurrentUser
 import org.joda.time.DateTime
 import com.normation.rudder.services.workflows.ChangeRequestService
+import com.normation.rudder.web.components.DateFormaterService
 
 class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
@@ -98,10 +99,16 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          {cr.info.name}
       </td>
       <td id="crOwner">
-         {"someone"}
+         {changeRequestEventLogService.getChangeRequestHistory(cr.id) match {
+           case eb :EmptyBox => "Error while fetching Creator"
+           case Full(seq) => seq.headOption.map(_.actor.name).getOrElse("Unknown User")
+         }}
       </td>
       <td id="crDate">
-         {"date"}
+         {changeRequestEventLogService.getLastLog(cr.id) match {
+           case eb :EmptyBox => "Error while fetching last action Date"
+           case Full(seq) => seq.map(event => DateFormaterService.getFormatedDate(event.creationDate)).getOrElse("Error while fetching last action Date")
+         }}
       </td>
    </tr>
   def dispatch = {
@@ -142,7 +149,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
 
    def statusFilter = {
-     val values =  "Draft" :: "Validation" :: Nil
+     val values =  workflowService.stepsValue.map(_.value)
      val selectValues =  values.map(x=> (x,x))
      var value = ""
      val onChange = (
@@ -169,8 +176,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       SHtml.select(
           ("","All")::selectValues
         , Full(default)
-        , list => {logger.info(list)
-          value = list}
+        , list => value = list
         , ("style","width:auto;")
       ) % onChange  ++ submit("...",expandedFilter)
 
@@ -184,8 +190,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
         SHtml.multiSelect(
             selectValues
           , extendedDefault
-          , list => {logger.warn(list)
-            value = if (list.size==1) list.head else "All"}
+          , list => value = if (list.size==1) list.head else "All"
           , ("style","width:auto;padding-right:3px;")
         ) % onChange ++ submit(".",unexpandedFilter)
       )

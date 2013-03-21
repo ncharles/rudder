@@ -132,6 +132,7 @@ import ChangeRequestDetails._
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val woChangeRequestRepository = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepository = RudderConfig.roChangeRequestRepository
+  private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
   private[this] val workflowService = RudderConfig.workflowService
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[String] = {S.param("crId") }
@@ -202,9 +203,9 @@ import ChangeRequestDetails._
 
   def displayHeader(cr:ChangeRequest) = {
     //last action:
-    val action = changeRequestEventLogService.getLastLog(cr.id) match {
-      case eb:EmptyBox => "Error when retrieving the last action"
-      case Full(None)  => "Error, no action were recorded for that change request" //should not happen here !
+    val (action,date) = changeRequestEventLogService.getLastLog(cr.id) match {
+      case eb:EmptyBox => ("Error when retrieving the last action",None)
+      case Full(None)  => ("Error, no action were recorded for that change request",None) //should not happen here !
       case Full(Some(ChangeRequestEventLog(actor,date,reason,diff))) =>
         val actionName = diff match {
           case ModifyToChangeRequestDiff(_) => "Modified"
@@ -212,13 +213,25 @@ import ChangeRequestDetails._
           case DeleteChangeRequestDiff(_) => "Deleted"
           case RebaseChangeRequestDiff(_) => "Resynchronise with current values"
         }
-        s"${actionName} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}"
+        (s"${actionName} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}",Some(date))
     }
 
+    val (step,stepDate) = workFlowEventLogService.getLastLog(cr.id) match {
+      case eb:EmptyBox => ("Error when retrieving the last action",None)
+      case Full(None)  => ("Error when retrieving the last action",None) //should not happen here !
+      case Full(Some(StepWorkflowProcessEventLog(actor,date,reason,from,to))) =>
+        (s"Sent from ${from} to ${to} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}",Some(date))
+    }
+     val last = (date,stepDate) match {
+       case (None,None) => action
+       case (Some(_),None) => action
+       case (None,Some(_)) => step
+       case (Some(date),Some(stepDate)) => if (date.isAfter(stepDate)) action else step
+     }
     ("#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
        "#CRName *" #> s"CR#${cr.id}: ${cr.info.name}" &
        "#CRStatus *" #> workflowService.findStep(cr.id).value &
-       "#CRLastAction *" #> s"${ action }") (header)
+       "#CRLastAction *" #> s"${ last }") (header)
 
   }
 

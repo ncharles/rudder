@@ -117,8 +117,9 @@ import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
 import com.normation.rudder.services.workflows.ChangeRequestServiceImpl
 import com.normation.rudder.services.workflows.WorkflowServiceImpl
 import com.normation.rudder.services.modification.DiffServiceImpl
-import com.normation.rudder.services.workflows.WorkflowProcessLog
+import com.normation.rudder.services.workflows.WorkflowProcessEventLogService
 import com.normation.rudder.services.workflows.CommitAndDeployChangeRequest
+import com.normation.rudder.services.workflows.InMemoryWorkflowProcessEventLogService
 
 /**
  * Define a resource for configuration.
@@ -318,9 +319,10 @@ object RudderConfig extends Loggable {
   private[this] val draftRepo = new InMemoryDraftChangeRequestRepository
   val roDraftChangeRequestRepository: RoDraftChangeRequestRepository = draftRepo
   val woDraftChangeRequestRepository: WoDraftChangeRequestRepository = draftRepo
+  val workflowEventLogService =    new InMemoryWorkflowProcessEventLogService
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
   val workflowService: WorkflowService = new WorkflowServiceImpl(
-      new WorkflowProcessLog
+      workflowEventLogService
     , new CommitAndDeployChangeRequest(uuidGen, roChangeRequestRepository)
   )
   val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl(uuidGen)

@@ -44,6 +44,10 @@ import net.liftweb.http._
 import net.liftweb.http.js.JE._
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.util.Helpers._
+import com.normation.rudder.domain.nodes.NodeGroupId
+import com.normation.rudder.domain.nodes.AddNodeGroupDiff
+import com.normation.rudder.domain.nodes.DeleteNodeGroupDiff
+import com.normation.rudder.domain.nodes.ModifyNodeGroupDiff
 
 
 object ChangeRequestChangesForm {
@@ -61,7 +65,10 @@ class ChangeRequestChangesForm(
 import ChangeRequestChangesForm._
 
   val roDirectiveRepo = RudderConfig.roDirectiveRepository
+  val roGroupRepo = RudderConfig.roNodeGroupRepository
   val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
+  val workFlowEventLogService =  RudderConfig.workflowEventLogService
+
 
   def dispatch = {
     case "changes" => _ => changeRequest match {
@@ -84,10 +91,15 @@ import ChangeRequestChangesForm._
     val directive= roDirectiveRepo.getDirective(directiveId)
 
     val changes = List(changeRequest.directives(directiveId).changes)
-
+    val directiveName = changeRequest.directives(directiveId).changes.firstChange.diff match{
+           case a :AddDirectiveDiff => a.directive.name
+           case d :DeleteDirectiveDiff => d.directive.name
+           case modTo : ModifyToDirectiveDiff => modTo.directive.name
+           case mod : ModifyDirectiveDiff => mod.name
+    }
     val body = SHtml.a(
         () => SetHtml("history",displayHistory(changes))
-      , <span>{directive.map(_.name).getOrElse("Unknown Directive")}</span>
+      , <span>{directiveName}</span>
     )
 
     val children = Nil
@@ -116,10 +128,28 @@ import ChangeRequestChangesForm._
     override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "rules"}))
   }
 
-  val groupsChild = new JsTreeNode{
-    val changes = Nil
+    def groupChild(groupId:NodeGroupId) = new JsTreeNode{
+
+    val directive= roGroupRepo.getNodeGroup(groupId)
+
+    val changes = List(changeRequest.nodeGroups(groupId).changes)
+    val directiveName = changeRequest.nodeGroups(groupId).changes.firstChange.diff match{
+           case a :AddNodeGroupDiff => a.group.name
+           case d :DeleteNodeGroupDiff => d.group.name
+           //case modTo : ModifyToNodeGroupDiff => modTo.group.name
+           case mod : ModifyNodeGroupDiff => mod.name
+    }
     val body = SHtml.a(
-        () => SetHtml("history",displayHistory(changes) )
+        () => SetHtml("history",displayHistory(List()))
+      , <span>{directiveName}</span>
+    )
+
+    val children = Nil
+  }
+  val groupsChild = new JsTreeNode{
+    val changes =  changeRequest.nodeGroups.values.map(_.changes).toList
+    val body = SHtml.a(
+        () => SetHtml("history",displayHistory(Nil) )
       , <span>Groups</span>
     )
     val children = Nil
@@ -141,7 +171,11 @@ import ChangeRequestChangesForm._
     val logs = changeRequestEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq())
 
 
-  ( "#crBody" #> { logs.flatMap(CRLine(_)) ++ directives.flatMap(CRLine(_))}
+  ( "#crBody" #> {
+    workFlowEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq()).flatMap(CRLine(_)) ++
+    logs.flatMap(CRLine(_)) ++
+    directives.flatMap(CRLine(_))
+    }
   ) apply CRTable ++
     Script(
       SetHtml("diff",diff(directives) ) &
@@ -183,9 +217,7 @@ import ChangeRequestChangesForm._
     </table>
 
   def diff(cr : List[DirectiveChange]) = cr match {
-      case directive::Nil => Text(directive.initialState.map(_.name).getOrElse("Unknown Directive"))
-      case Nil            => Text("Nothing to show")
-      case list           => <ul>{list.flatMap(directive => <li>{directive.initialState.map(_.name).getOrElse("Unknown Directive")}</li>)}</ul>
+      case list           => <ul>{list.flatMap(directive => <li>{directive.firstChange.diff}</li>)}</ul>
     }
 
   def CRLine(cr: ChangeRequestEventLog)=
@@ -205,6 +237,22 @@ import ChangeRequestChangesForm._
          {DateFormaterService.getFormatedDate(cr.creationDate)}
       </td>
    </tr>
+    def CRLine(cr: WorkflowProcessEventLog)=
+    cr match { case StepWorkflowProcessEventLog(actor, date, reason, from, to) =>
+    <tr>
+      <td id="action">
+         {s"Change workflow step from ${from} to ${to}"
+         }
+      </td>
+      <td id="actor">
+         {actor.name}
+      </td>
+      <td id="date">
+         {DateFormaterService.getFormatedDate(date)}
+      </td>
+   </tr>
+    case _ => NodeSeq.Empty
+    }
 
   def CRLine(cr: DirectiveChange)=
     <tr>
