@@ -77,7 +77,8 @@ class InMemoryChangeRequestEventLogService extends ChangeRequestEventLogService 
     Full(repo.getOrElse(id, Seq()))
   }
 
+  /* changed to lastOption as the order is reversed */
   def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]] = {
-    Full(repo.getOrElse(id, Seq()).headOption)
+    Full(repo.getOrElse(id, Seq()).lastOption)
   }
 }
