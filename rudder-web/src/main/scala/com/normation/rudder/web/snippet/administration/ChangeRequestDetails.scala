@@ -77,57 +77,42 @@ object ChangeRequestDetails {
     }) openOr Nil
 
 }
+
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
-import ChangeRequestDetails._
+  import ChangeRequestDetails._
 
 
   val techRepo = RudderConfig.techniqueRepository
   val rodirective = RudderConfig.roDirectiveRepository
-  val adirectiveId = DirectiveId("11c2fdab-053e-4100-a663-b6a29e8b049c")
-  val directive = rodirective.getDirective(adirectiveId).get
-  val tech = rodirective.getActiveTechnique(adirectiveId).get.techniqueName
-  val aDirectiveAddDiff = AddDirectiveDiff(tech,directive)
-  val aDirectiveChangeItem =  DirectiveChangeItem(CurrentUser.getActor,DateTime.now.minusHours(6),None,aDirectiveAddDiff)
-  val aDirectiveChange = DirectiveChange(Some(directive),aDirectiveChangeItem,Seq())
-  val aDirectiveChanges = DirectiveChanges(aDirectiveChange,Seq())
-//  val dummyStatus = ChangeRequestInfo("MyFirstChangeRequest","blablabla",false)
-//  val dummyStatus2 = ChangeRequestInfo("MySecondChangeRequest","blablabla",false)
-//  val startStatus = AddChangeRequestStatusDiff(dummyStatus)
-//  val startStatus2 = AddChangeRequestStatusDiff(dummyStatus2)
-//  val startStatusItem = ChangeRequestStatusItem(
-//                            CurrentUser.getActor
-//                          , DateTime.now.minusDays(1)
-//                          , None
-//                          , AddChangeRequestStatusDiff(dummyStatus)
-//                        )
-//  val startStatusItem2 = ChangeRequestStatusItem(
-//                             CurrentUser.getActor
-//                           , DateTime.now.minusDays(1)
-//                           , None
-//                           , AddChangeRequestStatusDiff(dummyStatus2)
-//                         )
-
-  val dummyCR = ConfigurationChangeRequest(
-      ChangeRequestId("1")
-    , ChangeRequestInfo(
-          "MyFirstChangeRequest"
-        , "blablabla"
-        , false
-      )
-    , Map( adirectiveId -> aDirectiveChanges )
-    , Map()
-  )
-  val dummyCR2 = ConfigurationChangeRequest(
-      ChangeRequestId("2")
-    , ChangeRequestInfo(
-          "MyFirstChangeRequest"
-        , "blablabla"
-        , false
-      )
-    , Map( adirectiveId -> aDirectiveChanges )
-    , Map()
-  )
-
+//  val adirectiveId = DirectiveId("11c2fdab-053e-4100-a663-b6a29e8b049c")
+//  val directive = rodirective.getDirective(adirectiveId).get
+//  val tech = rodirective.getActiveTechnique(adirectiveId).get.techniqueName
+//  val aDirectiveAddDiff = AddDirectiveDiff(tech,directive)
+//  val aDirectiveChangeItem =  DirectiveChangeItem(CurrentUser.getActor,DateTime.now.minusHours(6),None,aDirectiveAddDiff)
+//  val aDirectiveChange = DirectiveChange(Some(directive),aDirectiveChangeItem,Seq())
+//  val aDirectiveChanges = DirectiveChanges(aDirectiveChange,Seq())
+//
+//  val dummyCR = ConfigurationChangeRequest(
+//      ChangeRequestId("1")
+//    , ChangeRequestInfo(
+//          "MyFirstChangeRequest"
+//        , "blablabla"
+//        , false
+//      )
+//    , Map( adirectiveId -> aDirectiveChanges )
+//    , Map()
+//  )
+//  val dummyCR2 = ConfigurationChangeRequest(
+//      ChangeRequestId("2")
+//    , ChangeRequestInfo(
+//          "MyFirstChangeRequest"
+//        , "blablabla"
+//        , false
+//      )
+//    , Map( adirectiveId -> aDirectiveChanges )
+//    , Map()
+//  )
+//
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val woChangeRequestRepository = RudderConfig.woChangeRequestRepository
@@ -136,8 +121,9 @@ import ChangeRequestDetails._
   private[this] val workflowService = RudderConfig.workflowService
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[String] = {S.param("crId") }
-  private[this] var changeRequest: Box[ChangeRequest] = CrId match {case Full("1") => Full(dummyCR)
-    case Full("2") => Full(dummyCR2)
+  private[this] var changeRequest: Box[ChangeRequest] = CrId match {
+//    case Full("1") => Full(dummyCR)
+//    case Full("2") => Full(dummyCR2)
     case Full(id) => roChangeRequestRepository.get(ChangeRequestId(id)) match {
       case Full(Some(cr)) => Full(cr)
       case Full(None) => Failure(s"There is no Cr with id :${id}")
@@ -175,8 +161,7 @@ import ChangeRequestDetails._
                 )
                 changeRequest = Full(newCR)
                 logger.warn(changeRequest)
-                //todo: save update change request, that will create the event log,
-                //and so populate the eventlog history
+
                 woChangeRequestRepository.updateChangeRequest(newCR, CurrentUser.getActor, None)
 
                 SetHtml("changeRequestHeader", displayHeader(newCR)) &

@@ -191,6 +191,7 @@ class ModificationValidationPopup(
 
   private[this] val uuidGen                  = RudderConfig.stringUuidGenerator
   private[this] val userPropertyService      = RudderConfig.userPropertyService
+  private[this] val roDraftChangeRequestRepo = RudderConfig.roDraftChangeRequestRepository
   private[this] val roChangeRequestRepo      = RudderConfig.roChangeRequestRepository
   private[this] val woChangeRequestRepo      = RudderConfig.woChangeRequestRepository
   private[this] val changeRequestService     = RudderConfig.changeRequestService
@@ -416,9 +417,10 @@ class ModificationValidationPopup(
 
           case "existing" =>
             for {
-              cr    <- roChangeRequestRepo.get(ChangeRequestId(existingChangeRequest.get))
+              cr    <- roDraftChangeRequestRepo.get(ChangeRequestId(existingChangeRequest.get))
               ccr   <- cr match {
-                         case x:ConfigurationChangeRequest => Full(x)
+                         case None => Failure(s"Error: can not find back details of change request with id ${existingChangeRequest.get}")
+                         case Some((x:ConfigurationChangeRequest, actor, reason)) => Full(x)
                          case x => Failure(s"ChangeRequest of type ${x.getClass} can not be updated with a node group or a directive, only ConfigurationChangeRequest can")
                        }
               newCr =  item match {

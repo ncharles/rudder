@@ -323,7 +323,14 @@ object RudderConfig extends Loggable {
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
   val workflowService: WorkflowService = new WorkflowServiceImpl(
       workflowEventLogService
-    , new CommitAndDeployChangeRequest(uuidGen, roChangeRequestRepository)
+    , new CommitAndDeployChangeRequest(
+          uuidGen
+        , roChangeRequestRepository
+        , roDirectiveRepository
+        , woDirectiveRepository
+        , asyncDeploymentAgent
+        , dependencyAndDeletionService
+      )
   )
   val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl(uuidGen)
 

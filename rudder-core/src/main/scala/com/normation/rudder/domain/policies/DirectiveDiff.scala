@@ -45,10 +45,13 @@ import com.normation.cfclerk.domain.SectionSpec
 
 sealed trait DirectiveDiff
 
+//for change request, with add type tag to DirectiveDiff
+sealed trait ChangeRequestDirectiveDiff
+
 final case class DeleteDirectiveDiff(
     techniqueName: TechniqueName
   , directive    : Directive
-) extends DirectiveDiff with HashcodeCaching
+) extends DirectiveDiff with HashcodeCaching with ChangeRequestDirectiveDiff
 
 // add and modify are put together
 sealed trait DirectiveSaveDiff extends DirectiveDiff
@@ -56,7 +59,7 @@ sealed trait DirectiveSaveDiff extends DirectiveDiff
 final case class AddDirectiveDiff(
     techniqueName: TechniqueName
   , directive    : Directive
-) extends DirectiveSaveDiff with HashcodeCaching
+) extends DirectiveSaveDiff with HashcodeCaching with ChangeRequestDirectiveDiff
 
 
 final case class ModifyDirectiveDiff(
@@ -78,4 +81,4 @@ final case class ModifyToDirectiveDiff(
     techniqueName: TechniqueName
   , directive    : Directive
   , rootSection  : SectionSpec
-) extends DirectiveSaveDiff with HashcodeCaching
+) extends DirectiveDiff with HashcodeCaching with ChangeRequestDirectiveDiff

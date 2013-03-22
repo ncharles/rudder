@@ -39,6 +39,12 @@ import com.normation.eventlog.EventActor
 import com.normation.rudder.domain.policies._
 import com.normation.rudder.domain.nodes._
 import com.normation.eventlog.EventActor
+import net.liftweb.common.Box
+import net.liftweb.common.EmptyBox
+import net.liftweb.common.Full
+import net.liftweb.common.Failure
+import com.normation.cfclerk.domain.TechniqueName
+import com.normation.cfclerk.domain.SectionSpec
 
 
 /*
@@ -168,8 +174,16 @@ sealed trait Change[T, DIFF, T_CHANGE <: ChangeItem[DIFF]] {
   //we have at least one such sequence
   def initialState: Option[T]
   def firstChange: T_CHANGE
-  //non-empty list
+  //the most recent change come in tail
+  //(so that firstChange :: nextChanges is ordered
   def nextChanges: Seq[T_CHANGE]
+
+  //get the composition of all change,
+  //the actual change between initialState
+  //and last change
+  //it's a box because we can have inconsistant
+  //states, like modify withou an initial state
+  def change: Box[T_CHANGE]
 }
 
 
@@ -211,20 +225,47 @@ case class DirectiveChangeItem(
     actor       : EventActor
   , creationDate: DateTime
   , reason      : Option[String]
-  , diff        : DirectiveDiff
-) extends ChangeItem[DirectiveDiff]
+  , diff        : ChangeRequestDirectiveDiff
+) extends ChangeItem[ChangeRequestDirectiveDiff]
 
 
 case class DirectiveChange(
-    val initialState: Option[Directive]
+    val initialState: Option[(TechniqueName, Directive, SectionSpec)]
   , val firstChange: DirectiveChangeItem
   , val nextChanges: Seq[DirectiveChangeItem]
-) extends Change[Directive, DirectiveDiff, DirectiveChangeItem]
+) extends Change[(TechniqueName, Directive, SectionSpec), ChangeRequestDirectiveDiff, DirectiveChangeItem] {
+  private[this] def recChange(
+      previousState: Box[DirectiveChangeItem]
+    , nexts:List[DirectiveChangeItem]): Box[DirectiveChangeItem] = {
+
+    previousState match {
+      case eb:EmptyBox => eb
+      case Full(x) => nexts match {
+        case Nil => Full(x)
+        case h :: tail => (x.diff,h.diff) match {
+          case ( _ , a:AddDirectiveDiff) => Failure("Trying to add an already existing Direcive (in the context of that change)")
+          case (a:AddDirectiveDiff, _) => recChange(Full(h), tail)
+          case (d:DeleteDirectiveDiff, _) => Failure("Trying to delete a non existing Directive (in the context of that change request)")
+          case (m:ModifyToDirectiveDiff, _) => recChange(Full(h), tail)
+        }
+      }
+    }
+  }
+
+  val change = {
+    val allChanges = firstChange :: nextChanges.toList
+    (initialState, firstChange.diff) match {
+      case (None, a:AddDirectiveDiff) => recChange(Full(firstChange), allChanges)
+      case (None, _) => Failure("Trying to modify or delete a non existing Directive (in the context of that change request)")
+      case (Some((tn,d,rs)), x) => recChange(Full(firstChange.copy( diff = ModifyToDirectiveDiff(tn,d,rs))), allChanges)
+    }
+  }
+}
 
 case class DirectiveChanges(
     val changes: DirectiveChange
   , val changeHistory: Seq[DirectiveChange]
-)extends Changes[Directive, DirectiveDiff, DirectiveChangeItem]
+)extends Changes[(TechniqueName, Directive, SectionSpec), ChangeRequestDirectiveDiff, DirectiveChangeItem]
 
 
 case class NodeGroupChangeItem(
@@ -240,7 +281,9 @@ case class NodeGroupChange(
     val initialState: Option[NodeGroup]
   , val firstChange: NodeGroupChangeItem
   , val nextChanges: Seq[NodeGroupChangeItem]
-) extends Change[NodeGroup, NodeGroupDiff, NodeGroupChangeItem]
+) extends Change[NodeGroup, NodeGroupDiff, NodeGroupChangeItem] {
+  def change = ???
+}
 
 case class NodeGroupChanges(
     val changes: NodeGroupChange

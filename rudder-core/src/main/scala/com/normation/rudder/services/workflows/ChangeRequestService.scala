@@ -113,37 +113,29 @@ class ChangeRequestServiceImpl(
     , reason           : Option[String]
   ) : ConfigurationChangeRequest = {
 
-      val (diff, initialState) = originalDirective match {
+    val (diff, initialState) = originalDirective match {
       case None =>
-      (AddDirectiveDiff(techniqueName, directive), None)
+        (AddDirectiveDiff(techniqueName, directive), None)
       case Some(x) =>
-      (ModifyToDirectiveDiff(techniqueName, directive, rootSection), Some(x))
-      }
+        (ModifyToDirectiveDiff(techniqueName, directive, rootSection), Some((techniqueName, x, rootSection)))
+    }
 
-      val change = DirectiveChange(
-                       initialState = initialState
-                     , firstChange = DirectiveChangeItem(actor, DateTime.now, reason, diff)
-                     , Seq()
-                   )
+    val change = DirectiveChange(
+                     initialState = initialState
+                   , firstChange = DirectiveChangeItem(actor, DateTime.now, reason, diff)
+                   , Seq()
+                 )
 
-      ConfigurationChangeRequest(
-          ChangeRequestId(uuidGen.newUuid)
-        , ChangeRequestInfo(
-              changeRequestName
-            , changeRequestDesc
-            , readOnly
-          )
-//        , List(ChangeRequestStatusItem(
-//              actor, DateTime.now, reason
-//            , AddChangeRequestStatusDiff(ChangeRequestStatus(
-//                  changeRequestName
-//                , changeRequestDesc
-//                , true
-//              ))
-//          ))
-        , Map(directive.id -> DirectiveChanges(change, Seq()))
-        , Map()
-      )
+    ConfigurationChangeRequest(
+        ChangeRequestId(uuidGen.newUuid)
+      , ChangeRequestInfo(
+            changeRequestName
+          , changeRequestDesc
+          , readOnly
+        )
+      , Map(directive.id -> DirectiveChanges(change, Seq()))
+      , Map()
+    )
   }
 
   def createChangeRequestFromNodeGroup(

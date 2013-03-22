@@ -34,40 +34,28 @@
 
 package com.normation.rudder.services.workflows
 
-import com.normation.rudder.domain.workflows.{ ChangeRequestId }
-import net.liftweb.common.Box
-import com.normation.rudder.domain.workflows.ChangeRequestId
 import scala.collection.mutable.Buffer
-import com.normation.rudder.domain.workflows.ChangeRequestId
-import com.normation.rudder.domain.workflows.ChangeRequestId
-import net.liftweb.common.Failure
-import net.liftweb.common.Loggable
-import net.liftweb.common.Full
-import com.normation.rudder.domain.workflows.WorkflowProcessEventLog
-import com.normation.rudder.domain.workflows.StepWorkflowProcessEventLog
-import com.normation.eventlog.EventActor
+import scala.collection.mutable.{ Map => MutMap }
+
 import org.joda.time.DateTime
-import com.normation.rudder.domain.workflows.ChangeRequestId
-import com.normation.rudder.domain.workflows.WorkflowNodeId
-import com.normation.rudder.domain.workflows.WorkflowNode
-import com.normation.rudder.domain.workflows.ChangeRequestId
-import com.normation.rudder.domain.workflows.WorkflowNode
-import com.normation.rudder.domain.workflows.WorkflowNodeId
-import com.normation.rudder.domain.workflows.ChangeRequestId
-import com.normation.rudder.repository.RoChangeRequestRepository
-import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
-import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
-import com.normation.utils.StringUuidGenerator
-import com.normation.rudder.domain.policies.DirectiveId
+
+import com.normation.cfclerk.domain.TechniqueName
+import com.normation.eventlog.EventActor
 import com.normation.eventlog.ModificationId
-import com.normation.rudder.domain.workflows.DirectiveChanges
+import com.normation.rudder.batch.AsyncDeploymentAgent
+import com.normation.rudder.batch.AutomaticStartDeployment
+import com.normation.rudder.domain.eventlog.RudderEventActor
 import com.normation.rudder.domain.nodes.NodeGroupId
-import com.normation.rudder.domain.workflows.NodeGroupChanges
-import com.normation.rudder.domain.policies.AddDirectiveDiff
-import com.normation.rudder.domain.policies.DeleteDirectiveDiff
-import com.normation.rudder.domain.policies.ModifyToDirectiveDiff
+import com.normation.rudder.domain.policies._
+import com.normation.rudder.domain.workflows._
+import com.normation.rudder.repository.RoChangeRequestRepository
+import com.normation.rudder.repository.RoDirectiveRepository
 import com.normation.rudder.repository.WoDirectiveRepository
-import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.rudder.services.policies.DependencyAndDeletionService
+import com.normation.utils.Control._
+import com.normation.utils.StringUuidGenerator
+
+import net.liftweb.common._
 
 /**
  * That service allows to glue Rudder with the
@@ -134,8 +122,12 @@ trait WorkflowService {
  * deploy them
  */
 class CommitAndDeployChangeRequest(
-    uuidGen            : StringUuidGenerator
-  , roChangeRequestRepo: RoChangeRequestRepository
+    uuidGen             : StringUuidGenerator
+  , roChangeRequestRepo : RoChangeRequestRepository
+  , roDirectiveRepo     : RoDirectiveRepository
+  , woDirectiveRepo     : WoDirectiveRepository
+  , asyncDeploymentAgent: AsyncDeploymentAgent
+  , dependencyService   : DependencyAndDeletionService
 ) extends Loggable {
 
   def save(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
@@ -157,16 +149,29 @@ class CommitAndDeployChangeRequest(
   private[this] def saveConfigurationChangeRequest(cr:ConfigurationChangeRequest) : Box[ChangeRequestId] = {
     import com.normation.utils.Control.sequence
 
-    def doDirectiveChange(change:DirectiveChanges, modId: ModificationId) : Box[DirectiveId] = {
-      val id = change.changes.firstChange.diff match {
-        case add:AddDirectiveDiff => add.directive.id
-        case del:DeleteDirectiveDiff => del.directive.id
-        case modTo: ModifyToDirectiveDiff => modTo.directive.id
-        case _ => change.changes.initialState.map( _.id).getOrElse(DirectiveId("should have been there"))
+    def doDirectiveChange(directiveChanges:DirectiveChanges, modId: ModificationId) : Box[DirectiveId] = {
+      def save(tn:TechniqueName, d:Directive, change: DirectiveChangeItem) = {
+        for {
+          activeTechnique <- roDirectiveRepo.getActiveTechnique(tn)
+          saved           <- woDirectiveRepo.saveDirective(activeTechnique.id, d, modId, change.actor, change.reason)
+        } yield {
+          saved
+        }
       }
-      logger.info(s"Save directive with id '${id}'")
-      Full(id)
+
+      for {
+        change <- directiveChanges.changes.change
+        done   <- change.diff match {
+                    case DeleteDirectiveDiff(tn,d) =>
+                      dependencyService.cascadeDeleteDirective(d.id, modId, change.actor, change.reason).map( _ => d.id)
+                    case ModifyToDirectiveDiff(tn,d,rs) => save(tn,d, change).map( _ => d.id )
+                    case AddDirectiveDiff(tn,d) => save(tn,d, change).map( _ => d.id )
+                  }
+      } yield {
+        done
+      }
     }
+
     def doNodeGroupChange(change:NodeGroupChanges, modId: ModificationId) : Box[NodeGroupId] = {
       val id = change.changes.initialState.map( _.id.value).getOrElse("new group")
       logger.info(s"Save group with id '${id}'")
@@ -174,6 +179,11 @@ class CommitAndDeployChangeRequest(
     }
 
     val modId = ModificationId(uuidGen.newUuid)
+
+    /*
+     * TODO: we should NOT commit into git each modification,
+     * but wait until the last line and then commit.
+     */
 
     for {
       directives <- sequence(cr.directives.values.toSeq) { directiveChange =>
@@ -183,6 +193,7 @@ class CommitAndDeployChangeRequest(
                       doNodeGroupChange(nodeGroupChange, modId)
                     }
     } yield {
+      asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
       cr.id
     }
   }

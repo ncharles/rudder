@@ -48,6 +48,7 @@ import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.nodes.AddNodeGroupDiff
 import com.normation.rudder.domain.nodes.DeleteNodeGroupDiff
 import com.normation.rudder.domain.nodes.ModifyNodeGroupDiff
+import com.normation.rudder.domain.nodes.ModifyToNodeGroupDiff
 
 
 object ChangeRequestChangesForm {
@@ -95,8 +96,8 @@ import ChangeRequestChangesForm._
            case a :AddDirectiveDiff => a.directive.name
            case d :DeleteDirectiveDiff => d.directive.name
            case modTo : ModifyToDirectiveDiff => modTo.directive.name
-           case mod : ModifyDirectiveDiff => mod.name
     }
+
     val body = SHtml.a(
         () => SetHtml("history",displayHistory(changes))
       , <span>{directiveName}</span>
@@ -133,15 +134,15 @@ import ChangeRequestChangesForm._
     val directive= roGroupRepo.getNodeGroup(groupId)
 
     val changes = List(changeRequest.nodeGroups(groupId).changes)
-    val directiveName = changeRequest.nodeGroups(groupId).changes.firstChange.diff match{
+    val groupeName = changeRequest.nodeGroups(groupId).changes.firstChange.diff match{
            case a :AddNodeGroupDiff => a.group.name
            case d :DeleteNodeGroupDiff => d.group.name
-           //case modTo : ModifyToNodeGroupDiff => modTo.group.name
+           case modTo : ModifyToNodeGroupDiff => modTo.group.name
            case mod : ModifyNodeGroupDiff => mod.name
     }
     val body = SHtml.a(
         () => SetHtml("history",displayHistory(List()))
-      , <span>{directiveName}</span>
+      , <span>{groupeName}</span>
     )
 
     val children = Nil
