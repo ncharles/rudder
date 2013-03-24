@@ -266,8 +266,7 @@ class DeploymentServiceImpl (
     override val nodeConfigurationChangeDetectService : NodeConfigurationChangeDetectService,
     override val reportingService : ReportingService,
     override val historizationService : HistorizationService,
-    override val parameterService : RoParameterService
-    
+    override val parameterService : RoParameterService    
 ) extends DeploymentService with
   DeploymentService_findDependantRules_bruteForce with
   DeploymentService_buildRuleVals with

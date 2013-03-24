@@ -46,8 +46,8 @@ import scala.collection.mutable.{Map => MutMap}
 import com.normation.cfclerk.domain.{TechniqueId, Cf3PolicyDraftId,Cf3PolicyDraft, Cf3PolicyDraftContainer}
 import com.normation.rudder.domain.policies.{Rule,RuleId}
 import com.normation.rudder.domain.parameters.Parameter
-import com.normation.cfclerk.domain.ParameterEntry
 import com.normation.rudder.services.policies.ParameterForConfiguration
+import com.normation.cfclerk.domain.ParameterEntry
 
 
 trait NodeConfiguration extends Loggable {
