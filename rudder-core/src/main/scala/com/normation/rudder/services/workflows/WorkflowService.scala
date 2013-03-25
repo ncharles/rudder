@@ -165,7 +165,7 @@ class CommitAndDeployChangeRequest(
                     case DeleteDirectiveDiff(tn,d) =>
                       dependencyService.cascadeDeleteDirective(d.id, modId, change.actor, change.reason).map( _ => d.id)
                     case ModifyToDirectiveDiff(tn,d,rs) => save(tn,d, change).map( _ => d.id )
-                    case AddDirectiveDiff(tn,d) => save(tn,d, change).map( _ => d.id )
+                    case AddDirectiveDiff(tn,d,rs) => save(tn,d, change).map( _ => d.id )
                   }
       } yield {
         done

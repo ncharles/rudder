@@ -59,6 +59,7 @@ sealed trait DirectiveSaveDiff extends DirectiveDiff
 final case class AddDirectiveDiff(
     techniqueName: TechniqueName
   , directive    : Directive
+  , rootSection  : Option[SectionSpec] = None
 ) extends DirectiveSaveDiff with HashcodeCaching with ChangeRequestDirectiveDiff
 
 

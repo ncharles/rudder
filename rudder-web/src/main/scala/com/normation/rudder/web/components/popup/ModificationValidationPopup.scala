@@ -374,7 +374,7 @@ class ModificationValidationPopup(
     initialState match {
       case None =>
       if (action=="save")
-        Full(AddDirectiveDiff(techniqueName,directive))
+        Full(AddDirectiveDiff(techniqueName,directive,Some(rootSection)))
       else
         Failure(s"Action ${action} is not possible on a new directive")
       case Some(d) =>

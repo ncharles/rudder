@@ -217,8 +217,45 @@ import ChangeRequestChangesForm._
       </tbody>
     </table>
 
+  private[this] val xmlPretty = new scala.xml.PrettyPrinter(80, 2)
+
+  private[this] val piDetailsXML =
+    <div>
+      <h4>Directive overview:</h4>
+      <ul class="evlogviewpad">
+        <li><b>ID:&nbsp;</b><value id="directiveID"/></li>
+        <li><b>Name:&nbsp;</b><value id="directiveName"/></li>
+        <li><b>Description:&nbsp;</b><value id="shortDescription"/></li>
+        <li><b>Technique name:&nbsp;</b><value id="ptName"/></li>
+        <li><b>Technique version:&nbsp;</b><value id="ptVersion"/></li>
+        <li><b>Priority:&nbsp;</b><value id="priority"/></li>
+        <li><b>Enabled:&nbsp;</b><value id="isEnabled"/></li>
+        <li><b>System:&nbsp;</b><value id="isSystem"/></li>
+        <li><b>Details:&nbsp;</b><value id="longDescription"/></li>
+        <li><b>Parameters:&nbsp;</b><value id="parameters"/></li>
+      </ul>
+    </div>
   def diff(cr : List[DirectiveChange]) = cr match {
-      case list           => <ul>{list.flatMap(directive => <li>{directive.firstChange.diff}</li>)}</ul>
+      case list           => <ul>{list.flatMap(directive => <li>{directive.change.map(_.diff) match {
+        case Full(a:AddDirectiveDiff) => {
+          val directive= a.directive
+          val ptName = a.techniqueName
+          //def directiveDetails(xml:NodeSeq, ptName: TechniqueName, directive:Directive, sectionVal:SectionVal) = (
+      ("#directiveID" #> directive.id.value.toUpperCase &
+      "#directiveName" #> directive.name &
+      "#ptVersion" #> directive.techniqueVersion.toString &
+      "#ptName" #> ptName.value &
+      "#ptVersion" #> directive.techniqueVersion.toString &
+      "#ptName" #> ptName.value &
+      "#priority" #> directive.priority &
+      "#isEnabled" #> directive.isEnabled &
+      "#isSystem" #> directive.isSystem &
+      "#shortDescription" #> directive.shortDescription &
+      "#longDescription" #> directive.longDescription &
+      "#parameters" #> <pre>{xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(a.rootSection.get,directive.parameters)))}</pre>
+  )(piDetailsXML)}
+        case a => a
+      }}</li>)}</ul>
     }
 
   def CRLine(cr: ChangeRequestEventLog)=
