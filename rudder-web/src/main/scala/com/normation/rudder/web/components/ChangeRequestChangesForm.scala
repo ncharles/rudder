@@ -49,6 +49,7 @@ import com.normation.rudder.domain.nodes.AddNodeGroupDiff
 import com.normation.rudder.domain.nodes.DeleteNodeGroupDiff
 import com.normation.rudder.domain.nodes.ModifyNodeGroupDiff
 import com.normation.rudder.domain.nodes.ModifyToNodeGroupDiff
+import com.normation.cfclerk.domain.TechniqueId
 
 
 object ChangeRequestChangesForm {
@@ -66,6 +67,7 @@ class ChangeRequestChangesForm(
 import ChangeRequestChangesForm._
 
   val roDirectiveRepo = RudderConfig.roDirectiveRepository
+  val techniqueRepo = RudderConfig.techniqueRepository
   val roGroupRepo = RudderConfig.roNodeGroupRepository
   val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
   val workFlowEventLogService =  RudderConfig.workflowEventLogService
@@ -219,15 +221,15 @@ import ChangeRequestChangesForm._
 
   private[this] val xmlPretty = new scala.xml.PrettyPrinter(80, 2)
 
-  private[this] val piDetailsXML =
+  private[this] val DirectiveXML =
     <div>
       <h4>Directive overview:</h4>
       <ul class="evlogviewpad">
         <li><b>ID:&nbsp;</b><value id="directiveID"/></li>
         <li><b>Name:&nbsp;</b><value id="directiveName"/></li>
         <li><b>Description:&nbsp;</b><value id="shortDescription"/></li>
-        <li><b>Technique name:&nbsp;</b><value id="ptName"/></li>
-        <li><b>Technique version:&nbsp;</b><value id="ptVersion"/></li>
+        <li><b>Technique name:&nbsp;</b><value id="techniqueName"/></li>
+        <li><b>Technique version:&nbsp;</b><value id="techniqueVersion"/></li>
         <li><b>Priority:&nbsp;</b><value id="priority"/></li>
         <li><b>Enabled:&nbsp;</b><value id="isEnabled"/></li>
         <li><b>System:&nbsp;</b><value id="isSystem"/></li>
@@ -236,26 +238,56 @@ import ChangeRequestChangesForm._
       </ul>
     </div>
   def diff(cr : List[DirectiveChange]) = cr match {
-      case list           => <ul>{list.flatMap(directive => <li>{directive.change.map(_.diff) match {
-        case Full(a:AddDirectiveDiff) => {
-          val directive= a.directive
-          val ptName = a.techniqueName
-          //def directiveDetails(xml:NodeSeq, ptName: TechniqueName, directive:Directive, sectionVal:SectionVal) = (
-      ("#directiveID" #> directive.id.value.toUpperCase &
-      "#directiveName" #> directive.name &
-      "#ptVersion" #> directive.techniqueVersion.toString &
-      "#ptName" #> ptName.value &
-      "#ptVersion" #> directive.techniqueVersion.toString &
-      "#ptName" #> ptName.value &
-      "#priority" #> directive.priority &
-      "#isEnabled" #> directive.isEnabled &
-      "#isSystem" #> directive.isSystem &
-      "#shortDescription" #> directive.shortDescription &
-      "#longDescription" #> directive.longDescription &
-      "#parameters" #> <pre>{xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(a.rootSection.get,directive.parameters)))}</pre>
-  )(piDetailsXML)}
-        case a => a
-      }}</li>)}</ul>
+      case list           => <ul>{list.flatMap(directive => <li>{directive.change.map(_.diff match {
+        case AddDirectiveDiff(techniqueName,directive,optRootSection) => {
+        val parameters = optRootSection match {
+          case None => logger.warn("No rootsection was linked to taht diff, looking directly in the technique")
+            techniqueRepo.get(TechniqueId(techniqueName,directive.techniqueVersion)).map(_.rootSection) match {
+              case Some(rs) =>   xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
+              case None => logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
+                 <div> directive.parameters </div>
+            }
+          case Some(rs) =>   xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
+        }
+        ("#directiveID" #> directive.id.value.toUpperCase &
+        "#directiveName" #> directive.name &
+        "#techniqueVersion" #> directive.techniqueVersion.toString &
+        "#techniqueName" #> techniqueName.value &
+        "#techniqueVersion" #> directive.techniqueVersion.toString &
+        "#techniqueName" #> techniqueName.value &
+        "#priority" #> directive.priority &
+        "#isEnabled" #> directive.isEnabled &
+        "#isSystem" #> directive.isSystem &
+        "#shortDescription" #> directive.shortDescription &
+        "#longDescription" #> directive.longDescription &
+        "#parameters" #>
+          <pre>{parameters}</pre>
+        )(DirectiveXML)}
+        case DeleteDirectiveDiff(techniqueName,directive,optRootSection) => {
+        val parameters = optRootSection match {
+          case None => logger.warn("No rootsection was linked to taht diff, looking directly in the technique")
+            techniqueRepo.get(TechniqueId(techniqueName,directive.techniqueVersion)).map(_.rootSection) match {
+              case Some(rs) =>   xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
+              case None => logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
+                 <div> directive.parameters </div>
+            }
+          case Some(rs) =>   xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
+        }
+        ("#directiveID" #> directive.id.value.toUpperCase &
+        "#directiveName" #> directive.name &
+        "#techniqueVersion" #> directive.techniqueVersion.toString &
+        "#techniqueName" #> techniqueName.value &
+        "#techniqueVersion" #> directive.techniqueVersion.toString &
+        "#techniqueName" #> techniqueName.value &
+        "#priority" #> directive.priority &
+        "#isEnabled" #> directive.isEnabled &
+        "#isSystem" #> directive.isSystem &
+        "#shortDescription" #> directive.shortDescription &
+        "#longDescription" #> directive.longDescription &
+        "#parameters" #>
+          <pre>{parameters}</pre>
+        )(DirectiveXML)}
+      })}</li>)}</ul>
     }
 
   def CRLine(cr: ChangeRequestEventLog)=

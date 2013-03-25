@@ -379,7 +379,7 @@ class ModificationValidationPopup(
         Failure(s"Action ${action} is not possible on a new directive")
       case Some(d) =>
         action match {
-          case "delete" => Full(DeleteDirectiveDiff(techniqueName,directive))
+          case "delete" => Full(DeleteDirectiveDiff(techniqueName,directive,Some(rootSection)))
           case "save"|"disable"|"enable" => Full(ModifyToDirectiveDiff(techniqueName,directive,rootSection))
           case _ =>         Failure(s"Action ${action} is not possible on a existing directive")
         }
