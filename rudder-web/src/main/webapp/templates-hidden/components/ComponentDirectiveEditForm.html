@@ -85,8 +85,21 @@
 </component:body>
 
 <component:form>
-  <div id="editForm" class="object-details">
+  <div id="editForm" class="object-details">  
     <lift:authz role="directive_edit">
+
+    <fieldset class="topLevelAction" id="existingPrivateDrafts">
+      You already started some draft concerning that directive:
+      <ul>
+        <li class="draft">[here come description of the draft and a link to it]))
+      </ul>
+    </fieldset>
+    <fieldset class="topLevelAction" id="existingChangeRequests">
+      Some change request already exists concerning that directive:
+      <ul>
+        <li class="draft">[here come description of the change request and a link to it]))
+      </ul>
+    </fieldset>    
     <fieldset class="topLevelAction">
       <p class="clearable">
         This is the zone for top level actions which does not take into account
