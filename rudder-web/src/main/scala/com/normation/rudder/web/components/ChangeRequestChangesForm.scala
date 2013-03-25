@@ -69,7 +69,7 @@ import ChangeRequestChangesForm._
   val roGroupRepo = RudderConfig.roNodeGroupRepository
   val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
   val workFlowEventLogService =  RudderConfig.workflowEventLogService
-
+  val diffService =  RudderConfig.diffService
 
   def dispatch = {
     case "changes" => _ => changeRequest match {
@@ -259,8 +259,9 @@ import ChangeRequestChangesForm._
     <tr>
       <td id="action">
          {cr.firstChange.diff match {
-           case a :AddDirectiveDiff => s"Create Directive ${a.directive.name}"
-           case _ => "another change ..."
+           case a : AddDirectiveDiff => s"Create Directive ${a.directive.name}"
+           case d : DeleteDirectiveDiff => s"Delete Directive ${d.directive.name}"
+           case m : ModifyToDirectiveDiff => s"Modify Directive ${m.directive.name}"
          }}
       </td>
       <td id="actor">
