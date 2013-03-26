@@ -878,54 +878,12 @@ class EventListDisplayer(
           <pre style="width:200px;" id={"after" + id}
             class="nodisplay">{xmlPretty.format(SectionVal.toXml(diff.newValue))}</pre>
           <pre id={"result" + id} ></pre>
-        ) ++ Script(OnLoad(JsRaw("""
-
-            var eventId = '%s';
-            var a = $('#before' + eventId);
-            var b = $('#after' + eventId);
-            var result = $('#result' + eventId);
-
-            function changed() {
-              var diff = JsDiff.diffLines(a.text(), b.text());
-              var fragment = document.createDocumentFragment();
-              for (var i=0; i < diff.length; i++) {
-
-                if (diff[i].added && diff[i + 1] && diff[i + 1].removed) {
-                  var swap = diff[i];
-                  diff[i] = diff[i + 1];
-                  diff[i + 1] = swap;
-                }
-
-                var node;
-                if (diff[i].removed) {
-                  node = document.createElement('del');
-                  node.appendChild(document.createTextNode(appendLines('-', diff[i].value)));
-                } else if (diff[i].added) {
-                  node = document.createElement('ins');
-                  node.appendChild(document.createTextNode(appendLines('+', diff[i].value)));
-                } else {
-                  node = document.createTextNode(appendLines(" ", diff[i].value));
-                }
-                fragment.appendChild(node);
-              }
-
-              result.text('');
-              result.append(fragment);
-            }
-
-            function appendLines(c, s) {
-              var res = s.replace(/\n/g, "\n" + c);
-              res = c+res;
-              if(res.charAt(res.length -1) == c)
-                res = res.substring(0, res.length - 1);
-              return res;
-            }
-
-            changed();
-
-            """
-            .format(id)
-            )))
+        ) ++ Script(OnLoad(JsRaw(s"""
+            var before = "before${id}";
+            var after  = "after${id}";
+            var result = "result${id}";
+            makeDiff(before,after,result);
+            """)))
       }
   }
 
