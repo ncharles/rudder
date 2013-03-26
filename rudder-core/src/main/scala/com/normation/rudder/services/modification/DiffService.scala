@@ -51,7 +51,7 @@ trait DiffService {
     , refRootSection : SectionSpec
     , newItem:Directive
     , newRootSection : SectionSpec
-  ) : DirectiveDiff
+  ) : ModifyDirectiveDiff
 
   def diffNodeGroup(reference:NodeGroup, newItem:NodeGroup) : NodeGroupDiff
 
