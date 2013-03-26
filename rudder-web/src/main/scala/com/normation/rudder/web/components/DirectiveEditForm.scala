@@ -675,11 +675,11 @@ class DirectiveEditForm(
    */
   private[this] def displayConfirmationPopup(
       action:String
-    , directive:Directive
+    , newDirective:Directive
   ) : JsCmd = {
     val optOriginal = { if(isADirectiveCreation) None else Some(directive) }
     val popup = new ModificationValidationPopup(
-        Left(technique.id.name,technique.rootSection,  directive, optOriginal)
+        Left(technique.id.name,technique.rootSection,  newDirective, optOriginal)
       , action
       , isADirectiveCreation
       , xml => JsRaw("$.modal.close();") & onSuccessCallback(directive) & successPopup(xml)
