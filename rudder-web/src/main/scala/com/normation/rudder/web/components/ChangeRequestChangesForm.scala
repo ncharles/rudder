@@ -287,21 +287,25 @@ import ChangeRequestChangesForm._
                "#parameters" #> <pre>{parameters}</pre>
               )(DirectiveXML)
             case ModifyToDirectiveDiff(techniqueName,directive,rootSection) =>
-              val Some((s,v)) = directiveChange.initialState.map(init => (init._2,init._3))
-              val diff = diffService.diffDirective(s, v, directive, rootSection)
-              logger.info(s)
+              val Some((initialDirective,initialRS)) = directiveChange.initialState.map(init => (init._2,init._3))
+              val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
+              val parameters = techniqueRepo.get(techniqueId).map(_.rootSection)
+              val diff = diffService.diffDirective(initialDirective, initialRS, directive, rootSection)
               ("#directiveID" #> directive.id.value.toUpperCase &
-               "#directiveName" #> diff.modName.map(value => <div><div>{value.oldValue}</div><div>{value.newValue}</div></div>).getOrElse(Text(directive.name)) &
-               "#techniqueVersion" #> directive.techniqueVersion.toString &
+               "#directiveName" #> diff.modName.map(value => displaydirectiveInnerFormDiff(value, "name")).getOrElse(Text(directive.name)) &
+               "#techniqueVersion" #> diff.modTechniqueVersion.map(value => displaydirectiveInnerFormDiff(value, "techniqueVersion")).getOrElse(Text(directive.techniqueVersion.toString)) &
                "#techniqueName" #> techniqueName.value &
-               "#techniqueVersion" #> directive.techniqueVersion.toString &
-               "#techniqueName" #> techniqueName.value &
-               "#priority" #> directive.priority &
-               "#isEnabled" #> directive.isEnabled &
+               "#priority" #> diff.modPriority.map(value => displaydirectiveInnerFormDiff(value, "priority")).getOrElse(Text(directive.priority.toString)) &
+               "#isEnabled" #> diff.modIsActivated.map(value => displaydirectiveInnerFormDiff(value, "active")).getOrElse(Text(directive.isEnabled.toString)) &
                "#isSystem" #> directive.isSystem &
-               "#shortDescription" #> directive.shortDescription &
-               "#longDescription" #> directive.longDescription &
-               "#parameters" #> <pre>{diff}</pre>
+               "#shortDescription" #> diff.modShortDescription.map(value => displaydirectiveInnerFormDiff(value, "short")).getOrElse(Text(directive.shortDescription)) &
+               "#longDescription" #> diff.modLongDescription.map(value => displaydirectiveInnerFormDiff(value, "long")).getOrElse(Text(directive.longDescription)) &
+               "#parameters" #> {
+               implicit val fun = (section:SectionVal) => xmlPretty.format(SectionVal.toXml(section))
+                 diff.modParameters.map{
+                 displaydirectiveInnerFormDiff(_,"parameters")
+               }.getOrElse(<pre>{fun(SectionVal.directiveValToSectionVal(rootSection,directive.parameters))}</pre>)
+               }
               )(DirectiveXML)
             }
           ).getOrElse(<div>Error</div>)
@@ -309,7 +313,24 @@ import ChangeRequestChangesForm._
       )
     }
   </ul>
-
+  private[this] def displaydirectiveInnerFormDiff[T](diff: SimpleDiff[T], name:String)(implicit fun: T => String = (t:T) => t.toString) = {
+    <pre style="width:200px;" id={s"before${name}"}
+    class="nodisplay">{fun(diff.oldValue)}</pre>
+    <pre style="width:200px;" id={s"after${name}"}
+    class="nodisplay">{fun(diff.newValue)}</pre>
+    <pre id={s"result${name}"} ></pre>  ++
+    Script(
+      OnLoad(
+        JsRaw(
+          s"""
+            var before = "before${name}";
+            var after  = "after${name}";
+            var result = "result${name}";
+            makeDiff(before,after,result);"""
+        )
+      )
+    )
+  }
   def CRLine(cr: ChangeRequestEventLog)=
     <tr>
       <td id="action">
