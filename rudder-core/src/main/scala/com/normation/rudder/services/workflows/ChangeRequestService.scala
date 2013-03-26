@@ -45,6 +45,9 @@ import com.normation.utils.StringUuidGenerator
 import com.normation.rudder.domain.workflows.ChangeRequestInfo
 import com.normation.cfclerk.domain.SectionSpec
 import net.liftweb.common.Loggable
+import com.normation.rudder.domain.policies.DeleteDirectiveDiff
+import com.normation.rudder.domain.policies.ChangeRequestDirectiveDiff
+import com.normation.rudder.domain.policies.DirectiveId
 
 
 
@@ -60,8 +63,9 @@ trait ChangeRequestService {
     , readOnly         : Boolean
     , techniqueName    : TechniqueName
     , rootSection      : SectionSpec
-    , directive        : Directive
+    , directiveId      : DirectiveId
     , originalDirective: Option[Directive]
+    , diff             : ChangeRequestDirectiveDiff
     , actor            : EventActor
     , reason           : Option[String]
   ) : ConfigurationChangeRequest
@@ -107,25 +111,23 @@ class ChangeRequestServiceImpl(
     , readOnly         : Boolean
     , techniqueName    : TechniqueName
     , rootSection      : SectionSpec
-    , directive        : Directive
+    , directiveId      : DirectiveId
     , originalDirective: Option[Directive]
+    , diff             : ChangeRequestDirectiveDiff
     , actor            : EventActor
     , reason           : Option[String]
   ) : ConfigurationChangeRequest = {
 
-    val (diff, initialState) = originalDirective match {
-      case None =>
-        (AddDirectiveDiff(techniqueName, directive), None)
-      case Some(x) =>
-        (ModifyToDirectiveDiff(techniqueName, directive, rootSection), Some((techniqueName, x, rootSection)))
+    val initialState = originalDirective match {
+      case None =>  None
+      case Some(x) => Some((techniqueName, x, rootSection))
     }
-
     val change = DirectiveChange(
                      initialState = initialState
                    , firstChange = DirectiveChangeItem(actor, DateTime.now, reason, diff)
                    , Seq()
                  )
-
+    logger.debug(change)
     ConfigurationChangeRequest(
         ChangeRequestId(uuidGen.newUuid)
       , ChangeRequestInfo(
@@ -133,7 +135,7 @@ class ChangeRequestServiceImpl(
           , changeRequestDesc
           , readOnly
         )
-      , Map(directive.id -> DirectiveChanges(change, Seq()))
+      , Map(directiveId -> DirectiveChanges(change, Seq()))
       , Map()
     )
   }

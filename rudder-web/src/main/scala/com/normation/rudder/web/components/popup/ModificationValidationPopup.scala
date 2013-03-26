@@ -365,6 +365,27 @@ class ModificationValidationPopup(
     onSubmit(keepOpen = true)
   }
 
+  private[this] def DirectiveDiffFromAction(
+      techniqueName: TechniqueName
+    , rootSection  : SectionSpec
+    , directive:Directive
+    , initialState:Option[Directive]
+  ) : Box[ChangeRequestDirectiveDiff] = {
+    initialState match {
+      case None =>
+      if (action=="save")
+        Full(AddDirectiveDiff(techniqueName,directive,Some(rootSection)))
+      else
+        Failure(s"Action ${action} is not possible on a new directive")
+      case Some(d) =>
+        action match {
+          case "delete" => Full(DeleteDirectiveDiff(techniqueName,directive,Some(rootSection)))
+          case "save"|"disable"|"enable" => Full(ModifyToDirectiveDiff(techniqueName,directive,rootSection))
+          case _ =>         Failure(s"Action ${action} is not possible on a existing directive")
+        }
+    }
+  }
+
   private[this] def onSubmit(keepOpen:Boolean) : JsCmd = {
 
     if(formTracker.hasErrors) {
@@ -377,28 +398,32 @@ class ModificationValidationPopup(
           case "quick" | "new" =>
             val cr = item match {
               case Left((techniqueName, rootSection, directive, optOriginal)) =>
-                changeRequestService.createChangeRequestFromDirective(
-                    changeRequestName.get
-                  , changeRequestDescription.get
-                  , false
-                  , techniqueName
-                  , rootSection
-                  , directive
-                  , optOriginal
-                  , CurrentUser.getActor
-                  , crReasons.map( _.get )
+                val action = DirectiveDiffFromAction(techniqueName, rootSection, directive, optOriginal)
+                action.map(
+                  changeRequestService.createChangeRequestFromDirective(
+                      changeRequestName.get
+                    , changeRequestDescription.get
+                    , false
+                    , techniqueName
+                    , rootSection
+                    , directive.id
+                    , optOriginal
+                    , _
+                    , CurrentUser.getActor
+                    , crReasons.map( _.get )
+                  )
                 )
               case Right((nodeGroup, optOriginal)) =>
-                changeRequestService.createChangeRequestFromNodeGroup(
+                Full(changeRequestService.createChangeRequestFromNodeGroup(
                     changeRequestName.get
                   , changeRequestDescription.get
                   , nodeGroup
                   , optOriginal
                   , CurrentUser.getActor
                   , crReasons.map( _.get )
-                )
+                ) )
             }
-
+            cr.flatMap{ cr =>
             currentRadio match {
               case "quick" =>
                 for {
@@ -410,9 +435,9 @@ class ModificationValidationPopup(
                 }
 
               case "new" => //save in draft
-                woDraftChangeRequestRepo.saveDraftChangeRequest(cr, CurrentUser.getActor, crReasons.map( _.get ))
+                woDraftChangeRequestRepo.saveDraftChangeRequest(cr, CurrentUser.getActor, crReasons.map( _.get )).map(_.id)
             }
-
+            }
 
 
           case "existing" =>
@@ -446,7 +471,7 @@ class ModificationValidationPopup(
               saved <- woChangeRequestRepo.updateChangeRequest(newCr, CurrentUser.getActor, crReasons.map( _.get ))
               wf    <- workflowService.startWorkflow(saved.id,CurrentUser.getActor, crReasons.map( _.get ))
             } yield {
-              saved
+              saved.id
             }
         }
       }

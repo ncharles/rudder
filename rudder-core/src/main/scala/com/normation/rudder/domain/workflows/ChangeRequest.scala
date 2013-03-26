@@ -237,7 +237,7 @@ case class DirectiveChange(
   private[this] def recChange(
       previousState: Box[DirectiveChangeItem]
     , nexts:List[DirectiveChangeItem]): Box[DirectiveChangeItem] = {
-
+    println(previousState)
     previousState match {
       case eb:EmptyBox => eb
       case Full(x) => nexts match {
@@ -255,7 +255,7 @@ case class DirectiveChange(
   val change = {
     val allChanges = firstChange :: nextChanges.toList
     (initialState, firstChange.diff) match {
-      case (None, a:AddDirectiveDiff) => recChange(Full(firstChange), allChanges)
+      case (None, a:AddDirectiveDiff) => recChange(Full(firstChange), nextChanges.toList)
       case (None, _) => Failure("Trying to modify or delete a non existing Directive (in the context of that change request)")
       case (Some((tn,d,rs)), x) => recChange(Full(firstChange.copy( diff = ModifyToDirectiveDiff(tn,d,rs))), allChanges)
     }

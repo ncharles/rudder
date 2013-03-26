@@ -162,10 +162,10 @@ class CommitAndDeployChangeRequest(
       for {
         change <- directiveChanges.changes.change
         done   <- change.diff match {
-                    case DeleteDirectiveDiff(tn,d) =>
+                    case DeleteDirectiveDiff(tn,d,rs) =>
                       dependencyService.cascadeDeleteDirective(d.id, modId, change.actor, change.reason).map( _ => d.id)
                     case ModifyToDirectiveDiff(tn,d,rs) => save(tn,d, change).map( _ => d.id )
-                    case AddDirectiveDiff(tn,d) => save(tn,d, change).map( _ => d.id )
+                    case AddDirectiveDiff(tn,d,rs) => save(tn,d, change).map( _ => d.id )
                   }
       } yield {
         done
