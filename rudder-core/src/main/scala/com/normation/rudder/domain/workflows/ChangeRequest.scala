@@ -128,6 +128,7 @@ case class ConfigurationChangeRequest(
   , info       : ChangeRequestInfo
   , directives : Map[DirectiveId, DirectiveChanges]
   , nodeGroups : Map[NodeGroupId, NodeGroupChanges]
+  , rules      : Map[RuleId, RuleChanges]
   // ... TODO: complete for groups and rules
 ) extends ChangeRequest
 
@@ -281,4 +282,27 @@ case class NodeGroupChanges(
     val changes: NodeGroupChange
   , val changeHistory: Seq[NodeGroupChange]
 )extends Changes[NodeGroup, NodeGroupDiff, NodeGroupChangeItem]
+
+case class RuleChangeItem(
+  //no ID: that object does not have any meaning outside
+  // a change request
+    actor       : EventActor
+  , creationDate: DateTime
+  , reason      : Option[String]
+  , diff        : RuleDiff
+) extends ChangeItem[RuleDiff]
+
+case class RuleChange(
+    val initialState: Option[Rule]
+  , val firstChange: RuleChangeItem
+  , val nextChanges: Seq[RuleChangeItem]
+) extends Change[Rule, RuleDiff, RuleChangeItem] {
+
+  val change = Full(firstChange)
+}
+
+case class RuleChanges(
+    val changes: RuleChange
+  , val changeHistory: Seq[RuleChange]
+)extends Changes[Rule, RuleDiff, RuleChangeItem]
 

@@ -39,8 +39,7 @@ import com.normation.cfclerk.domain.TechniqueName
 import com.normation.eventlog.EventActor
 import com.normation.rudder.domain.nodes.NodeGroup
 import com.normation.rudder.domain.policies.{ AddDirectiveDiff, Directive, ModifyToDirectiveDiff }
-import com.normation.rudder.domain.workflows.{ ConfigurationChangeRequest, DirectiveChange, DirectiveChangeItem, DirectiveChanges }
-import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.rudder.domain.workflows._
 import com.normation.utils.StringUuidGenerator
 import com.normation.rudder.domain.workflows.ChangeRequestInfo
 import com.normation.cfclerk.domain.SectionSpec
@@ -48,6 +47,7 @@ import net.liftweb.common.Loggable
 import com.normation.rudder.domain.policies.DeleteDirectiveDiff
 import com.normation.rudder.domain.policies.ChangeRequestDirectiveDiff
 import com.normation.rudder.domain.policies.DirectiveId
+import com.normation.rudder.domain.nodes.NodeGroupDiff
 
 
 
@@ -74,24 +74,7 @@ trait ChangeRequestService {
     , changeRequestDesc: String
     , nodeGroup        : NodeGroup
     , originalNodeGroup: Option[NodeGroup]
-    , actor            : EventActor
-    , reason           : Option[String]
-  ) : ConfigurationChangeRequest
-
-  def updateChangeRequestWithDirective(
-      changeRequest: ConfigurationChangeRequest
-    , techniqueName: TechniqueName
-    , rootSection      : SectionSpec
-    , directive    : Directive
-    , originalDirective: Option[Directive]
-    , actor            : EventActor
-    , reason           : Option[String]
-  ) : ConfigurationChangeRequest
-
-  def updateChangeRequestWithNodeGroup(
-      changeRequest    : ConfigurationChangeRequest
-    , nodeGroup        : NodeGroup
-    , originalNodeGroup: Option[NodeGroup]
+    , diff             : NodeGroupDiff
     , actor            : EventActor
     , reason           : Option[String]
   ) : ConfigurationChangeRequest
@@ -140,6 +123,7 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
         )
       , Map(directiveId -> DirectiveChanges(change, Seq()))
       , Map()
+      , Map()
     )
   }
 
@@ -148,35 +132,28 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
     , changeRequestDesc: String
     , nodeGroup        : NodeGroup
     , originalNodeGroup: Option[NodeGroup]
+    , diff             : NodeGroupDiff
     , actor            : EventActor
     , reason           : Option[String]
   ) : ConfigurationChangeRequest = {
-    logger.info("update")
-    ???
+
+    val change = NodeGroupChange(
+                     initialState = originalNodeGroup
+                   , firstChange = NodeGroupChangeItem(actor, DateTime.now, reason, diff)
+                   , Seq()
+                 )
+    logger.debug(change)
+    ConfigurationChangeRequest(
+        ChangeRequestId(getNextId)
+      , ChangeRequestInfo(
+            changeRequestName
+          , changeRequestDesc
+        )
+      , Map()
+      , Map(nodeGroup.id -> NodeGroupChanges(change,Seq()))
+      , Map()
+    )
   }
 
-  def updateChangeRequestWithDirective(
-      changeRequest: ConfigurationChangeRequest
-    , techniqueName: TechniqueName
-    , rootSection      : SectionSpec
-    , directive    : Directive
-    , originalDirective: Option[Directive]
-    , actor            : EventActor
-    , reason           : Option[String]
-  ) = {
-    logger.info("update")
-    ???
-  }
-
-  def updateChangeRequestWithNodeGroup(
-      changeRequest    : ConfigurationChangeRequest
-    , nodeGroup        : NodeGroup
-    , originalNodeGroup: Option[NodeGroup]
-    , actor            : EventActor
-    , reason           : Option[String]
-  ) : ConfigurationChangeRequest = {
-    logger.info("update")
-    ???
-  }
 
 }
