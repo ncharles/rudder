@@ -225,12 +225,10 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
         , {t:stepChangeFunction => nextChosen = t}
       )
     def nextOne(next:String) : NodeSeq=
-      <div class="wbBaseField">
-        <b class="threeCol">Next: </b>
+
         <span id="CRStatus">
           {next}
         </span>
-      </div>
 
     val stepMessage =
       new WBTextAreaField("Message", "") {
@@ -247,8 +245,8 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
 
     val next = {
       nextSteps match {
-        case Nil => <span>Error</span>
-        case (head,_) :: Nil => nextOne(head.value)
+        case Nil => <span id="CRStatus">Error</span>
+        case (head,_) :: Nil =>  <span id="CRStatus"> {head.value} </span>
         case _ => nextSelect
       }
     }

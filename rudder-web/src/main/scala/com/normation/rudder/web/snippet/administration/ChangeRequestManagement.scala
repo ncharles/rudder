@@ -160,7 +160,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
     }
     def unexpandedFilter(default:String):NodeSeq = {
       val select = SHtml.select(
-          ("","All")::selectValues
+          ("","All"):: ("Pending","Pending") ::selectValues
         , Full(default)
         , list => value = list
         , ("style","width:auto;")
@@ -169,16 +169,16 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   }
 
     def expandedFilter(default:String) = {
-      val extendedDefault = if (values.exists(_ == default)) List(default) else Nil
+      val extendedDefault = if(default == "Pending") values.filter(_.contains("Pending")) else if (values.exists(_ == default)) List(default) else Nil
       val multiSelect =  SHtml.multiSelect(
             selectValues
           , extendedDefault
-          , list => value = if (list.size==1) list.head else "All"
+          , list => value = if (list.size==4) "All" else if (list.forall(_.contains("Pending") && list.size == 2)) "Pending" else list.head
           , ("style","width:auto;padding-right:3px;")
         )
       filterForm(multiSelect,"...",unexpandedFilter)
     }
 
-  unexpandedFilter(initFilter.getOrElse("All"))
+  unexpandedFilter(initFilter.getOrElse("Pending"))
   }
 }
