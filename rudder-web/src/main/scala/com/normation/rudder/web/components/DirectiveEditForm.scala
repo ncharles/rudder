@@ -81,7 +81,7 @@ object DirectiveEditForm {
       xml <- Templates("templates-hidden" :: "components" :: "ComponentDirectiveEditForm" :: Nil)
     } yield {
       chooseTemplate("component", "staticInit", xml) ++
-        RuleGrid.staticInit ++ ModificationValidationPopup.staticInit
+        RuleGrid.staticInit
     }) openOr Nil
 
   private def body =
@@ -339,30 +339,33 @@ class DirectiveEditForm(
     if (formTracker.hasErrors) {
       onFailure
     } else {
-      val newDirective = if (isADirectiveCreation) {
-        directive.copy(
+      if (isADirectiveCreation) {
+        val newDirective = directive.copy(
           parameters = parameterEditor.mapValueSeq,
           name = piName.is,
           shortDescription = piShortDescription.is,
           priority = piPriority.is,
           longDescription = piLongDescription.is,
-          isEnabled = directive.isEnabled
+          isEnabled = directive.isEnabled)
+        displayConfirmationPopup(
+            "create"
+          , newDirective
         )
       } else {
-        directive.copy(
+        val updatedDirective = directive.copy(
           parameters = parameterEditor.mapValueSeq,
           name = piName.is,
           shortDescription = piShortDescription.is,
           priority = piPriority.is,
-          longDescription = piLongDescription.is
+          longDescription = piLongDescription.is)
+        displayConfirmationPopup(
+            "save"
+          , updatedDirective
         )
       }
 
       //display confirmation pop-up that also manage workflows
-      displayConfirmationPopup(
-          "save"
-        , newDirective
-      )
+      
     }
   }
 

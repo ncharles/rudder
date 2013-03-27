@@ -84,26 +84,6 @@ import com.normation.rudder.web.model.RudderBaseField
 object ModificationValidationPopup extends Loggable {
   val htmlId_popupContainer = "validationContainer"
 
-  def staticInit() : NodeSeq = {
-    //a method to display the content matching the selected radio
-    <head>{Script(
-     JsRaw("""var displayCrInput = function(name) {
-       if(name == 'existing') {
-          $('#existingChangeRequest').show();
-          $('#newChangeRequest').hide();
-        } else if(name == 'new') {
-          $('#existingChangeRequest').hide();
-          $('#newChangeRequest').show();
-          $('#changeRequestDescription').show();
-        } else {
-          $('#existingChangeRequest').hide();
-          $('#newChangeRequest').show();
-          $('#changeRequestDescription').hide();
-        }
-     };""")
-    )}</head>
-  }
-
   private def html = {
     val path = "templates-hidden" :: "Popup" :: "ModificationValidationPopup" :: Nil
     (for {
@@ -127,6 +107,7 @@ object ModificationValidationPopup extends Loggable {
     , "disable" -> "Disable a Directive"
     , "delete"  -> s"Delete a ${item}"
     , "save"    -> s"Update a ${item}"
+    , "create"  -> s"Create a ${item}"    
   )
 
   private def explanationMessages(item:String) = Map(
@@ -170,6 +151,8 @@ object ModificationValidationPopup extends Loggable {
            Updating this {item} will have an impact on the following Rules which apply it.
          </div>
       </div>
+    , "create"    ->
+      <div></div>
   )
 
 }
@@ -181,7 +164,7 @@ class ModificationValidationPopup(
                             (TechniqueName, SectionSpec ,Directive, Option[Directive])
                           , (NodeGroup, Option[NodeGroup])
                         ]
-  , action            : String //one among: save, delete, enable, disable
+  , action            : String //one among: save, delete, enable, disable or create
   , isANewItem        : Boolean
   , onSuccessCallback : NodeSeq => JsCmd = { x => Noop }
   , onFailureCallback : NodeSeq => JsCmd = { x => Noop }
@@ -211,19 +194,18 @@ class ModificationValidationPopup(
       "#disableItemDependencies" #> showDependentRules() &
       ".reasonsFieldsetPopup" #> {
         crReasons.map { f =>
-          "#reasonMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
-          "#reasonFieldError" #> showError(f) &
-          "#reasonField" #> f.toForm_!
+          <div>
+            <div style="margin:10px 0px 5px 0px; color:#444">
+              {userPropertyService.reasonsFieldExplanation}
+            </div>
+              {f.toForm_!}
+        </div>
         }
       } &
-      "#radioQuick" #> radioQuick &
-      "#radioNew" #> radioNew &
-      "#radioExisting" #> radioExisting &
       "#changeRequestName" #> changeRequestName.toForm &
       "#changeRequestDescription" #> changeRequestDescription.toForm &
       "#existingChangeRequest" #> existingChangeRequest.toForm &
 //      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
-      "#saveCreateDraft" #> (SHtml.ajaxSubmit("Submit Draft", onSubmitKeepOpen) % ("id", "createDirectiveSaveButton") % ("tabindex","4") % ("class","nodisplay")) &
       "#saveStartWorkflow" #> (SHtml.ajaxSubmit("Create Draft", onSubmitStartWorkflow _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
     )(html ++ Script(OnLoad(
         JsRaw("correctButtons();"))))
@@ -263,20 +245,6 @@ class ModificationValidationPopup(
   }
 
   ///////////// fields for category settings ///////////////////
-  private[this] var currentRadio : String = "quick"
-
-  val (radioQuick, radioNew, radioExisting) = {
-    val radios = SHtml.radio(Seq("quick","new", "existing"), Full(currentRadio), { s =>
-      currentRadio = s
-    } ).map { choice =>
-      choice.xhtml match {
-        case e:Elem => e % ("onclick", s"displayCrInput('${choice.key}');")
-        case x => x
-      }
-    }
-    (radios(0),radios(1),radios(2))
-  }
-
 
   private[this] val crReasons = {
     import com.normation.rudder.web.services.ReasonBehavior._
@@ -292,7 +260,7 @@ class ModificationValidationPopup(
     new WBTextAreaField("Message", "") {
       override def setFilter = notNull _ :: trim _ :: Nil
       override def inputField = super.inputField  %  ("style" -> "height:8em;")
-      override def subContainerClassName = containerClass
+      //override def subContainerClassName = containerClass
       override def validations() = {
         if(mandatory){
           valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
@@ -356,35 +324,31 @@ class ModificationValidationPopup(
 
 
   private[this] def onSubmitStartWorkflow() : JsCmd = {
-    onSubmit(keepOpen = false)
-  }
-
-  private[this] def onSubmitKeepOpen() : JsCmd = {
-    onSubmit(keepOpen = true)
+    onSubmit()
   }
 
   private[this] def DirectiveDiffFromAction(
       techniqueName: TechniqueName
     , rootSection  : SectionSpec
-    , directive:Directive
-    , initialState:Option[Directive]
+    , directive    : Directive
+    , initialState : Option[Directive]
   ) : Box[ChangeRequestDirectiveDiff] = {
     initialState match {
       case None =>
-      if (action=="save")
-        Full(AddDirectiveDiff(techniqueName,directive))
-      else
-        Failure(s"Action ${action} is not possible on a new directive")
+        if ((action=="save") || (action == "create"))
+          Full(AddDirectiveDiff(techniqueName,directive))
+        else
+          Failure(s"Action ${action} is not possible on a new directive")
       case Some(d) =>
         action match {
           case "delete" => Full(DeleteDirectiveDiff(techniqueName,directive))
-          case "save"|"disable"|"enable" => Full(ModifyToDirectiveDiff(techniqueName,directive,rootSection))
+          case "save"|"disable"|"enable"|"create" => Full(ModifyToDirectiveDiff(techniqueName,directive,rootSection))
           case _ =>         Failure(s"Action ${action} is not possible on a existing directive")
         }
     }
   }
 
-  private[this] def onSubmit(keepOpen:Boolean) : JsCmd = {
+  private[this] def onSubmit() : JsCmd = {
 
     if(formTracker.hasErrors) {
       onFailure
@@ -392,13 +356,12 @@ class ModificationValidationPopup(
 
       //based on the choice of the user, create or update a Change request
       val savedChangeRequest = {
-        currentRadio match {
-          case "quick" | "new" =>
-            val cr = item match {
-              case Left((techniqueName, rootSection, directive, optOriginal)) =>
-                val action = DirectiveDiffFromAction(techniqueName, rootSection, directive, optOriginal)
-                action.map(
-                  changeRequestService.createChangeRequestFromDirective(
+        // we only have quick change request now
+        val cr = item match {
+          case Left((techniqueName, rootSection, directive, optOriginal)) =>
+              val action = DirectiveDiffFromAction(techniqueName, rootSection, directive, optOriginal)
+              action.map(
+                changeRequestService.createChangeRequestFromDirective(
                       changeRequestName.get
                     , changeRequestDescription.get
                     , techniqueName
@@ -408,67 +371,25 @@ class ModificationValidationPopup(
                     , _
                     , CurrentUser.getActor
                     , crReasons.map( _.get )
-                  )
-                )
-              case Right((nodeGroup, optOriginal)) =>
-                Full(changeRequestService.createChangeRequestFromNodeGroup(
-                    changeRequestName.get
-                  , changeRequestDescription.get
-                  , nodeGroup
-                  , optOriginal
-                  , CurrentUser.getActor
-                  , crReasons.map( _.get )
                 ) )
-            }
-            cr.flatMap{ cr =>
-            currentRadio match {
-              case "quick" =>
-                for {
-                  saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map( _.get ))
-                  wfStarted <- workflowService.startWorkflow(saved.id,CurrentUser.getActor, crReasons.map( _.get ))
-                } yield {
-                  wfStarted
-                }
 
-              case "new" => //save in draft
-                woDraftChangeRequestRepo.saveDraftChangeRequest(cr, CurrentUser.getActor, crReasons.map( _.get )).map(_.id)
-            }
-            }
-
-
-          case "existing" =>
-            for {
-              cr    <- roDraftChangeRequestRepo.get(ChangeRequestId(existingChangeRequest.get))
-              ccr   <- cr match {
-                         case None => Failure(s"Error: can not find back details of change request with id ${existingChangeRequest.get}")
-                         case Some((x:ConfigurationChangeRequest, actor, reason)) => Full(x)
-                         case x => Failure(s"ChangeRequest of type ${x.getClass} can not be updated with a node group or a directive, only ConfigurationChangeRequest can")
-                       }
-              newCr =  item match {
-                         case Left((techniqueName, rootSection, directive, optOriginal)) =>
-                           changeRequestService.updateChangeRequestWithDirective(
-                               ccr
-                             , techniqueName
-                             , rootSection
-                             , directive
-                             , optOriginal
-                             , CurrentUser.getActor
-                             , crReasons.map( _.get )
-                           )
-                         case Right((nodeGroup, optOriginal)) =>
-                           changeRequestService.updateChangeRequestWithNodeGroup(
-                               ccr
-                             , nodeGroup
-                             , optOriginal
-                             , CurrentUser.getActor
-                             , crReasons.map( _.get )
-                           )
-                       }
-              saved <- woChangeRequestRepo.updateChangeRequest(newCr, CurrentUser.getActor, crReasons.map( _.get ))
-              wf    <- workflowService.startWorkflow(saved.id,CurrentUser.getActor, crReasons.map( _.get ))
-            } yield {
-              saved.id
-            }
+          case Right((nodeGroup, optOriginal)) =>
+              Full(changeRequestService.createChangeRequestFromNodeGroup(
+                  changeRequestName.get
+                , changeRequestDescription.get
+                , nodeGroup
+                , optOriginal
+                , CurrentUser.getActor
+                , crReasons.map(_.get))
+              )
+        }
+        cr.flatMap { cr =>
+          for {
+            saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map(_.get))
+            wfStarted <- workflowService.startWorkflow(saved.id, CurrentUser.getActor, crReasons.map(_.get))
+          } yield {
+            saved.id
+          }
         }
       }
 
@@ -476,7 +397,7 @@ class ModificationValidationPopup(
       savedChangeRequest match {
         case Full(_) => onSuccessCallback(Text("TODO: a custom message if in Draft, or a workflow status"))
         case eb:EmptyBox =>
-          val e = (eb ?~! "Error when trying to save you modification")
+          val e = (eb ?~! "Error when trying to save your modification")
           e.rootExceptionCause.foreach { ex =>
             logger.error(s"Exception when trying to update a change request:", ex)
           }
