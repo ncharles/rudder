@@ -239,8 +239,8 @@ class Boot extends Loggable {
       , Menu("Login") / "index" >> Hidden
       , nodeManagerMenu
       , buildManagerMenu("configuration")
-      , administrationMenu
       , utilitiesMenu
+      , administrationMenu
     ).map( _.toMenu )
 
 
