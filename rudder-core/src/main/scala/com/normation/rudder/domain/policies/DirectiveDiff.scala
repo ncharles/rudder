@@ -46,7 +46,10 @@ import com.normation.cfclerk.domain.SectionSpec
 sealed trait DirectiveDiff
 
 //for change request, with add type tag to DirectiveDiff
-sealed trait ChangeRequestDirectiveDiff
+sealed trait ChangeRequestDirectiveDiff {
+  def techniqueName : TechniqueName
+  def directive     : Directive
+}
 
 final case class DeleteDirectiveDiff(
     techniqueName: TechniqueName
