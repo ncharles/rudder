@@ -88,22 +88,16 @@ trait WorkflowService {
 
   //allowed workflow steps
 
-  def stepStartToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
   def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepValidationToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepValidationToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepDeploymentToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepDeploymentToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepCorrectionToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepCorrectionToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
+  def stepValidationToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
+  def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
+  def stepDeploymentToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
 
   def getValidation : Box[Seq[ChangeRequestId]]
   def getDeployment : Box[Seq[ChangeRequestId]]
-  def getCorrection : Box[Seq[ChangeRequestId]]
-  def getDeployed : Box[Seq[ChangeRequestId]]
-  def getRejected : Box[Seq[ChangeRequestId]]
+  def getDeployed   : Box[Seq[ChangeRequestId]]
+  def getRejected   : Box[Seq[ChangeRequestId]]
 
 
   val stepsValue :List[WorkflowNodeId]
@@ -206,19 +200,10 @@ class WorkflowServiceImpl(
 ) extends WorkflowService with Loggable {
   private[this] sealed trait MyWorkflowNode extends WorkflowNode
 
-  //buffers for Workflow process
-  private[this] case object Start extends MyWorkflowNode {
-    val id = WorkflowNodeId("Start")
-    val requests = Buffer[ChangeRequestId]()
-  }
-
-  private[this] case object Correction extends MyWorkflowNode {
-    val id = WorkflowNodeId("Correction")
-    val requests = Buffer[ChangeRequestId]()
-  }
 
   private[this] case object Validation extends MyWorkflowNode {
     val id = WorkflowNodeId("Validation")
+
     val requests = Buffer[ChangeRequestId]()
   }
 
@@ -237,15 +222,13 @@ class WorkflowServiceImpl(
     val requests = Buffer[ChangeRequestId]()
   }
 
-  private[this] val steps:List[WorkflowNode] = List(Start,Correction,Validation,Deployment,Deployed,Rejected)
+  private[this] val steps:List[WorkflowNode] = List(Validation,Deployment,Deployed,Rejected)
 
   val stepsValue = steps.map(_.id)
 
   val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
     steps.map{
-    case Start      => Start.id -> Seq((Validation.id,stepStartToValidation _))
     case Validation => Validation.id -> Seq((Deployment.id,stepValidationToDeployment _),(Deployed.id,stepValidationToDeployed _))
-    case Correction => Correction.id -> Seq((Validation.id,stepCorrectionToValidation _))
     case Deployment => Deployment.id -> Seq((Deployed.id,stepDeploymentToDeployed _))
     case Deployed   => Deployed.id -> Seq()
     case Rejected   => Rejected.id -> Seq()
@@ -253,15 +236,13 @@ class WorkflowServiceImpl(
 
   val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
     steps.map{
-    case Start      => Start.id -> Seq()
-    case Validation => Validation.id -> Seq((Correction.id,stepValidationToCorrection _),(Rejected.id,stepValidationToRejected _))
-    case Correction => Correction.id -> Seq((Rejected.id,stepCorrectionToRejected _))
-    case Deployment => Deployment.id -> Seq((Correction.id,stepDeploymentToCorrection _),(Rejected.id,stepDeploymentToRejected _))
+    case Validation => Validation.id -> Seq((Rejected.id,stepValidationToRejected _))
+    case Deployment => Deployment.id -> Seq((Rejected.id,stepDeploymentToRejected _))
     case Deployed   => Deployed.id -> Seq()
     case Rejected   => Rejected.id -> Seq()
    }.toMap
 
-  def findStep(changeRequestId: ChangeRequestId) = { logger.warn(s"lookinf for cr $changeRequestId")
+  def findStep(changeRequestId: ChangeRequestId) = {
     steps.find(_.requests.contains(changeRequestId)).map(_.id).getOrElse(Rejected.id)
   }
 
@@ -304,8 +285,8 @@ class WorkflowServiceImpl(
 
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     logger.info("start")
-    Start.requests += changeRequestId
-    stepStartToValidation(changeRequestId, actor, reason)
+    Validation.requests += changeRequestId
+    Full(changeRequestId)
   }
 
   def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
@@ -321,17 +302,11 @@ class WorkflowServiceImpl(
 
   //allowed workflow steps
 
-  def stepStartToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Start, Validation, changeRequestId, actor, reason)
-  }
 
   def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     changeStep(Validation, Deployment, changeRequestId, actor, reason)
   }
 
-  def stepValidationToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Validation, Correction, changeRequestId, actor, reason)
-  }
 
   def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     toSuccess(Validation, changeRequestId, actor, reason)
@@ -345,27 +320,16 @@ class WorkflowServiceImpl(
     toSuccess(Deployment, changeRequestId, actor, reason)
   }
 
-  def stepDeploymentToCorrection(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Deployment, Correction, changeRequestId, actor, reason)
-  }
 
   def stepDeploymentToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     toFailure(Deployment, changeRequestId, actor, reason)
   }
 
-  def stepCorrectionToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    toFailure(Correction, changeRequestId, actor, reason)
-  }
-
-  def stepCorrectionToValidation(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    changeStep(Correction, Validation, changeRequestId, actor, reason)
-  }
 
   def getValidation : Box[Seq[ChangeRequestId]] = Full(Validation.requests)
   def getDeployment : Box[Seq[ChangeRequestId]] = Full(Deployment.requests)
-  def getCorrection : Box[Seq[ChangeRequestId]] = Full(Correction.requests)
-  def getDeployed : Box[Seq[ChangeRequestId]] = Full(Deployed.requests)
-  def getRejected : Box[Seq[ChangeRequestId]] = Full(Rejected.requests)
+  def getDeployed   : Box[Seq[ChangeRequestId]] = Full(Deployed.requests)
+  def getRejected  : Box[Seq[ChangeRequestId]] = Full(Rejected.requests)
 }
 
 
