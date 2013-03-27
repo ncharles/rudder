@@ -44,12 +44,18 @@ import net.liftweb.http._
 import net.liftweb.http.js.JE._
 import net.liftweb.http.js.JsCmds._
 import net.liftweb.util.Helpers._
+import net.liftweb.util._
 import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.nodes.AddNodeGroupDiff
 import com.normation.rudder.domain.nodes.DeleteNodeGroupDiff
 import com.normation.rudder.domain.nodes.ModifyNodeGroupDiff
 import com.normation.rudder.domain.nodes.ModifyToNodeGroupDiff
 import com.normation.cfclerk.domain.TechniqueId
+import net.liftweb.util.CanBind
+import com.normation.cfclerk.domain.TechniqueName
+import com.normation.cfclerk.domain.SectionSpec
+import com.normation.eventlog.EventActor
+import org.joda.time.DateTime
 
 
 object ChangeRequestChangesForm {
@@ -58,33 +64,34 @@ object ChangeRequestChangesForm {
       xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
     } yield {
       chooseTemplate("component", "changes", xml)
-    }) openOr Nil
- }
+    } ) openOr Nil
+}
 
 class ChangeRequestChangesForm(
-    var changeRequest:ChangeRequest
- ) extends DispatchSnippet with Loggable {
-import ChangeRequestChangesForm._
+  var changeRequest:ChangeRequest
+) extends DispatchSnippet with Loggable {
+  import ChangeRequestChangesForm._
 
-  val roDirectiveRepo = RudderConfig.roDirectiveRepository
-  val techniqueRepo = RudderConfig.techniqueRepository
-  val roGroupRepo = RudderConfig.roNodeGroupRepository
-  val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
-  val workFlowEventLogService =  RudderConfig.workflowEventLogService
-  val diffService =  RudderConfig.diffService
+  private[this] val roDirectiveRepo = RudderConfig.roDirectiveRepository
+  private[this] val techniqueRepo = RudderConfig.techniqueRepository
+  private[this] val roGroupRepo = RudderConfig.roNodeGroupRepository
+  private[this] val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
+  private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
+  private[this] val diffService =  RudderConfig.diffService
 
   def dispatch = {
-    case "changes" => _ => changeRequest match {
-      case cr: ConfigurationChangeRequest =>
-        ( "#changeTree ul *" #>  treeNode(cr).toXml &
-          "#history *" #> displayHistory (cr.directives.values.map(_.changes).toList) &
-          "#diff *" #> diff(cr.directives.values.map(_.changes).toList)).apply(form) ++
-          Script(JsRaw(s"""buildChangesTree("#changeTree","${S.contextPath}");
-                           $$( "#changeDisplay" ).tabs();""") )
-      case _ => Text("not implemented :(")
-    }
-
-
+    case "changes" =>
+      _ =>
+        changeRequest match {
+          case cr: ConfigurationChangeRequest =>
+            ( "#changeTree ul *" #>  treeNode(cr).toXml &
+              "#history *" #> displayHistory (cr.directives.values.map(_.changes).toList) &
+              "#diff *" #> diff(cr.directives.values.map(_.changes).toList)
+            ) (form) ++
+            Script(JsRaw(s"""buildChangesTree("#changeTree","${S.contextPath}");
+                             $$( "#changeDisplay" ).tabs();""") )
+          case _ => Text("not implemented :(")
+        }
   }
 
  def treeNode(changeRequest:ConfigurationChangeRequest) = new JsTreeNode{
@@ -93,15 +100,11 @@ import ChangeRequestChangesForm._
 
     val directive= roDirectiveRepo.getDirective(directiveId)
 
-    val changes = List(changeRequest.directives(directiveId).changes)
-    val directiveName = changeRequest.directives(directiveId).changes.firstChange.diff match{
-           case a :AddDirectiveDiff => a.directive.name
-           case d :DeleteDirectiveDiff => d.directive.name
-           case modTo : ModifyToDirectiveDiff => modTo.directive.name
-    }
+    val changes = changeRequest.directives(directiveId).changes
+    val directiveName = changes.initialState.map(_._2.name).getOrElse(changes.firstChange.diff.directive.name)
 
     val body = SHtml.a(
-        () => SetHtml("history",displayHistory(changes))
+        () => SetHtml("history",displayHistory(List(changes)))
       , <span>{directiveName}</span>
     )
 
@@ -110,10 +113,9 @@ import ChangeRequestChangesForm._
 
 
   val directivesChild = new JsTreeNode{
-
     val changes = changeRequest.directives.values.map(_.changes).toList
     val body = SHtml.a(
-        {() => SetHtml("history",displayHistory(changes) )}
+        () => SetHtml("history",displayHistory(changes) )
       , <span>Directives</span>
     )
     val children = changeRequest.directives.keys.map(directiveChild(_)).toList
@@ -131,17 +133,15 @@ import ChangeRequestChangesForm._
     override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "rules"}))
   }
 
-    def groupChild(groupId:NodeGroupId) = new JsTreeNode{
+  def groupChild(groupId:NodeGroupId) = new JsTreeNode{
 
-    val directive= roGroupRepo.getNodeGroup(groupId)
-
-    val changes = List(changeRequest.nodeGroups(groupId).changes)
-    val groupeName = changeRequest.nodeGroups(groupId).changes.firstChange.diff match{
+    val group= roGroupRepo.getNodeGroup(groupId)
+    val changes = changeRequest.nodeGroups(groupId).changes
+    val groupeName = changes.initialState.map(_.name).getOrElse(changes.firstChange.diff match{
            case a :AddNodeGroupDiff => a.group.name
            case d :DeleteNodeGroupDiff => d.group.name
            case modTo : ModifyToNodeGroupDiff => modTo.group.name
-           case mod : ModifyNodeGroupDiff => mod.name
-    }
+    } )
     val body = SHtml.a(
         () => SetHtml("history",displayHistory(List()))
       , <span>{groupeName}</span>
@@ -149,6 +149,7 @@ import ChangeRequestChangesForm._
 
     val children = Nil
   }
+
   val groupsChild = new JsTreeNode{
     val changes =  changeRequest.nodeGroups.values.map(_.changes).toList
     val body = SHtml.a(
@@ -171,18 +172,14 @@ import ChangeRequestChangesForm._
 }
 
   def displayHistory (directives : List[DirectiveChange])= {
-    val logs = changeRequestEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq())
+    val crLogs = changeRequestEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq())
+    val wfLogs = workFlowEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq())
+    val lines =
+      wfLogs.flatMap(displayWorkflowEvent(_)) ++
+      crLogs.flatMap(displayChangeRequestEvent(_)) ++
+      directives.flatMap(displayDirectiveChange(_))
 
-
-  ( "#crBody" #> {
-    workFlowEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq()).flatMap(CRLine(_)) ++
-    logs.flatMap(CRLine(_)) ++
-    directives.flatMap(CRLine(_))
-    }
-  ) apply CRTable ++
-    Script(
-      SetHtml("diff",diff(directives) ) &
-      JsRaw(s"""
+    val initDatatable = JsRaw(s"""
         $$('#changeHistory').dataTable( {
           "asStripeClasses": [ 'color1', 'color2' ],
           "bAutoWidth": false,
@@ -202,8 +199,13 @@ import ChangeRequestChangesForm._
             { "sWidth": "40px" }
           ],
         } );
-        $$('.dataTables_filter input').attr("placeholder", "Search"); """
-    ) )
+        $$('.dataTables_filter input').attr("placeholder", "Search"); """)
+
+    ( "#crBody" #> lines).apply(CRTable) ++
+    Script(
+      SetHtml("diff",diff(directives) ) &
+      initDatatable
+    )
   }
     val CRTable =
     <table id="changeHistory">
@@ -237,82 +239,86 @@ import ChangeRequestChangesForm._
         <li><b>Parameters:&nbsp;</b><value id="parameters"/></li>
       </ul>
     </div>
-  def diff(cr : List[DirectiveChange]) =
-    <ul>{
+
+  private[this] def displaySimpleDiff[T] (
+      diff    : Option[SimpleDiff[T]]
+    , name    : String
+    , default : String
+  ) = diff.map(value => displaydirectiveInnerFormDiff(value, name)).getOrElse(Text(default))
+
+  private[this] def displayDirective(directive:Directive, techniqueName:TechniqueName) = {
+    val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
+    val parameters = techniqueRepo.get(techniqueId).map(_.rootSection) match {
+      case Some(rs) =>
+        xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
+      case None =>
+        logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
+        <div> directive.parameters </div>
+      }
+
+    ( "#directiveID" #> directive.id.value.toUpperCase &
+      "#directiveName" #> directive.name &
+      "#techniqueVersion" #> directive.techniqueVersion.toString &
+      "#techniqueName" #> techniqueName.value &
+      "#techniqueVersion" #> directive.techniqueVersion.toString &
+      "#techniqueName" #> techniqueName.value &
+      "#priority" #> directive.priority &
+      "#isEnabled" #> directive.isEnabled &
+      "#isSystem" #> directive.isSystem &
+      "#shortDescription" #> directive.shortDescription &
+      "#longDescription" #> directive.longDescription &
+      "#parameters" #> <pre>{parameters}</pre>
+    ) (DirectiveXML)
+  }
+
+  private[this] def displayDirectiveDiff (
+        diff          : ModifyDirectiveDiff
+      , directive     : Directive
+      , techniqueName : TechniqueName
+      , rootSection   : SectionSpec
+  ) = {
+
+    ( "#directiveID"      #> directive.id.value.toUpperCase &
+      "#techniqueName"    #> techniqueName.value &
+      "#isSystem"         #> directive.isSystem &
+      "#directiveName"    #> displaySimpleDiff(diff.modName, "name", directive.name) &
+      "#techniqueVersion" #> displaySimpleDiff(diff.modTechniqueVersion, "techniqueVersion", directive.techniqueVersion.toString) &
+      "#priority"         #> displaySimpleDiff(diff.modPriority, "priority", directive.priority.toString) &
+      "#isEnabled"        #> displaySimpleDiff(diff.modIsActivated, "active", directive.isEnabled.toString) &
+      "#shortDescription" #> displaySimpleDiff(diff.modShortDescription, "short", directive.shortDescription) &
+      "#longDescription"  #> displaySimpleDiff(diff.modLongDescription, "long", directive.longDescription) &
+      "#parameters"       #> {
+        implicit val fun = (section:SectionVal) => xmlPretty.format(SectionVal.toXml(section))
+        val parameters = <pre>{fun(SectionVal.directiveValToSectionVal(rootSection,directive.parameters))}</pre>
+        diff.modParameters.map(displaydirectiveInnerFormDiff(_,"parameters")).getOrElse(parameters)
+      }
+    ) (DirectiveXML)
+  }
+
+  def diff(cr : List[DirectiveChange]) = <ul> {
       cr.flatMap(directiveChange =>
         <li>{
           directiveChange.change.map(_.diff match {
-            case AddDirectiveDiff(techniqueName,directive) =>
-              val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
-              val parameters = techniqueRepo.get(techniqueId).map(_.rootSection) match {
-                case Some(rs) =>
-                  xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
-                case None =>
-                  logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
-                  <div> directive.parameters </div>
-              }
-              ("#directiveID" #> directive.id.value.toUpperCase &
-               "#directiveName" #> directive.name &
-               "#techniqueVersion" #> directive.techniqueVersion.toString &
-               "#techniqueName" #> techniqueName.value &
-               "#techniqueVersion" #> directive.techniqueVersion.toString &
-               "#techniqueName" #> techniqueName.value &
-               "#priority" #> directive.priority &
-               "#isEnabled" #> directive.isEnabled &
-               "#isSystem" #> directive.isSystem &
-               "#shortDescription" #> directive.shortDescription &
-               "#longDescription" #> directive.longDescription &
-               "#parameters" #> <pre>{parameters}</pre>
-              )(DirectiveXML)
-            case DeleteDirectiveDiff(techniqueName,directive) =>
-              val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
-              val parameters = techniqueRepo.get(techniqueId).map(_.rootSection) match {
-                case Some(rs) =>
-                  xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
-                case None =>
-                  logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
-                  <div> directive.parameters </div>
-              }
-              ("#directiveID" #> directive.id.value.toUpperCase &
-               "#directiveName" #> directive.name &
-               "#techniqueVersion" #> directive.techniqueVersion.toString &
-               "#techniqueName" #> techniqueName.value &
-               "#techniqueVersion" #> directive.techniqueVersion.toString &
-               "#techniqueName" #> techniqueName.value &
-               "#priority" #> directive.priority &
-               "#isEnabled" #> directive.isEnabled &
-               "#isSystem" #> directive.isSystem &
-               "#shortDescription" #> directive.shortDescription &
-               "#longDescription" #> directive.longDescription &
-               "#parameters" #> <pre>{parameters}</pre>
-              )(DirectiveXML)
+            case e @(_:AddDirectiveDiff|_:DeleteDirectiveDiff) =>
+              val techniqueName = e.techniqueName
+              val directive = e.directive
+              displayDirective(directive, techniqueName)
             case ModifyToDirectiveDiff(techniqueName,directive,rootSection) =>
-              val Some((initialDirective,initialRS)) = directiveChange.initialState.map(init => (init._2,init._3))
-              val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
-              val parameters = techniqueRepo.get(techniqueId).map(_.rootSection)
-              val diff = diffService.diffDirective(initialDirective, initialRS, directive, rootSection)
-              ("#directiveID" #> directive.id.value.toUpperCase &
-               "#directiveName" #> diff.modName.map(value => displaydirectiveInnerFormDiff(value, "name")).getOrElse(Text(directive.name)) &
-               "#techniqueVersion" #> diff.modTechniqueVersion.map(value => displaydirectiveInnerFormDiff(value, "techniqueVersion")).getOrElse(Text(directive.techniqueVersion.toString)) &
-               "#techniqueName" #> techniqueName.value &
-               "#priority" #> diff.modPriority.map(value => displaydirectiveInnerFormDiff(value, "priority")).getOrElse(Text(directive.priority.toString)) &
-               "#isEnabled" #> diff.modIsActivated.map(value => displaydirectiveInnerFormDiff(value, "active")).getOrElse(Text(directive.isEnabled.toString)) &
-               "#isSystem" #> directive.isSystem &
-               "#shortDescription" #> diff.modShortDescription.map(value => displaydirectiveInnerFormDiff(value, "short")).getOrElse(Text(directive.shortDescription)) &
-               "#longDescription" #> diff.modLongDescription.map(value => displaydirectiveInnerFormDiff(value, "long")).getOrElse(Text(directive.longDescription)) &
-               "#parameters" #> {
-               implicit val fun = (section:SectionVal) => xmlPretty.format(SectionVal.toXml(section))
-                 diff.modParameters.map{
-                 displaydirectiveInnerFormDiff(_,"parameters")
-               }.getOrElse(<pre>{fun(SectionVal.directiveValToSectionVal(rootSection,directive.parameters))}</pre>)
-               }
-              )(DirectiveXML)
-            }
-          ).getOrElse(<div>Error</div>)
+              directiveChange.initialState.map(init => (init._2,init._3)) match {
+                case Some((initialDirective,initialRS)) =>
+                  val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
+                  val diff = diffService.diffDirective(initialDirective, initialRS, directive, rootSection)
+                  displayDirectiveDiff(diff,directive,techniqueName,rootSection)
+                case None =>
+                  val msg = s"Could not display diff for ${directive.name} (${directive.id.value.toUpperCase})"
+                  logger.error(msg)
+                  <div>msg</div>
+              }
+          } ).getOrElse(<div>Error</div>)
         }</li>
       )
-    }
-  </ul>
+  }</ul>
+
   private[this] def displaydirectiveInnerFormDiff[T](diff: SimpleDiff[T], name:String)(implicit fun: T => String = (t:T) => t.toString) = {
     <pre style="width:200px;" id={s"before${name}"}
     class="nodisplay">{fun(diff.oldValue)}</pre>
@@ -331,56 +337,44 @@ import ChangeRequestChangesForm._
       )
     )
   }
-  def CRLine(cr: ChangeRequestEventLog)=
+
+  val CRLine =
     <tr>
-      <td id="action">
-         {cr.diff match {
+      <td id="action"/>
+      <td id="actor"/>
+      <td id="date"/>
+   </tr>
+
+  def displayEvent(action:String, actor:EventActor, date:DateTime ) =
+   ( "#action *" #> {action } &
+     "#actor *" #> actor.name &
+     "#date *"  #> DateFormaterService.getFormatedDate(date)
+   ).apply(CRLine)
+
+
+  def displayChangeRequestEvent(crEvent:ChangeRequestEventLog) = {
+    val action = crEvent.diff match {
            case AddChangeRequestDiff(_) => "Change request created"
            case ModifyToChangeRequestDiff(_) => "Change request details changed"
            case DeleteChangeRequestDiff(_) => "Change request deleted"
-         }}
-      </td>
-      <td id="actor">
-         {cr.actor.name}
-      </td>
-      <td id="date">
-         {DateFormaterService.getFormatedDate(cr.creationDate)}
-      </td>
-   </tr>
-    def CRLine(cr: WorkflowProcessEventLog)=
-    cr match { case StepWorkflowProcessEventLog(actor, date, reason, from, to) =>
-    <tr>
-      <td id="action">
-         {s"Change workflow step from ${from} to ${to}"
-         }
-      </td>
-      <td id="actor">
-         {actor.name}
-      </td>
-      <td id="date">
-         {DateFormaterService.getFormatedDate(date)}
-      </td>
-   </tr>
-    case _ => NodeSeq.Empty
+    }
+    displayEvent(action,crEvent.actor,crEvent.creationDate)
+  }
+
+  def displayWorkflowEvent(wfEvent: WorkflowProcessEventLog)=
+    wfEvent match {
+      case StepWorkflowProcessEventLog(actor, date, reason, from, to) =>
+        val action = s"Change workflow step from ${from} to ${to}"
+        displayEvent(action,actor,date)
     }
 
-  def CRLine(cr: DirectiveChange)=
-    <tr>
-      <td id="action">
-         {cr.firstChange.diff match {
+  def displayDirectiveChange(directiveChange: DirectiveChange) = {
+    val action = directiveChange.firstChange.diff match {
            case a : AddDirectiveDiff => s"Create Directive ${a.directive.name}"
            case d : DeleteDirectiveDiff => s"Delete Directive ${d.directive.name}"
            case m : ModifyToDirectiveDiff => s"Modify Directive ${m.directive.name}"
-         }}
-      </td>
-      <td id="actor">
-         {cr.firstChange.actor.name}
-      </td>
-      <td id="date">
-         {DateFormaterService.getFormatedDate(cr.firstChange.creationDate)}
-      </td>
-   </tr>
-
-
+         }
+   displayEvent(action,directiveChange.firstChange.actor,directiveChange.firstChange.creationDate)
+  }
 
 }

@@ -519,12 +519,16 @@ function makeDiff(beforeId,afterId,resultId) {
     res = c+res;
     if(res.charAt(res.length -1) == c)
       res = res.substring(0, res.length - 1);
-    return res+"\n";
+    if(res.charAt(res.length -1) == "\n")
+      return res;
+    else
+      return res+"\n"
   }
   var before = $('#'+beforeId);
   var after  = $('#'+afterId);
   var result = $('#'+resultId);
-  
+  console.log(before.text())
+  console.log(after.text())
   var diff = JsDiff.diffLines(before.text(), after.text());
   var fragment = document.createDocumentFragment();
   for (var i=0; i < diff.length; i++) {

@@ -269,13 +269,13 @@ class WorkflowServiceImpl(
 
 
   private[this] case object Validation extends MyWorkflowNode {
-    val id = WorkflowNodeId("Pending Validation")
+    val id = WorkflowNodeId("Pending validation")
 
     val requests = Buffer[ChangeRequestId]()
   }
 
   private[this] case object Deployment extends MyWorkflowNode {
-    val id = WorkflowNodeId("Pending Deployment")
+    val id = WorkflowNodeId("Pending deployment")
     val requests = Buffer[ChangeRequestId]()
   }
 

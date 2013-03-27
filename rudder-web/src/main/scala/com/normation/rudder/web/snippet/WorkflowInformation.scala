@@ -59,26 +59,26 @@ class WorkflowInformation extends DispatchSnippet with Loggable {
      
     }
   }
-  
+
   def pendingModifications = {
     workflowService.getValidation match {
       case Full(seq) =>
         seq.size match {
-          case 0 => ".pendingModifications" #> <span>There is change request pending review</span>
-          case 1 => ".pendingModifications" #> <span>There is <a href="/secure/utilities/changeRequests">1</a> change request pending review</span>
-          case size => ".pendingModifications" #>  <span>There are <a href="/secure/utilities/changeRequests">{size}</a> change requests pending review</span>
+          case 0 => ".pendingModifications" #> <span>There is no change request pending review</span>
+          case 1 => ".pendingModifications" #> <span>There is <a href="/secure/utilities/changeRequests/Pending_validation">1</a> change request pending review</span>
+          case size => ".pendingModifications" #>  <span>There are <a href="/secure/utilities/changeRequests/Pending_validation">{size}</a> change requests pending review</span>
         }
       case e:EmptyBox => ".pendingModifications" #>  <p class="error">Error when trying to fetch pending change requests.</p>
     }
   }
-  
+
   def pendingDeployment = {
-    workflowService.getDeployed match {
+    workflowService.getDeployment match {
       case Full(seq) =>
         seq.size match {
-          case 0 => ".pendingDeployment" #> <span>There is no pending deployment</span>
-          case 1 => ".pendingDeployment" #> <span>There is <a href="/secure/utilities/changeRequests">1</a> change pending deployment</span>
-          case size => ".pendingDeployment" #>  <span>There are <a href="/secure/utilities/changeRequests">{size}</a> changes pending deployment</span>
+          case 0 => ".pendingDeployment" #> <span>There is no change request pending deployment</span>
+          case 1 => ".pendingDeployment" #> <span>There is <a href="/secure/utilities/changeRequests/Pending_deployment">1</a> change request pending deployment</span>
+          case size => ".pendingDeployment" #>  <span>There are <a href="/secure/utilities/changeRequests/Pending_deployment">{size}</a> changes requests pending deployment</span>
         }
       case e:EmptyBox => ".pendingDeployment" #>  <p class="error">Error when trying to fetch pending change requests.</p>
     }
