@@ -51,7 +51,6 @@ sealed trait ChangeRequestDirectiveDiff
 final case class DeleteDirectiveDiff(
     techniqueName: TechniqueName
   , directive    : Directive
-  , rootSection  : Option[SectionSpec] = None
 ) extends DirectiveDiff with HashcodeCaching with ChangeRequestDirectiveDiff
 
 // add and modify are put together
@@ -60,7 +59,6 @@ sealed trait DirectiveSaveDiff extends DirectiveDiff
 final case class AddDirectiveDiff(
     techniqueName: TechniqueName
   , directive    : Directive
-  , rootSection  : Option[SectionSpec] = None
 ) extends DirectiveSaveDiff with HashcodeCaching with ChangeRequestDirectiveDiff
 
 

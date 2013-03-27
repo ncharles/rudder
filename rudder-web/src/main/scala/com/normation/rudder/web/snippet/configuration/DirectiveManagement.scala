@@ -320,7 +320,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
         case Full(technique) =>
           currentTechnique = Some((technique,activeTechnique))
           updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique,
-              directive.copy(techniqueVersion = v))
+              directive.copy(techniqueVersion = v),Some(directive))
         case e:EmptyBox => currentDirectiveSettingForm.set(e)
       }
     }
@@ -391,7 +391,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
     new CreateDirectivePopup(
         technique.name, technique.description, technique.id.version,
         onSuccessCallback = { (directive : Directive) =>
-          updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique, directive, true)
+          updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique, directive,None, true)
           //Update UI
           Replace(htmlId_policyConf, showDirectiveDetails) &
           JsRaw("""scrollToElement('%s')""".format(htmlId_policyConf))
@@ -405,7 +405,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
       case Full((technique,activeTechnique,directive)) =>
         Replace(htmlId_activeTechniquesTree, userLibrary)
         currentTechnique = Some((technique,activeTechnique))
-        updateCf3PolicyDraftInstanceSettingFormComponent(technique,activeTechnique,directive)
+        updateCf3PolicyDraftInstanceSettingFormComponent(technique,activeTechnique,directive,None)
       case e:EmptyBox => currentDirectiveSettingForm.set(e)
     }
 
@@ -422,12 +422,16 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
       technique:Technique,
       activeTechnique:ActiveTechnique,
       directive:Directive,
+      oldDirective:Option[Directive],
       isADirectiveCreation : Boolean = false) : Unit = {
 
     val dirEditForm = new DirectiveEditForm(
-      htmlId_policyConf, technique, activeTechnique, directive,
-      onSuccessCallback = directiveEditFormSuccessCallBack,
-      isADirectiveCreation = isADirectiveCreation
+        htmlId_policyConf
+      , technique, activeTechnique
+      , directive
+      , oldDirective
+      , onSuccessCallback = directiveEditFormSuccessCallBack
+      , isADirectiveCreation = isADirectiveCreation
     )
 
     currentDirectiveSettingForm.set(Full(dirEditForm))
@@ -436,7 +440,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
   private[this] def directiveEditFormSuccessCallBack(dir: Directive): JsCmd = {
     directiveRepository.getDirectiveWithContext(dir.id) match {
       case Full((technique, activeTechnique, directive)) => {
-        updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique, dir)
+        updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique, dir,None)
         Replace(htmlId_policyConf, showDirectiveDetails) &
         JsRaw("""this.window.location.hash = "#" + JSON.stringify({'directiveId':'%s'})"""
           .format(dir.id.value)) &

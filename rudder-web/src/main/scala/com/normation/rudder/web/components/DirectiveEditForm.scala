@@ -67,6 +67,7 @@ import org.joda.time.DateTime
 import com.normation.cfclerk.domain.TechniqueName
 import com.normation.rudder.web.components.popup.ModificationValidationPopup
 import com.normation.rudder.services.workflows.WorkflowService
+import com.normation.cfclerk.domain.TechniqueId
 
 object DirectiveEditForm {
 
@@ -105,13 +106,14 @@ object DirectiveEditForm {
  * Parameters can not be null.
  */
 class DirectiveEditForm(
-  htmlId_policyConf: String,
-  technique: Technique,
-  activeTechnique: ActiveTechnique,
-  val directive: Directive,
-  onSuccessCallback: (Directive) => JsCmd = { (Directive) => Noop },
-  onFailureCallback: () => JsCmd = { () => Noop },
-  isADirectiveCreation: Boolean = false
+    htmlId_policyConf : String
+  , technique         : Technique
+  , activeTechnique   : ActiveTechnique
+  , val directive     : Directive
+  , oldDirective      : Option[Directive]
+  , onSuccessCallback : (Directive) => JsCmd = { (Directive) => Noop }
+  , onFailureCallback : () => JsCmd = { () => Noop }
+  , isADirectiveCreation : Boolean = false
 ) extends DispatchSnippet with Loggable {
 
   import DirectiveEditForm._
@@ -123,6 +125,8 @@ class DirectiveEditForm(
   private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepo    = RudderConfig.roChangeRequestRepository
   private[this] val roDraftChangeRequestRepository = RudderConfig.roDraftChangeRequestRepository
+  private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
+  private[this] val techniqueRepo          = RudderConfig.techniqueRepository
 
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"
@@ -382,11 +386,13 @@ class DirectiveEditForm(
    */
   private[this] def displayConfirmationPopup(
       action:String
-    , directive:Directive
+    , newDirective:Directive
   ) : JsCmd = {
-    val optOriginal = { if(isADirectiveCreation) None else Some(directive) }
+    val optOriginal = { if(isADirectiveCreation) None else if(oldDirective.isEmpty) Some(directive) else oldDirective }
+    // Find old root section if there is an initial State
+    val rootSection = optOriginal.flatMap(old => techniqueRepo.get(TechniqueId(activeTechnique.techniqueName,old.techniqueVersion)).map(_.rootSection)).getOrElse(technique.rootSection)
     val popup = new ModificationValidationPopup(
-        Left(technique.id.name,technique.rootSection,  directive, optOriginal)
+        Left(technique.id.name,rootSection, newDirective, optOriginal)
       , action
       , isADirectiveCreation
       , xml => JsRaw("$.modal.close();") & onSuccessCallback(directive) & successPopup(xml)

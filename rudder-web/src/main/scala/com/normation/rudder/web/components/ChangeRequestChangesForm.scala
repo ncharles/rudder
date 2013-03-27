@@ -237,59 +237,100 @@ import ChangeRequestChangesForm._
         <li><b>Parameters:&nbsp;</b><value id="parameters"/></li>
       </ul>
     </div>
-  def diff(cr : List[DirectiveChange]) = cr match {
-      case list           => <ul>{list.flatMap(directive => <li>{directive.change.map(_.diff match {
-        case AddDirectiveDiff(techniqueName,directive,optRootSection) => {
-        val parameters = optRootSection match {
-          case None => logger.warn("No rootsection was linked to taht diff, looking directly in the technique")
-            techniqueRepo.get(TechniqueId(techniqueName,directive.techniqueVersion)).map(_.rootSection) match {
-              case Some(rs) =>   xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
-              case None => logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
-                 <div> directive.parameters </div>
+  def diff(cr : List[DirectiveChange]) =
+    <ul>{
+      cr.flatMap(directiveChange =>
+        <li>{
+          directiveChange.change.map(_.diff match {
+            case AddDirectiveDiff(techniqueName,directive) =>
+              val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
+              val parameters = techniqueRepo.get(techniqueId).map(_.rootSection) match {
+                case Some(rs) =>
+                  xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
+                case None =>
+                  logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
+                  <div> directive.parameters </div>
+              }
+              ("#directiveID" #> directive.id.value.toUpperCase &
+               "#directiveName" #> directive.name &
+               "#techniqueVersion" #> directive.techniqueVersion.toString &
+               "#techniqueName" #> techniqueName.value &
+               "#techniqueVersion" #> directive.techniqueVersion.toString &
+               "#techniqueName" #> techniqueName.value &
+               "#priority" #> directive.priority &
+               "#isEnabled" #> directive.isEnabled &
+               "#isSystem" #> directive.isSystem &
+               "#shortDescription" #> directive.shortDescription &
+               "#longDescription" #> directive.longDescription &
+               "#parameters" #> <pre>{parameters}</pre>
+              )(DirectiveXML)
+            case DeleteDirectiveDiff(techniqueName,directive) =>
+              val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
+              val parameters = techniqueRepo.get(techniqueId).map(_.rootSection) match {
+                case Some(rs) =>
+                  xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
+                case None =>
+                  logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
+                  <div> directive.parameters </div>
+              }
+              ("#directiveID" #> directive.id.value.toUpperCase &
+               "#directiveName" #> directive.name &
+               "#techniqueVersion" #> directive.techniqueVersion.toString &
+               "#techniqueName" #> techniqueName.value &
+               "#techniqueVersion" #> directive.techniqueVersion.toString &
+               "#techniqueName" #> techniqueName.value &
+               "#priority" #> directive.priority &
+               "#isEnabled" #> directive.isEnabled &
+               "#isSystem" #> directive.isSystem &
+               "#shortDescription" #> directive.shortDescription &
+               "#longDescription" #> directive.longDescription &
+               "#parameters" #> <pre>{parameters}</pre>
+              )(DirectiveXML)
+            case ModifyToDirectiveDiff(techniqueName,directive,rootSection) =>
+              val Some((initialDirective,initialRS)) = directiveChange.initialState.map(init => (init._2,init._3))
+              val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
+              val parameters = techniqueRepo.get(techniqueId).map(_.rootSection)
+              val diff = diffService.diffDirective(initialDirective, initialRS, directive, rootSection)
+              ("#directiveID" #> directive.id.value.toUpperCase &
+               "#directiveName" #> diff.modName.map(value => displaydirectiveInnerFormDiff(value, "name")).getOrElse(Text(directive.name)) &
+               "#techniqueVersion" #> diff.modTechniqueVersion.map(value => displaydirectiveInnerFormDiff(value, "techniqueVersion")).getOrElse(Text(directive.techniqueVersion.toString)) &
+               "#techniqueName" #> techniqueName.value &
+               "#priority" #> diff.modPriority.map(value => displaydirectiveInnerFormDiff(value, "priority")).getOrElse(Text(directive.priority.toString)) &
+               "#isEnabled" #> diff.modIsActivated.map(value => displaydirectiveInnerFormDiff(value, "active")).getOrElse(Text(directive.isEnabled.toString)) &
+               "#isSystem" #> directive.isSystem &
+               "#shortDescription" #> diff.modShortDescription.map(value => displaydirectiveInnerFormDiff(value, "short")).getOrElse(Text(directive.shortDescription)) &
+               "#longDescription" #> diff.modLongDescription.map(value => displaydirectiveInnerFormDiff(value, "long")).getOrElse(Text(directive.longDescription)) &
+               "#parameters" #> {
+               implicit val fun = (section:SectionVal) => xmlPretty.format(SectionVal.toXml(section))
+                 diff.modParameters.map{
+                 displaydirectiveInnerFormDiff(_,"parameters")
+               }.getOrElse(<pre>{fun(SectionVal.directiveValToSectionVal(rootSection,directive.parameters))}</pre>)
+               }
+              )(DirectiveXML)
             }
-          case Some(rs) =>   xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
-        }
-        ("#directiveID" #> directive.id.value.toUpperCase &
-        "#directiveName" #> directive.name &
-        "#techniqueVersion" #> directive.techniqueVersion.toString &
-        "#techniqueName" #> techniqueName.value &
-        "#techniqueVersion" #> directive.techniqueVersion.toString &
-        "#techniqueName" #> techniqueName.value &
-        "#priority" #> directive.priority &
-        "#isEnabled" #> directive.isEnabled &
-        "#isSystem" #> directive.isSystem &
-        "#shortDescription" #> directive.shortDescription &
-        "#longDescription" #> directive.longDescription &
-        "#parameters" #>
-          <pre>{parameters}</pre>
-        )(DirectiveXML)}
-        case DeleteDirectiveDiff(techniqueName,directive,optRootSection) => {
-        val parameters = optRootSection match {
-          case None => logger.warn("No rootsection was linked to taht diff, looking directly in the technique")
-            techniqueRepo.get(TechniqueId(techniqueName,directive.techniqueVersion)).map(_.rootSection) match {
-              case Some(rs) =>   xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
-              case None => logger.error(s"Could not find rootSection for technique ${techniqueName.value} version ${directive.techniqueVersion}" )
-                 <div> directive.parameters </div>
-            }
-          case Some(rs) =>   xmlPretty.format(SectionVal.toXml(SectionVal.directiveValToSectionVal(rs,directive.parameters)))
-        }
-        ("#directiveID" #> directive.id.value.toUpperCase &
-        "#directiveName" #> directive.name &
-        "#techniqueVersion" #> directive.techniqueVersion.toString &
-        "#techniqueName" #> techniqueName.value &
-        "#techniqueVersion" #> directive.techniqueVersion.toString &
-        "#techniqueName" #> techniqueName.value &
-        "#priority" #> directive.priority &
-        "#isEnabled" #> directive.isEnabled &
-        "#isSystem" #> directive.isSystem &
-        "#shortDescription" #> directive.shortDescription &
-        "#longDescription" #> directive.longDescription &
-        "#parameters" #>
-          <pre>{parameters}</pre>
-        )(DirectiveXML)}
-      })}</li>)}</ul>
+          ).getOrElse(<div>Error</div>)
+        }</li>
+      )
     }
-
+  </ul>
+  private[this] def displaydirectiveInnerFormDiff[T](diff: SimpleDiff[T], name:String)(implicit fun: T => String = (t:T) => t.toString) = {
+    <pre style="width:200px;" id={s"before${name}"}
+    class="nodisplay">{fun(diff.oldValue)}</pre>
+    <pre style="width:200px;" id={s"after${name}"}
+    class="nodisplay">{fun(diff.newValue)}</pre>
+    <pre id={s"result${name}"} ></pre>  ++
+    Script(
+      OnLoad(
+        JsRaw(
+          s"""
+            var before = "before${name}";
+            var after  = "after${name}";
+            var result = "result${name}";
+            makeDiff(before,after,result);"""
+        )
+      )
+    )
+  }
   def CRLine(cr: ChangeRequestEventLog)=
     <tr>
       <td id="action">
