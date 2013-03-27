@@ -48,9 +48,16 @@ import bootstrap.liftweb.RudderConfig
 
 class WorkflowInformation extends DispatchSnippet with Loggable {
   private[this] val workflowService = RudderConfig.workflowService
+  private[this] val workflowEnabled = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
   
   def dispatch = {
-    case "pendingModification" => (pendingModifications & pendingDeployment)
+    case "pendingModification" => {
+      workflowEnabled match {
+        case true =>  (pendingModifications & pendingDeployment)
+        case _ => ".modificationsDisplayer" #> Text("")
+      }
+     
+    }
   }
   
   def pendingModifications = {

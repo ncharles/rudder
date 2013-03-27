@@ -66,7 +66,6 @@ import com.normation.rudder.domain.workflows._
 import org.joda.time.DateTime
 import com.normation.cfclerk.domain.TechniqueName
 import com.normation.rudder.web.components.popup.ModificationValidationPopup
-import com.normation.rudder.services.workflows.WorkflowService
 import com.normation.cfclerk.domain.TechniqueId
 
 object DirectiveEditForm {
@@ -121,7 +120,6 @@ class DirectiveEditForm(
   val currentDirectiveSettingForm = new LocalSnippet[DirectiveEditForm]
 
   private[this] val directiveEditorService = RudderConfig.directiveEditorService
-  private[this] val workflowEngine         = RudderConfig.workflowService
   private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepo    = RudderConfig.roChangeRequestRepository
   private[this] val roDraftChangeRequestRepository = RudderConfig.roDraftChangeRequestRepository
@@ -388,7 +386,7 @@ class DirectiveEditForm(
    * Create the confirmation pop-up
    */
   private[this] def displayConfirmationPopup(
-      action:String
+      action      :String
     , newDirective:Directive
   ) : JsCmd = {
     val optOriginal = { if(isADirectiveCreation) None else if(oldDirective.isEmpty) Some(directive) else oldDirective }
@@ -398,7 +396,7 @@ class DirectiveEditForm(
         Left(technique.id.name,rootSection, newDirective, optOriginal)
       , action
       , isADirectiveCreation
-      , xml => JsRaw("$.modal.close();") & onSuccessCallback(directive) & successPopup(xml)
+      , xml => JsRaw("$.modal.close();") & onSuccessCallback(newDirective) & successPopup(xml)
       , xml => onFailureCallback() & failurePopup(xml)
     )
 
