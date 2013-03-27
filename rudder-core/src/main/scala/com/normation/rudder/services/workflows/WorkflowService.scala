@@ -90,14 +90,14 @@ trait WorkflowService {
 
   def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
   def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
-  def stepValidationToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
+  def stepValidationToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
   def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
-  def stepDeploymentToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
+  def stepDeploymentToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
 
   def getValidation : Box[Seq[ChangeRequestId]]
   def getDeployment : Box[Seq[ChangeRequestId]]
   def getDeployed   : Box[Seq[ChangeRequestId]]
-  def getRejected   : Box[Seq[ChangeRequestId]]
+  def getCancelled  : Box[Seq[ChangeRequestId]]
 
 
   val stepsValue :List[WorkflowNodeId]
@@ -202,13 +202,13 @@ class WorkflowServiceImpl(
 
 
   private[this] case object Validation extends MyWorkflowNode {
-    val id = WorkflowNodeId("Validation")
+    val id = WorkflowNodeId("Pending Validation")
 
     val requests = Buffer[ChangeRequestId]()
   }
 
   private[this] case object Deployment extends MyWorkflowNode {
-    val id = WorkflowNodeId("Deployment")
+    val id = WorkflowNodeId("Pending Deployment")
     val requests = Buffer[ChangeRequestId]()
   }
 
@@ -217,33 +217,33 @@ class WorkflowServiceImpl(
     val requests = Buffer[ChangeRequestId]()
   }
 
-  private[this] case object Rejected extends MyWorkflowNode {
-    val id = WorkflowNodeId("Rejected")
+  private[this] case object Cancelled extends MyWorkflowNode {
+    val id = WorkflowNodeId("Cancelled")
     val requests = Buffer[ChangeRequestId]()
   }
 
-  private[this] val steps:List[WorkflowNode] = List(Validation,Deployment,Deployed,Rejected)
+  private[this] val steps:List[WorkflowNode] = List(Validation,Deployment,Deployed,Cancelled)
 
   val stepsValue = steps.map(_.id)
 
   val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
     steps.map{
-    case Validation => Validation.id -> Seq((Deployment.id,stepValidationToDeployment _),(Deployed.id,stepValidationToDeployed _))
-    case Deployment => Deployment.id -> Seq((Deployed.id,stepDeploymentToDeployed _))
-    case Deployed   => Deployed.id -> Seq()
-    case Rejected   => Rejected.id -> Seq()
-   }.toMap
+      case Validation => Validation.id -> Seq((Deployment.id,stepValidationToDeployment _),(Deployed.id,stepValidationToDeployed _))
+      case Deployment => Deployment.id -> Seq((Deployed.id,stepDeploymentToDeployed _))
+      case Deployed   => Deployed.id -> Seq()
+      case Cancelled   => Cancelled.id -> Seq()
+    }.toMap
 
   val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
     steps.map{
-    case Validation => Validation.id -> Seq((Rejected.id,stepValidationToRejected _))
-    case Deployment => Deployment.id -> Seq((Rejected.id,stepDeploymentToRejected _))
-    case Deployed   => Deployed.id -> Seq()
-    case Rejected   => Rejected.id -> Seq()
-   }.toMap
+      case Validation => Validation.id -> Seq((Cancelled.id,stepValidationToCancelled _))
+      case Deployment => Deployment.id -> Seq((Cancelled.id,stepDeploymentToCancelled _))
+      case Deployed   => Deployed.id -> Seq()
+      case Cancelled   => Cancelled.id -> Seq()
+    }.toMap
 
   def findStep(changeRequestId: ChangeRequestId) = {
-    steps.find(_.requests.contains(changeRequestId)).map(_.id).getOrElse(Rejected.id)
+    steps.find(_.requests.contains(changeRequestId)).map(_.id).getOrElse(Cancelled.id)
   }
 
   private[this] def changeStep(
@@ -276,7 +276,7 @@ class WorkflowServiceImpl(
 
   private[this] def toFailure(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     for {
-      failure <- changeStep(from, Rejected, changeRequestId, actor, reason)
+      failure <- changeStep(from, Cancelled, changeRequestId, actor, reason)
       failed  <- onFailureWorkflow(changeRequestId, actor, reason)
     } yield {
       failed
@@ -312,7 +312,7 @@ class WorkflowServiceImpl(
     toSuccess(Validation, changeRequestId, actor, reason)
   }
 
-  def stepValidationToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  def stepValidationToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     toFailure(Validation, changeRequestId, actor, reason)
   }
 
@@ -321,7 +321,7 @@ class WorkflowServiceImpl(
   }
 
 
-  def stepDeploymentToRejected(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  def stepDeploymentToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     toFailure(Deployment, changeRequestId, actor, reason)
   }
 
@@ -329,7 +329,7 @@ class WorkflowServiceImpl(
   def getValidation : Box[Seq[ChangeRequestId]] = Full(Validation.requests)
   def getDeployment : Box[Seq[ChangeRequestId]] = Full(Deployment.requests)
   def getDeployed   : Box[Seq[ChangeRequestId]] = Full(Deployed.requests)
-  def getRejected  : Box[Seq[ChangeRequestId]] = Full(Rejected.requests)
+  def getCancelled  : Box[Seq[ChangeRequestId]] = Full(Cancelled.requests)
 }
 
 
