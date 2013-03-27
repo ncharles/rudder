@@ -105,6 +105,14 @@ class ChangeRequestServiceImpl(
     uuidGen: StringUuidGenerator
 ) extends ChangeRequestService with Loggable {
 
+  private[this] var nextId:Int = 1042
+
+  private[this] def getNextId = {
+    val id = nextId
+    nextId = nextId + 1
+    id.toString
+  }
+
   def createChangeRequestFromDirective(
       changeRequestName: String
     , changeRequestDesc: String
@@ -129,7 +137,7 @@ class ChangeRequestServiceImpl(
                  )
     logger.debug(change)
     ConfigurationChangeRequest(
-        ChangeRequestId(uuidGen.newUuid)
+        ChangeRequestId(getNextId)
       , ChangeRequestInfo(
             changeRequestName
           , changeRequestDesc
