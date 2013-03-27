@@ -437,26 +437,50 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
     currentDirectiveSettingForm.set(Full(dirEditForm))
   }
 
+  /**
+   * Callback used to update the form when the edition of the directive have 
+   * been done
+   * If we have workflow enabled, then the form is not updated, rather
+   * it tells that the modification are pending
+   */
   private[this] def directiveEditFormSuccessCallBack(dir: Directive): JsCmd = {
-    directiveRepository.getDirectiveWithContext(dir.id) match {
-      case Full((technique, activeTechnique, directive)) => {
-        updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique, dir,None)
-        Replace(htmlId_policyConf, showDirectiveDetails) &
-        JsRaw("""this.window.location.hash = "#" + JSON.stringify({'directiveId':'%s'})"""
-          .format(dir.id.value)) &
-        Replace(htmlId_activeTechniquesTree, userLibrary)
-      }
-      case eb:EmptyBox => {
-        val errMsg = "Error when trying to get directive'%s' [%s] info with its " +
-        		"technique context for displaying in Directive Management edit form."
-        val e = eb ?~! errMsg.format(dir.name, dir.id)
-        logger.error(e.messageChain)
-        e.rootExceptionCause.foreach { ex =>
-          logger.error("Root exception was: ", ex)
-        }
-        Alert("Error when trying to get display the page. Please, try again")
-      }
+    val isWorkflowEnabled = true
+    
+    isWorkflowEnabled match {
+      case false => 
+            directiveRepository.getDirectiveWithContext(dir.id) match {
+            case Full((technique, activeTechnique, directive)) => {
+              updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique, dir,None)
+              Replace(htmlId_policyConf, showDirectiveDetails) &
+              JsRaw("""this.window.location.hash = "#" + JSON.stringify({'directiveId':'%s'})"""
+                .format(dir.id.value)) &
+              Replace(htmlId_activeTechniquesTree, userLibrary)
+            }
+            case eb:EmptyBox => {
+              val errMsg = "Error when trying to get directive'%s' [%s] info with its " +
+                  "technique context for displaying in Directive Management edit form."
+              val e = eb ?~! errMsg.format(dir.name, dir.id)
+              logger.error(e.messageChain)
+              e.rootExceptionCause.foreach { ex =>
+                logger.error("Root exception was: ", ex)
+              }
+              Alert("Error when trying to get display the page. Please, try again")
+            }
+          }
+      case true => 
+        // in this case, the modification has not been done, and the repo has 
+        // not been updated.
+        val updated = <div id="editForm" class="object-details">
+          <fieldset class="editZone">
+            <legend>Change request requested</legend>
+            <hr class="spacer"/>
+            <p>The change on Directive <b>{dir.name}</b> has been submited</p>
+          </fieldset>
+          </div>
+          
+        SetHtml(htmlId_policyConf, updated)
     }
+
   }
 
   private[this] def onRemoveSuccessCallBack(): JsCmd = {

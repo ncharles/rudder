@@ -99,14 +99,17 @@
   <!--Début Logo-->
   <div id="logo"> 
     <lift:authz role="deployment_read">
-    <lift:comet type="AsyncDeployment" name="deploymentStatus" />
+      <lift:comet type="AsyncDeployment" name="deploymentStatus" />
     </lift:authz>
-    <lift:authz role="workflow_read">
     <div class="lift:WorkflowInformation.pendingModification modificationsDisplayer">
-      <span class="pendingModifications">[here comes the modifications]</span>
-      <span class="pendingDeployment">[here comes the pending deployment]</span>
+      <lift:authz role="validator_read">
+        <span class="pendingModifications">[here comes the modifications]</span>
+      </lift:authz>
+      <lift:authz role="deployer_read">      
+        <span class="pendingDeployment">[here comes the pending deployment]</span>
+      </lift:authz>
     </div>
-    </lift:authz>
+    
     <h1><a href="/secure/"><img src="/images/logoRudder.jpg" alt="Rudder" /></a></h1>
 
     

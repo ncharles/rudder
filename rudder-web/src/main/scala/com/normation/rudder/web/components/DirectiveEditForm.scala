@@ -436,12 +436,12 @@ class DirectiveEditForm(
 
   private[this] def successPopup(message: NodeSeq) : JsCmd = {
     JsRaw(""" callPopupWithTimeout(200, "successConfirmationDialog", 100, 350) """) &
-    JsRaw(s""" $$("#successDialogContent").append('${message}') """)
+    JsRaw(s""" $$("#successDialogContent").html('${message}') """)
   }
 
   private[this] def failurePopup(message: NodeSeq) : JsCmd = {
     JsRaw(""" callPopupWithTimeout(200, "successConfirmationDialog", 100, 350) """) &
-    JsRaw(s""" $$("#successDialogContent").append('${message}') """)
+    JsRaw(s""" $$("#successDialogContent").html('${message}') """)
   }
 }
 
