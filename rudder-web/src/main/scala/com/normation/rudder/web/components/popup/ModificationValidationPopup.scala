@@ -181,6 +181,8 @@ class ModificationValidationPopup(
   private[this] val workflowService          = RudderConfig.workflowService
   private[this] val dependencyService        = RudderConfig.dependencyAndDeletionService
   private[this] val woDraftChangeRequestRepo = RudderConfig.woDraftChangeRequestRepository
+  private[this] val workflowEnabled          = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
+
   private[this] val techniqueRepo            = RudderConfig.techniqueRepository
 
 
@@ -190,6 +192,10 @@ class ModificationValidationPopup(
 
   def popupContent() : NodeSeq = {
     val name = if(item.isLeft) "Directive" else "Group"
+    val buttonName = workflowEnabled match {
+      case true => "Create Draft"
+      case false => "Save"
+    }
     (
       "#validationForm" #> { (xml:NodeSeq) => SHtml.ajaxForm(xml) } andThen
       "#dialogTitle *" #> titles(name)(action) &
@@ -205,11 +211,12 @@ class ModificationValidationPopup(
         </div>
         }
       } &
+      "#newChangeRequest [class]" #> (if (workflowEnabled) Text("display") else Text("nodisplay")) &
       "#changeRequestName" #> changeRequestName.toForm &
       "#changeRequestDescription" #> changeRequestDescription.toForm &
       "#existingChangeRequest" #> existingChangeRequest.toForm &
 //      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
-      "#saveStartWorkflow" #> (SHtml.ajaxSubmit("Create Draft", onSubmitStartWorkflow _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
+      "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, onSubmitStartWorkflow _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
     )(html ++ Script(OnLoad(
         JsRaw("correctButtons();"))))
   }
@@ -410,12 +417,9 @@ class ModificationValidationPopup(
         }
       }
 
-
       savedChangeRequest match {
         case Full(_) =>
-          val isWorkflowInProgress = true
-
-          val changeText = isWorkflowInProgress match {
+          val changeText = workflowEnabled match {
             case true =>
               item match {
                 case Left((techniqueName, rootSection, directive, optOriginal)) =>

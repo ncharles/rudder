@@ -72,7 +72,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
   val directiveRepository = RudderConfig.roDirectiveRepository
   val uuidGen             = RudderConfig.stringUuidGenerator
   val treeUtilService     = RudderConfig.jsTreeUtilService
-
+  val workflowEnabled     = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
 
   def dispatch = {
     case "head" => { _ => head }
@@ -443,10 +443,8 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
    * If we have workflow enabled, then the form is not updated, rather
    * it tells that the modification are pending
    */
-  private[this] def directiveEditFormSuccessCallBack(dir: Directive): JsCmd = {
-    val isWorkflowEnabled = true
-    
-    isWorkflowEnabled match {
+  private[this] def directiveEditFormSuccessCallBack(dir: Directive): JsCmd = {  
+    workflowEnabled match {
       case false => 
             directiveRepository.getDirectiveWithContext(dir.id) match {
             case Full((technique, activeTechnique, directive)) => {

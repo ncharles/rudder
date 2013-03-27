@@ -143,7 +143,7 @@ class Boot extends Loggable {
 
 
     // All the following is related to the sitemap
-
+    val workflowEnabled = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
 
     val nodeManagerMenu =
       Menu("NodeManagerHome", <span>Node Management</span>) /
@@ -210,6 +210,7 @@ class Boot extends Loggable {
             >> TestAccess ( () => userIsAllowed(Write("administration"),"/secure/administration/policyServerManagement") )
       )
 
+
     def utilitiesMenu =
       Menu("UtilitiesHome", <span>Utilities</span>) /
         "secure" / "utilities" / "index" >> TestAccess ( ()
@@ -222,7 +223,8 @@ class Boot extends Loggable {
 
         , Menu("changeRequests", <span>Change requests</span>) /
             "secure" / "utilities" / "changeRequests"
-            >> LocGroup("utilitiesGroup")
+            >> (if (workflowEnabled) LocGroup("utilitiesGroup") else Hidden)
+            >> TestAccess ( () => userIsAllowed(Read("validator") ) )
 
         , Menu("changeRequest", <span>Change request</span>) /
             "secure" / "utilities" / "changeRequest"

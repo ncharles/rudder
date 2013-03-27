@@ -383,6 +383,17 @@ history.inventories.rootdir=/var/rudder/inventories/historical
 
 rudder.batch.reports.logInterval=1
 
+###########################
+# Workflow configuration  ###########################################################
+###########################
+
+# Activate the Workflow (default false)
+#
+# If true, the workflow will be activated within Rudder. Every changes in 
+# Directive, Group or Rules will have to be validated before being deployed
+
+rudder.workflow.enabled=true
+
 #########################
 # DEPRECATED properties #############################################################
 #########################

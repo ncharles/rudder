@@ -116,6 +116,7 @@ import com.normation.rudder.repository.inmemory.InMemoryDraftChangeRequestReposi
 import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
 import com.normation.rudder.services.workflows.ChangeRequestServiceImpl
 import com.normation.rudder.services.workflows.WorkflowServiceImpl
+import com.normation.rudder.services.workflows.NoWorkflowServiceImpl
 import com.normation.rudder.services.modification.DiffServiceImpl
 import com.normation.rudder.services.workflows.WorkflowProcessEventLogService
 import com.normation.rudder.services.workflows.CommitAndDeployChangeRequest
@@ -234,17 +235,15 @@ object RudderConfig extends Loggable {
   //used in spring security "applicationContext-security.xml", be careful if you change its name
   val RUDDER_REST_ALLOWNONAUTHENTICATEDUSER = config.getBoolean("rudder.rest.allowNonAuthenticatedUser")
 
+  //workflows configuration
+  val RUDDER_ENABLE_APPROVAL_WORKFLOWS = config.getBoolean("rudder.workflow.enabled") // false
+
   val licensesConfiguration = "licenses.xml"
   val logentries = "logentries.xml"
   val prettyPrinter = new PrettyPrinter(120, 2)
   val userLibraryDirectoryName = "directives"
   val groupLibraryDirectoryName = "groups"
   val rulesDirectoryName = "rules"
-
-
-  //workflows configuration
-  //TODO: read that from a config file !
-  val RUDDER_ENABLE_APPROVAL_WORKFLOWS = true
 
   //deprecated
   val BASE_URL = Try(config.getString("base.url")).getOrElse("")
@@ -321,17 +320,29 @@ object RudderConfig extends Loggable {
   val woDraftChangeRequestRepository: WoDraftChangeRequestRepository = draftRepo
   val workflowEventLogService =    new InMemoryWorkflowProcessEventLogService
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
-  val workflowService: WorkflowService = new WorkflowServiceImpl(
-      workflowEventLogService
-    , new CommitAndDeployChangeRequest(
-          uuidGen
-        , roChangeRequestRepository
-        , roDirectiveRepository
-        , woDirectiveRepository
-        , asyncDeploymentAgent
-        , dependencyAndDeletionService
-      )
-  )
+  val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
+    case true => new WorkflowServiceImpl(
+            workflowEventLogService
+          , new CommitAndDeployChangeRequest(
+                uuidGen
+              , roChangeRequestRepository
+              , roDirectiveRepository
+              , woDirectiveRepository
+              , asyncDeploymentAgent
+              , dependencyAndDeletionService
+            )
+        )
+    case false => new NoWorkflowServiceImpl(
+          new CommitAndDeployChangeRequest(
+                uuidGen
+              , roChangeRequestRepository
+              , roDirectiveRepository
+              , woDirectiveRepository
+              , asyncDeploymentAgent
+              , dependencyAndDeletionService
+            )
+        )
+  }
   val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl
 
 

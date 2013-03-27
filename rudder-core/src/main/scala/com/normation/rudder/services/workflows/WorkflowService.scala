@@ -193,6 +193,73 @@ class CommitAndDeployChangeRequest(
   }
 
 }
+/**
+ * The simplest workflow ever, that doesn't wait for approval
+ * It has only one state : Deployed
+ */
+class NoWorkflowServiceImpl(
+    commit: CommitAndDeployChangeRequest
+) extends WorkflowService with Loggable {
+
+  
+  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] = Map()
+
+  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] = Map()
+  
+  def findStep(changeRequestId: ChangeRequestId) : WorkflowNodeId = ???
+
+  val stepsValue :List[WorkflowNodeId] = List()
+  
+  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.info("Automatically saving change")
+    commit.save(changeRequestId, actor, reason)
+  }
+  
+  // should we keep this one or the previous ??
+  def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.info("Automatically saving change")
+    commit.save(changeRequestId, actor, reason)
+  }
+  
+  def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    // This should never happen, we can't reject in this workflow 
+    logger.error(s"Change request with ID ${changeRequestId.value} was rejected")
+    Failure("Cannot reject a modification when there is no workflow")
+  }
+  
+  def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.error("Invalid use of no workflow : It is impossible to change state when there is no workflow")
+    Failure("It is impossible to change state when there is no workflow")
+  }
+
+
+  def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.error("Invalid use of no workflow : It is impossible to change state when there is no workflow")
+    Failure("It is impossible to change state when there is no workflow")
+  }
+
+  def stepValidationToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.error("Invalid use of no workflow : It is impossible to change state when there is no workflow")
+    Failure("It is impossible to change state when there is no workflow")
+  }
+
+  def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.error("Invalid use of no workflow : It is impossible to change state when there is no workflow")
+    Failure("It is impossible to change state when there is no workflow")
+  }
+
+
+  def stepDeploymentToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+    logger.error("Invalid use of no workflow : It is impossible to change state when there is no workflow")
+    Failure("It is impossible to change state when there is no workflow")
+  }
+
+  def getValidation : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
+  def getDeployment : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
+  def getDeployed   : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
+  def getCancelled  : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
+  
+}
 
 class WorkflowServiceImpl(
     log   : WorkflowProcessEventLogService
