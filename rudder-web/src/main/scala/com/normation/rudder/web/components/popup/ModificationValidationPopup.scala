@@ -152,7 +152,7 @@ object ModificationValidationPopup extends Loggable {
          </div>
       </div>
     , "create"    ->
-      <div></div>
+      <div><h2>Are you sure that you want to create this {item}?</h2></div>
   )
 
 }
@@ -395,7 +395,22 @@ class ModificationValidationPopup(
 
 
       savedChangeRequest match {
-        case Full(_) => onSuccessCallback(Text("TODO: a custom message if in Draft, or a workflow status"))
+        case Full(_) =>
+          val isWorkflowInProgress = true
+          
+          val changeText = isWorkflowInProgress match {
+            case true => 
+              item match {
+                case Left((techniqueName, rootSection, directive, optOriginal)) =>
+                  <div>Your change on directive <b>{directive.name}</b> has been submited</div>
+                case Right((nodeGroup, optOriginal)) =>
+                  <div>Your change on group <b>{nodeGroup.name}</b> has been submited</div>
+              }
+            case false =>
+              // No workflow means nothing to warn the user about
+              <div/>
+          }          
+          onSuccessCallback(changeText)
         case eb:EmptyBox =>
           val e = (eb ?~! "Error when trying to save your modification")
           e.rootExceptionCause.foreach { ex =>
