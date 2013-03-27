@@ -54,9 +54,10 @@ object AuthzToRights {
   /*
    * Authorization kind
    */
-  val configurationkind = List("configuration","rule","directive","technique")
+  val configurationKind = List("configuration","rule","directive","technique")
   val nodeKind = List("node","group")
-  val allKind = "deployment"::"administration"::configurationkind ::: nodeKind
+  val workflowKind = List("workflow")
+  val allKind = "deployment"::"administration"::configurationKind ::: nodeKind ::: workflowKind
 
   /*
    * Authorization mapping
@@ -80,9 +81,10 @@ object AuthzToRights {
   def parseRole(roles:Seq[String]):Rights = {
     new Rights(roles.flatMap(_ match {
       case "administrator"       => toAllAuthz (allKind)
-      case "user"                => toAllAuthz (nodeKind ::: configurationkind)
+      case "user"                => toAllAuthz (nodeKind ::: configurationKind)
       case "administration_only" => toAllAuthz (List("administration"))
-      case "configuration"       => toAllAuthz (configurationkind)
+      case "workflow"            => toAllAuthz (workflowKind)
+      case "configuration"       => toAllAuthz (configurationKind)
       case "read_only"           => toReadAuthz (allKind)
       case "inventory"           => toReadAuthz (List("node"))
       case "rule_only"           => toReadAuthz (List("configuration","rule"))
