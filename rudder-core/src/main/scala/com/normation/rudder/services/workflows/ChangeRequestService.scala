@@ -101,9 +101,7 @@ trait ChangeRequestService {
 }
 
 
-class ChangeRequestServiceImpl(
-    uuidGen: StringUuidGenerator
-) extends ChangeRequestService with Loggable {
+class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
 
   private[this] var nextId:Int = 1042
 

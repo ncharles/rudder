@@ -332,7 +332,7 @@ object RudderConfig extends Loggable {
         , dependencyAndDeletionService
       )
   )
-  val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl(uuidGen)
+  val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl
 
 
   //////////////////////////////////////////////////////////////////////////////////////////
