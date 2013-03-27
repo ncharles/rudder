@@ -66,7 +66,7 @@ class WorkflowInformation extends DispatchSnippet with Loggable {
   }
 
   def pendingDeployment = {
-    workflowService.getDeployed match {
+    workflowService.getDeployment match {
       case Full(seq) =>
         seq.size match {
           case 0 => ".pendingDeployment" #> <span>There is no change request pending deployment</span>
