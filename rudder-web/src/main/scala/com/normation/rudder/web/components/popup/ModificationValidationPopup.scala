@@ -69,6 +69,7 @@ import com.normation.rudder.repository.WoChangeRequestRepository
 import com.normation.rudder.services.workflows.WorkflowService
 import com.normation.cfclerk.domain.SectionSpec
 import com.normation.rudder.web.model.RudderBaseField
+import com.normation.cfclerk.domain.TechniqueId
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -107,7 +108,7 @@ object ModificationValidationPopup extends Loggable {
     , "disable" -> "Disable a Directive"
     , "delete"  -> s"Delete a ${item}"
     , "save"    -> s"Update a ${item}"
-    , "create"  -> s"Create a ${item}"    
+    , "create"  -> s"Create a ${item}"
   )
 
   private def explanationMessages(item:String) = Map(
@@ -179,6 +180,7 @@ class ModificationValidationPopup(
   private[this] val workflowService          = RudderConfig.workflowService
   private[this] val dependencyService        = RudderConfig.dependencyAndDeletionService
   private[this] val woDraftChangeRequestRepo = RudderConfig.woDraftChangeRequestRepository
+  private[this] val techniqueRepo            = RudderConfig.techniqueRepository
 
 
   def dispatch = {
@@ -329,21 +331,25 @@ class ModificationValidationPopup(
 
   private[this] def DirectiveDiffFromAction(
       techniqueName: TechniqueName
-    , rootSection  : SectionSpec
     , directive    : Directive
     , initialState : Option[Directive]
   ) : Box[ChangeRequestDirectiveDiff] = {
-    initialState match {
-      case None =>
-        if ((action=="save") || (action == "create"))
-          Full(AddDirectiveDiff(techniqueName,directive))
-        else
-          Failure(s"Action ${action} is not possible on a new directive")
-      case Some(d) =>
-        action match {
-          case "delete" => Full(DeleteDirectiveDiff(techniqueName,directive))
-          case "save"|"disable"|"enable"|"create" => Full(ModifyToDirectiveDiff(techniqueName,directive,rootSection))
-          case _ =>         Failure(s"Action ${action} is not possible on a existing directive")
+
+    techniqueRepo.get(TechniqueId(techniqueName,directive.techniqueVersion)).map(_.rootSection) match {
+      case None => Failure(s"Could not get root section for technique ${techniqueName.value} version ${directive.techniqueVersion}")
+      case Some(rootSection) =>
+        initialState match {
+          case None =>
+            if ((action=="save") || (action == "create"))
+              Full(AddDirectiveDiff(techniqueName,directive))
+            else
+              Failure(s"Action ${action} is not possible on a new directive")
+          case Some(d) =>
+            action match {
+              case "delete" => Full(DeleteDirectiveDiff(techniqueName,directive))
+              case "save"|"disable"|"enable"|"create" => Full(ModifyToDirectiveDiff(techniqueName,directive,rootSection))
+              case _ =>         Failure(s"Action ${action} is not possible on a existing directive")
+            }
         }
     }
   }
@@ -358,14 +364,14 @@ class ModificationValidationPopup(
       val savedChangeRequest = {
         // we only have quick change request now
         val cr = item match {
-          case Left((techniqueName, rootSection, directive, optOriginal)) =>
-              val action = DirectiveDiffFromAction(techniqueName, rootSection, directive, optOriginal)
+          case Left((techniqueName, oldRootSection, directive, optOriginal)) =>
+              val action = DirectiveDiffFromAction(techniqueName, directive, optOriginal)
               action.map(
                 changeRequestService.createChangeRequestFromDirective(
                       changeRequestName.get
                     , changeRequestDescription.get
                     , techniqueName
-                    , rootSection
+                    , oldRootSection
                     , directive.id
                     , optOriginal
                     , _
