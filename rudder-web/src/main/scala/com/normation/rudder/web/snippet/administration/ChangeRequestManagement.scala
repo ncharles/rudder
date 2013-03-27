@@ -63,7 +63,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val changeRequestTableId = "ChangeRequestId"
 
-  private[this] val initFilter : Box[String] = S.param("filter")
+  private[this] val initFilter : Box[String] = S.param("filter").map(_.replace("_", " "))
 
   val dataTableInit =
     s"""$$('#${changeRequestTableId}').dataTable( {
