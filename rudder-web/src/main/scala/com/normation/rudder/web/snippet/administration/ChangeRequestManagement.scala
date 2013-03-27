@@ -52,6 +52,8 @@ import com.normation.rudder.web.model.CurrentUser
 import org.joda.time.DateTime
 import com.normation.rudder.services.workflows.ChangeRequestService
 import com.normation.rudder.web.components.DateFormaterService
+import scala.xml.Node
+import scala.xml.Elem
 
 class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
@@ -63,29 +65,29 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
   private[this] val CrId: Box[String] = S.param("crId")
 
-  val dummyStatus = ChangeRequestInfo("MyFirstChangeRequest","blablabla",false)
-  val dummyStatus2 = ChangeRequestInfo("MySecondChangeRequest","blablabla",false)
-//  val startStatus = ChangeRequestStatusItem(CurrentUser.getActor, DateTime.now, None, AddChangeRequestStatusDiff(dummyStatus))
-//  val startStatus2 = ChangeRequestStatusItem(CurrentUser.getActor, DateTime.now, None, AddChangeRequestStatusDiff(dummyStatus2))
-  val dummyCR = ConfigurationChangeRequest(ChangeRequestId("1"), dummyStatus, Map(), Map())
-  val dummyCR2 = ConfigurationChangeRequest(ChangeRequestId("2"), dummyStatus2,Map(), Map())
-
-    val CRTable =
-    <table id={changeRequestTableId}>
-      <thead>
-       <tr class="head tablewidth">
-        <th>ID</th>
-        <th>Status</th>
-        <th>Name</th>
-        <th>Creator</th>
-        <th>Last modification</th>
-      </tr>
-      </thead>
-      <tbody >
-      <div id="crBody"/>
-      </tbody>
-    </table>
-
+  val dataTableInit =
+    s"""$$('#${changeRequestTableId}').dataTable( {
+          "asStripeClasses": [ 'color1', 'color2' ],
+          "bAutoWidth": false,
+          "bFilter" : true,
+          "bPaginate" : true,
+          "bLengthChange": true,
+          "sPaginationType": "full_numbers",
+          "bJQueryUI": true,
+          "oLanguage": {
+            "sSearch": ""
+          },
+          "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
+          "aaSorting": [[ 1, "asc" ]],
+          "aoColumns": [
+            { "sWidth": "20px" },
+            { "sWidth": "40px" },
+            { "sWidth": "100px" },
+            { "sWidth": "40px" },
+            { "sWidth": "40px" }
+          ],
+        } );
+        $$('.dataTables_filter input').attr("placeholder", "Search"); """
 
   def CRLine(cr: ChangeRequest)=
     <tr>
@@ -112,88 +114,63 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       </td>
    </tr>
   def dispatch = {
-    case "filter" => xml => <div id="content">
-
-      <div id="nameFilter" style="margin-left:40px;"><span><span id="actualFilter" style="margin-left:10px; display:inline-block">{statusFilter}</span></span></div>
-    </div>
-    case "display" => xml =>  <div style="margin: 0 40px; overflow:auto;"> {
-      ( "#crBody" #> /*Seq(dummyCR,dummyCR2)*/roCrRepo.getAll.get.flatMap(CRLine(_)) ).apply(CRTable)
-      }
-    </div> ++ Script(OnLoad(
-        JsRaw(s"""$$('#${changeRequestTableId}').dataTable( {
-                    "asStripeClasses": [ 'color1', 'color2' ],
-                    "bAutoWidth": false,
-                    "bFilter" : true,
-                    "bPaginate" : true,
-                    "bLengthChange": true,
-                    "sPaginationType": "full_numbers",
-                    "bJQueryUI": true,
-                    "oLanguage": {
-                      "sSearch": ""
-                    },
-                    "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
-                    "aaSorting": [[ 1, "asc" ]],
-                    "aoColumns": [
-                      { "sWidth": "20px" },
-                      { "sWidth": "40px" },
-                      { "sWidth": "100px" },
-                      { "sWidth": "40px" },
-                      { "sWidth": "40px" }
-                    ],
-                  } );
-                  $$('.dataTables_filter input').attr("placeholder", "Search"); """)))
+    case "filter" =>
+      xml => ("#actualFilter *" #> statusFilter).apply(xml)
+    case "display" => xml =>
+      ( "#crBody" #> roCrRepo.getAll.get.flatMap(CRLine(_)) ).apply(xml) ++
+      Script(OnLoad(JsRaw(dataTableInit)))
   }
 
 
+  def statusFilter = {
+
+    val values =  workflowService.stepsValue.map(_.value)
+    val selectValues =  values.map(x=> (x,x))
+    var value = ""
+
+    val filterFunction =
+      s"""var filter = [];
+          $$(this).children(":selected").each(function () {
+            filter.push($$(this).attr("value"));
+          } );
+          $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);"""
+    val onChange = ("onchange" -> JsRaw(filterFunction))
 
 
 
-   def statusFilter = {
-     val values =  workflowService.stepsValue.map(_.value)
-     val selectValues =  values.map(x=> (x,x))
-     var value = ""
-     val onChange = (
-         "onchange" -> JsRaw(s"""
-             var filter = [];
-             $$(this).children(":selected").each(function () {
-               filter.push($$(this).attr("value"));
-             } );
-             $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);
-         """)
-     )
+    def filterForm (select:Elem,text:String, transform: String => NodeSeq) = {
+      val submit =
+          SHtml.ajaxSubmit(
+              text
+            , () => SetHtml("actualFilter",transform(value))
+            , ("class","expand")
+            , ("style","margin: 5px 10px; float:right; height:15px; width:18px;  padding: 0; border-radius:25px")
+         ) ++ Script(JsRaw("correctButtons()"))
 
-     def submit(text:String, transform: String => NodeSeq) =
-       SHtml.ajaxSubmit(
-           text
-         , () => SetHtml("actualFilter",transform(value))
-         , ("class","expand")
-         , ("style","margin: 5px 10px; float:right; height:15px; width:18px;  padding: 0; border-radius:25px")
-       ) ++ Script(JsRaw("correctButtons()"))
-
-     def unexpandedFilter(default:String):NodeSeq = {
-    SHtml.ajaxForm(
-      <b style="float:left; margin: 5px 10px">Status:</b> ++
-      SHtml.select(
+      SHtml.ajaxForm(
+        <b style="float:left; margin: 5px 10px">Status:</b> ++
+        select % onChange  ++ submit
+    )
+    }
+    def unexpandedFilter(default:String):NodeSeq = {
+      val select = SHtml.select(
           ("","All")::selectValues
         , Full(default)
         , list => value = list
         , ("style","width:auto;")
-      ) % onChange  ++ submit("...",expandedFilter)
-
-    )
+      )
+      filterForm(select,"...",expandedFilter)
   }
 
     def expandedFilter(default:String) = {
       val extendedDefault = if (values.exists(_ == default)) List(default) else Nil
-      SHtml.ajaxForm(
-        <b style="float:left; margin: 5px 10px">Status:</b> ++
-        SHtml.multiSelect(
+      val multiSelect =  SHtml.multiSelect(
             selectValues
           , extendedDefault
           , list => value = if (list.size==1) list.head else "All"
           , ("style","width:auto;padding-right:3px;")
-        ) % onChange ++ submit(".",unexpandedFilter)
-      )
+        )
+      filterForm(multiSelect,"...",unexpandedFilter)
     }
 
   unexpandedFilter("All")

@@ -82,48 +82,18 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   import ChangeRequestDetails._
 
 
-  val techRepo = RudderConfig.techniqueRepository
-  val rodirective = RudderConfig.roDirectiveRepository
-//  val adirectiveId = DirectiveId("11c2fdab-053e-4100-a663-b6a29e8b049c")
-//  val directive = rodirective.getDirective(adirectiveId).get
-//  val tech = rodirective.getActiveTechnique(adirectiveId).get.techniqueName
-//  val aDirectiveAddDiff = AddDirectiveDiff(tech,directive)
-//  val aDirectiveChangeItem =  DirectiveChangeItem(CurrentUser.getActor,DateTime.now.minusHours(6),None,aDirectiveAddDiff)
-//  val aDirectiveChange = DirectiveChange(Some(directive),aDirectiveChangeItem,Seq())
-//  val aDirectiveChanges = DirectiveChanges(aDirectiveChange,Seq())
-//
-//  val dummyCR = ConfigurationChangeRequest(
-//      ChangeRequestId("1")
-//    , ChangeRequestInfo(
-//          "MyFirstChangeRequest"
-//        , "blablabla"
-//        , false
-//      )
-//    , Map( adirectiveId -> aDirectiveChanges )
-//    , Map()
-//  )
-//  val dummyCR2 = ConfigurationChangeRequest(
-//      ChangeRequestId("2")
-//    , ChangeRequestInfo(
-//          "MyFirstChangeRequest"
-//        , "blablabla"
-//        , false
-//      )
-//    , Map( adirectiveId -> aDirectiveChanges )
-//    , Map()
-//  )
-//
+  private[this] val techRepo = RudderConfig.techniqueRepository
+  private[this] val rodirective = RudderConfig.roDirectiveRepository
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val woChangeRequestRepository = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepository = RudderConfig.roChangeRequestRepository
   private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
   private[this] val workflowService = RudderConfig.workflowService
+
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[String] = {S.param("crId") }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {
-//    case Full("1") => Full(dummyCR)
-//    case Full("2") => Full(dummyCR2)
     case Full(id) => roChangeRequestRepository.get(ChangeRequestId(id)) match {
       case Full(Some(cr)) => Full(cr)
       case Full(None) => Failure(s"There is no Cr with id :${id}")
@@ -136,58 +106,73 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   }
 
   def dispatch = {
-    case "header" => (xml => changeRequest match {
-        case eb:EmptyBox =>
-          <div id="content">
-            <div> Error</div>
-          </div>
-          /* detail page */
+    // Display Change request Header
+    case "header" =>
+      ( xml =>
+        changeRequest match {
+          case eb:EmptyBox => NodeSeq.Empty
+          case Full(id) => displayHeader(id)
+        }
+      )
 
-        case Full(id) => displayHeader(id)
-      }
-    )
+    // Display change request details
+    case "details" =>
+      ( xml =>
 
-    case "details" => (xml => changeRequest match {
-        case eb:EmptyBox => <div> Error {eb}</div>
-        case Full(cr) =>
-          new ChangeRequestEditForm(
-              cr.info
-            , workflowService
-            , cr.id
-            , (statusUpdate:ChangeRequestInfo) =>  {
-                val newCR = ChangeRequest.updateInfo(
-                    cr
-                  , statusUpdate
-                )
-                changeRequest = Full(newCR)
-                logger.warn(changeRequest)
+        changeRequest match {
+          case eb:EmptyBox => <div> Error {eb}</div>
+          case Full(cr) =>
+            new ChangeRequestEditForm(
+                cr.info
+              , workflowService
+              , cr.id
+              , changeDetailsCallback(cr) _
+            ).display
+        }
+      )
 
-                woChangeRequestRepository.updateChangeRequest(newCR, CurrentUser.getActor, None)
+    // Display change request content
+    case "changes" =>
+      ( xml =>
+        changeRequest match {
+          case eb:EmptyBox => NodeSeq.Empty
+          case Full(id) =>
+            val form = new ChangeRequestChangesForm(id).dispatch("changes")(xml)
+            <div id="changeRequestChanges">{form}</div>
+        }
+      )
 
-                SetHtml("changeRequestHeader", displayHeader(newCR)) &
-                SetHtml("changeRequestChanges", new ChangeRequestChangesForm(newCR).dispatch("changes")(NodeSeq.Empty))
-              }
-          ).display
-    })
+    // Add action buttons
+    case "actions" =>
+      ( xml =>
+        changeRequest match {
+          case eb:EmptyBox => NodeSeq.Empty
+          case Full(cr) =>
+            ("#backStep" #>
+               SHtml.ajaxButton(
+                   "Cancel"
+                 , () => ChangeStepPopup("Cancel",workflowService.backSteps(workflowService.findStep(cr.id)),cr)
+              ) &
+             "#nextStep" #>
+               SHtml.ajaxButton(
+                   "Accept"
+                 , () => ChangeStepPopup("Accept",workflowService.nextSteps(workflowService.findStep(cr.id)),cr)
+               )
+            ) (xml)
+        }
+      )
+  }
 
-    case "changes" => (xml => changeRequest match {
-        case eb:EmptyBox => <div> Error</div>
-        case Full(id) =>
-          <div id="changeRequestChanges">{
-            new ChangeRequestChangesForm(id).dispatch("changes")(NodeSeq.Empty)
-          }</div>
-    })
-
-    case "actions" => (xml => changeRequest match {
-      case eb:EmptyBox => NodeSeq.Empty
-      case Full(cr) => ("#backStep" #> SHtml.ajaxButton("Refuse", () => ChangeStepPopup("Refuse",workflowService.backSteps(workflowService.findStep(cr.id)),cr)) &
-         "#nextStep" #> SHtml.ajaxButton("Valid", () => ChangeStepPopup("Accept",workflowService.nextSteps(workflowService.findStep(cr.id)),cr)))(xml)
-
-    })
+  private[this] def changeDetailsCallback (cr:ChangeRequest)(statusUpdate:ChangeRequestInfo) =  {
+    val newCR = ChangeRequest.updateInfo(cr, statusUpdate)
+    changeRequest = Full(newCR)
+    woChangeRequestRepository.updateChangeRequest(newCR, CurrentUser.getActor, None)
+    SetHtml("changeRequestHeader", displayHeader(newCR)) &
+    SetHtml("changeRequestChanges", new ChangeRequestChangesForm(newCR).dispatch("changes")(NodeSeq.Empty))
   }
 
   def displayHeader(cr:ChangeRequest) = {
-    //last action:
+    //last action on the change Request (name/description changed):
     val (action,date) = changeRequestEventLogService.getLastLog(cr.id) match {
       case eb:EmptyBox => ("Error when retrieving the last action",None)
       case Full(None)  => ("Error, no action were recorded for that change request",None) //should not happen here !
@@ -200,67 +185,92 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
         (s"${actionName} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}",Some(date))
     }
 
+    // Last workflow change on that change Request
     val (step,stepDate) = workFlowEventLogService.getLastLog(cr.id) match {
       case eb:EmptyBox => ("Error when retrieving the last action",None)
       case Full(None)  => ("Error when retrieving the last action",None) //should not happen here !
       case Full(Some(StepWorkflowProcessEventLog(actor,date,reason,from,to))) =>
         (s"Sent from ${from} to ${to} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}",Some(date))
     }
-     val last = (date,stepDate) match {
-       case (None,None) => action
-       case (Some(_),None) => action
-       case (None,Some(_)) => step
-       case (Some(date),Some(stepDate)) => if (date.isAfter(stepDate)) action else step
-     }
-    ("#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
-       "#CRName *" #> s"CR#${cr.id}: ${cr.info.name}" &
-       "#CRStatus *" #> workflowService.findStep(cr.id).value &
-       "#CRLastAction *" #> s"${ last }") (header)
+
+    // Compare both to find the oldest
+    val last = (date,stepDate) match {
+      case (None,None) => action
+      case (Some(_),None) => action
+      case (None,Some(_)) => step
+      case (Some(date),Some(stepDate)) => if (date.isAfter(stepDate)) action else step
+    }
+    ( "#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
+      "#CRName *" #> s"CR#${cr.id}: ${cr.info.name}" &
+      "#CRStatus *" #> workflowService.findStep(cr.id).value &
+      "#CRLastAction *" #> s"${ last }"
+    ) (header)
 
   }
 
   def ChangeStepPopup(action:String,nextSteps:Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])],cr:ChangeRequest) = {
-    type functionType = (ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId]
-    def closePopup : JsCmd = SetHtml("changeRequestHeader", displayHeader(cr)) &
-                SetHtml("CRStatusDetails",Text(workflowService.findStep(cr.id).value )) &
-                SetHtml("changeRequestChanges", new ChangeRequestChangesForm(cr).dispatch("changes")(NodeSeq.Empty)) &JsRaw("""          correctButtons();
-                    $.modal.close();
-           """)
-      var nextChosen = nextSteps.head._2
-      val nextSelect = SHtml.selectObj(nextSteps.map(v => (v._2,v._1.value)), Full(nextChosen)
-          , {t:functionType => nextChosen = t})
-      def nextOne(next:String) : NodeSeq= <div class="wbBaseField">
-          <b class="threeCol">Next: </b>
-          <span id="CRStatus">
-            {next}
-           </span>
-        </div>
+    type stepChangeFunction = (ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId]
 
-      val description = new WBTextAreaField("Message", "") {
-      override def setFilter = notNull _ :: trim _ :: Nil
-      override def inputField = super.inputField  % ("style" -> "height:5em;")
-      override def errorClassName = ""
-      override def validations() = valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
+    def closePopup : JsCmd =
+      SetHtml("changeRequestHeader", displayHeader(cr)) &
+      SetHtml("CRStatusDetails",Text(workflowService.findStep(cr.id).value )) &
+      SetHtml("changeRequestChanges", new ChangeRequestChangesForm(cr).dispatch("changes")(NodeSeq.Empty)) &
+      JsRaw("""correctButtons();
+               $.modal.close();""")
+
+    var nextChosen = nextSteps.head._2
+    val nextSelect =
+      SHtml.selectObj(
+          nextSteps.map(v => (v._2,v._1.value)), Full(nextChosen)
+        , {t:stepChangeFunction => nextChosen = t}
+      )
+    def nextOne(next:String) : NodeSeq=
+      <div class="wbBaseField">
+        <b class="threeCol">Next: </b>
+        <span id="CRStatus">
+          {next}
+        </span>
+      </div>
+
+    val stepMessage =
+      new WBTextAreaField("Message", "") {
+        override def setFilter = notNull _ :: trim _ :: Nil
+        override def inputField = super.inputField  % ("style" -> "height:5em;")
+        override def errorClassName = ""
+        override def validations() = valMinLen(5, "The message must have at least 5 characters.") _ :: Nil
+      }
+
+    def confirm() : JsCmd = {
+      nextChosen(cr.id,CurrentUser.getActor,Some(stepMessage.is))
+      closePopup
     }
-          def confirm() : JsCmd = { val crId = nextChosen(cr.id,CurrentUser.getActor,Some(description.is))
-      logger.info(crId)
-              closePopup
+
+    val next = {
+      nextSteps match {
+        case Nil => <span>Error</span>
+        case (head,_) :: Nil => nextOne(head.value)
+        case _ => nextSelect
+      }
     }
-      SetHtml("popupContent",(
-          "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message." &
-          "#header" #>  s"${action} CR#${cr.id}: ${cr.info.name}" &
-          "#form *+" #>
-            SHtml.ajaxForm(
-              ("#reason" #> description.toForm_! &
-               "#next" #> {nextSteps match {
-                 case Nil => <span>Error</span>
-                 case (head,_) :: Nil => nextOne(head.value)
-                 case _ => nextSelect
-               }} &
-               "#cancel" #> SHtml.ajaxButton("Cancel", () => closePopup ) &
-               "#confirm" #> SHtml.ajaxSubmit("Confirm", () => confirm())
-          )(popupContent)))(popup++ Script((JsRaw("correctButtons();"))))) &
-          JsRaw("createPopup('changeStatePopup', 150, 850)")
+
+    val content = {
+      ( "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message." &
+        "#header"   #>  s"${action} CR#${cr.id}: ${cr.info.name}" &
+        "#form *+"  #>
+          SHtml.ajaxForm(
+            ( "#reason"  #> stepMessage.toForm_! &
+              "#next"    #> next &
+              "#cancel"  #> SHtml.ajaxButton("Cancel", () => closePopup ) &
+              "#confirm" #> SHtml.ajaxSubmit("Confirm", () => confirm())
+            ) (popupContent)
+          )
+      ) ( popup ) ++
+      Script(JsRaw("correctButtons();"))
+    }
+
+
+    SetHtml("popupContent",content) &
+    JsRaw("createPopup('changeStatePopup', 150, 850)")
 
   }
 }

@@ -2,102 +2,95 @@
 
 
 <component:header>
-        <div id="backButton" style ="float: left; margin-left: 40px;"/>
-        <div id="CRStatus" class="ui-button  ui-corner-all ui-state-default" style="float: right; font-size: 15px; font-weight: bold; padding: 7px; margin-right: 40px; cursor:default;" />
-             <hr class="spacer"/>
-        <div id="CRName" style="margin-left: 40px; font-weight: bold; font-size: 25px;"/>
-        
-        <hr class="spacer"/>
-        <i id="CRLastAction" style="margin-left: 75px; font-size: 15px;" />
+  <div id="backButton" style ="float: left; margin-left: 40px;"/>
+  <div id="CRStatus" class="ui-button  ui-corner-all ui-state-default" style="float: right; font-size: 15px; font-weight: bold; padding: 7px; margin-right: 40px; cursor:default;" />
+  <hr class="spacer"/>
+  <div id="CRName" style="margin-left: 40px; font-weight: bold; font-size: 25px;"/>
+  <hr class="spacer"/>
+  <i id="CRLastAction" style="margin-left: 75px; font-size: 15px;" />
 </component:header>
 
 <component:details>
-    <div id="detailsForm" class="object-details" style="margin:0 40px">
-      <hr class="spacer"/>
-      <div id="CRName"/>
-      <hr class="spacer"/>
-      <div class="wbBaseField">
-        <b class="threeCol">ID: </b>
-        <span id="CRId">
-          Here comes the rudder ID
-        </span>
-      </div>
-      <div class="wbBaseField">
-        <b class="threeCol">Status: </b>
-        <span id="CRStatusDetails">
-          Here comes change request status
-        </span>
-      </div>
-      <hr class="spacer"/>
-      <div id="CRDescription"/>
-      <div id="CRSave"/>
-	</div>
+  <div id="detailsForm" class="object-details" style="margin:0 40px">
+    <hr class="spacer"/>
+    <div id="CRName"/>
+    <hr class="spacer"/>
+    <div class="wbBaseField">
+      <b class="threeCol">ID: </b>
+      <span id="CRId">
+        Here comes the rudder ID
+      </span>
+    </div>
+    <div class="wbBaseField">
+      <b class="threeCol">Status: </b>
+      <span id="CRStatusDetails">
+        Here comes change request status
+      </span>
+    </div>
+    <hr class="spacer"/>
+    <div id="CRDescription"/>
+    <div id="CRSave"/>
+  </div>
 </component:details>
 
 <component:changes>
-    <div id="changes"  style=" margin: 0 40px; clear:both;  max-height:400px; border-radius:6px; border:2px ridge; position:relative; overflow:hidden;">
-      <div id="changeSelector" style="float:left; border-right: 2px ridge; max-height:390px; height:100%; width:225px; overflow:auto; padding:5px; position:absolute; padding-bottom:0">
-        <div id="changeTree">
-          <ul/>
-        </div>
-      </div>
-      <div id="changeDisplay"  style="margin: 10px 10px 10px 250px;">
-        <ul id="changeRequestTabMenu" style="height:30px">
-            <li><a href="#historyTab">Change history</a></li>
-            <li><a href="#diffTab">Diff</a></li>
-        </ul>
-        <div id="historyTab" style ="max-height:345px; overflow: auto">
-          <div id="history"></div>
-        </div>
-        <div id="diffTab" style="max-height:345px; overflow: auto">
-        <div id="diff"></div>
-        </div>
+  <div id="changes"  style=" margin: 0 40px; clear:both;  max-height:400px; border-radius:6px; border:2px ridge; position:relative; overflow:hidden;">
+    <div id="changeSelector" style="float:left; border-right: 2px ridge; max-height:390px; height:100%; width:225px; overflow:auto; padding:5px; position:absolute; padding-bottom:0">
+      <div id="changeTree">
+        <ul/>
       </div>
     </div>
-            <hr class="spacer"/>
+    <div id="changeDisplay"  style="margin: 10px 10px 10px 250px;">
+      <ul id="changeRequestTabMenu" style="height:30px">
+          <li><a href="#historyTab">Change history</a></li>
+          <li><a href="#diffTab">Diff</a></li>
+      </ul>
+      <div id="historyTab" style ="max-height:345px; overflow: auto">
+        <div id="history"/>
+      </div>
+      <div id="diffTab" style="max-height:345px; overflow: auto">
+        <div id="diff" />
+      </div>
+    </div>
+  </div>
+  <hr class="spacer"/>
 </component:changes>
 
 <component:popup>
-    <div id="changeStatePopup" class="nodisplay ui-widget" style="overflow: auto; max-height:500px;">
-      <div class="simplemodal-title">
-        <h1 ><span id="header"></span></h1>
-        <hr/>
-      </div>
-      <div class="simplemodal-content">
-       <br />
-      
-       <div class="popupContent" id="intro"/>
-       <div id="form">
-  
-      </div>
+  <div id="changeStatePopup" class="nodisplay ui-widget" style="overflow: auto; max-height:500px;">
+    <div class="simplemodal-title">
+      <h1 ><span id="header"></span></h1>
+      <hr/>
     </div>
+    <div class="simplemodal-content">
+      <br />
+      <div class="popupContent" id="intro"/>
+      <div id="form" />
     </div>
+  </div>
 </component:popup>
 
 <component:popupContent>
-     <hr class="spacer" />
-             <div class="wbBaseField">
-          <b class="threeCol">Next: </b>
-          <span id="next">
-            Here comes change request status
-           </span>
-        </div>
-       <hr class="spacer" />
-       <div id ="reason">
-       </div>
-      <div class="simplemodal-bottom">
-      <div style="float:left; padding:5px;">
-             <button class="simplemodal-close" id="cancel">
-            Cancel
-          </button>
-          </div>
-        <div class="popupButton">
-        <span>
-         <button id="confirm">
-            Confirm
-          </button>
-        </span>
-        </div>
-      </div>
+  <hr class="spacer" />
+  <div class="wbBaseField">
+    <b class="threeCol">Next: </b>
+    <span id="next">
+      Here comes change request status
+    </span>
+  </div>
+  <hr class="spacer" />
+  <div id ="reason" />
+  <div class="simplemodal-bottom">
+    <div style="float:left; padding:5px;">
+      <button class="simplemodal-close" id="cancel">
+        Cancel
+      </button>
+    </div>
+    <div class="popupButton">
+      <button id="confirm">
+        Confirm
+      </button>
+    </div>
+  </div>
 </component:popupContent>
 </xml:group>
