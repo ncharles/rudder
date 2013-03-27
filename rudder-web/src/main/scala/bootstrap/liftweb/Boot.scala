@@ -96,6 +96,8 @@ class Boot extends Loggable {
         RewriteResponse("secure" :: "configurationManager" :: "techniqueLibraryManagement" :: Nil, Map("techniqueId" -> activeTechniqueId))
       case RewriteRequest(ParsePath("secure"::"nodeManager"::"searchNodes"::nodeId::Nil, _, _, _), GetRequest, _) =>
         RewriteResponse("secure"::"nodeManager"::"searchNodes"::Nil, Map("nodeId" -> nodeId))
+      case RewriteRequest(ParsePath("secure"::"utilities"::"changeRequests"::filter::Nil, _, _, _), GetRequest, _) =>
+        RewriteResponse("secure"::"utilities"::"changeRequests"::Nil, Map("filter" -> filter))
       case RewriteRequest(ParsePath("secure"::"utilities"::"changeRequest"::crId::Nil, _, _, _), GetRequest, _) =>
         RewriteResponse("secure"::"utilities"::"changeRequest"::Nil, Map("crId" -> crId))
     }
@@ -225,7 +227,6 @@ class Boot extends Loggable {
         , Menu("changeRequest", <span>Change request</span>) /
             "secure" / "utilities" / "changeRequest"
             >> Hidden
-
 
         , Menu("eventLogViewer", <span>Event Logs</span>) /
             "secure" / "utilities" / "eventLogs"

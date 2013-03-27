@@ -63,7 +63,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val changeRequestTableId = "ChangeRequestId"
 
-  private[this] val CrId: Box[String] = S.param("crId")
+  private[this] val initFilter : Box[String] = S.param("filter")
 
   val dataTableInit =
     s"""$$('#${changeRequestTableId}').dataTable( {
@@ -87,7 +87,13 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
             { "sWidth": "40px" }
           ],
         } );
-        $$('.dataTables_filter input').attr("placeholder", "Search"); """
+        $$('.dataTables_filter input').attr("placeholder", "Search");
+        ${initFilter match {
+          case Full(filter) => s"$$('#${changeRequestTableId}').dataTable().fnFilter('${filter}',1,true,false,true);"
+          case eb:EmptyBox => ""
+          }
+        }"""
+
 
   def CRLine(cr: ChangeRequest)=
     <tr>
@@ -173,6 +179,6 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       filterForm(multiSelect,"...",unexpandedFilter)
     }
 
-  unexpandedFilter("All")
+  unexpandedFilter(initFilter.getOrElse("All"))
   }
 }
