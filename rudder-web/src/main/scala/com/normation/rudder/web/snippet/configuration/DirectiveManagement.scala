@@ -377,7 +377,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
           An error happened when trying to load Directive configuration.
           Error message was: {m}
         </div>
-      case Empty => <div id={htmlId_policyConf}></div>
+      case Empty =>  <div id={htmlId_policyConf}></div>
       //here we CAN NOT USE <lift:DirectiveEditForm.showForm /> because lift seems to cache things
       //strangely, and if so, after an form save, clicking on tree node does nothing
       // (or more exactly, the call to "onclicknode" is correct, the currentDirectiveSettingForm
