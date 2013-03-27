@@ -189,10 +189,8 @@ class ModificationValidationPopup(
 
   import ModificationValidationPopup._
 
-  private[this] val uuidGen                  = RudderConfig.stringUuidGenerator
   private[this] val userPropertyService      = RudderConfig.userPropertyService
   private[this] val roDraftChangeRequestRepo = RudderConfig.roDraftChangeRequestRepository
-  private[this] val roChangeRequestRepo      = RudderConfig.roChangeRequestRepository
   private[this] val woChangeRequestRepo      = RudderConfig.woChangeRequestRepository
   private[this] val changeRequestService     = RudderConfig.changeRequestService
   private[this] val workflowService          = RudderConfig.workflowService
