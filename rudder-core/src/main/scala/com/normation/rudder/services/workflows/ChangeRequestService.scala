@@ -60,7 +60,6 @@ trait ChangeRequestService {
   def createChangeRequestFromDirective(
       changeRequestName: String
     , changeRequestDesc: String
-    , readOnly         : Boolean
     , techniqueName    : TechniqueName
     , rootSection      : SectionSpec
     , directiveId      : DirectiveId
@@ -114,7 +113,6 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
   def createChangeRequestFromDirective(
       changeRequestName: String
     , changeRequestDesc: String
-    , readOnly         : Boolean
     , techniqueName    : TechniqueName
     , rootSection      : SectionSpec
     , directiveId      : DirectiveId
@@ -139,7 +137,6 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
       , ChangeRequestInfo(
             changeRequestName
           , changeRequestDesc
-          , readOnly
         )
       , Map(directiveId -> DirectiveChanges(change, Seq()))
       , Map()

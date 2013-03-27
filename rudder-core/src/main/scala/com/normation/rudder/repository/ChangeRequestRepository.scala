@@ -109,19 +109,4 @@ trait WoChangeRequestRepository {
    */
   def deleteChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest]
 
-  /**
-   * Unlock the Change Request so that subsequent call to updateChangeRequest
-   * can be made (and succeed).
-   * If the Change Request is already in Read/Write mode, that operation
-   * is a no-op.
-   */
-  def setReadWrite(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-
-  /**
-   * Lock the Change Request so that subsequent call to updateChangeRequest
-   * can not be made (they will return an error).
-   * If the Change Request is already in Read Only mode, that operation
-   * is a no-op.
-   */
-  def setReadOnly(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
 }

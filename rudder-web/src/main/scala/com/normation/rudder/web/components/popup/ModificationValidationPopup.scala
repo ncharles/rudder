@@ -401,7 +401,6 @@ class ModificationValidationPopup(
                   changeRequestService.createChangeRequestFromDirective(
                       changeRequestName.get
                     , changeRequestDescription.get
-                    , false
                     , techniqueName
                     , rootSection
                     , directive.id
@@ -426,8 +425,7 @@ class ModificationValidationPopup(
               case "quick" =>
                 for {
                   saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map( _.get ))
-                  closed    <- woChangeRequestRepo.setReadOnly(saved.id, CurrentUser.getActor, crReasons.map( _.get ))
-                  wfStarted <- workflowService.startWorkflow(closed,CurrentUser.getActor, crReasons.map( _.get ))
+                  wfStarted <- workflowService.startWorkflow(saved.id,CurrentUser.getActor, crReasons.map( _.get ))
                 } yield {
                   wfStarted
                 }

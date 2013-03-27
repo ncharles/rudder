@@ -92,11 +92,6 @@ case class ChangeRequestId(value:String) {
 final case class ChangeRequestInfo(
     name       : String
   , description: String
-  // A marker to know if the ChangeRequest can be modified or not.
-  // A change request can be modified only at certain point in
-  // workflow, and for example we don't want someone to modify a
-  // changeRequest just after the moment a reviewer validated it
-  , readOnly   : Boolean
 )
 
 object ChangeRequest {

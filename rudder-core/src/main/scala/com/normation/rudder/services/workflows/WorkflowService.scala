@@ -231,7 +231,7 @@ class WorkflowServiceImpl(
       case Validation => Validation.id -> Seq((Deployment.id,stepValidationToDeployment _),(Deployed.id,stepValidationToDeployed _))
       case Deployment => Deployment.id -> Seq((Deployed.id,stepDeploymentToDeployed _))
       case Deployed   => Deployed.id -> Seq()
-      case Cancelled   => Cancelled.id -> Seq()
+      case Cancelled  => Cancelled.id -> Seq()
     }.toMap
 
   val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
@@ -239,7 +239,7 @@ class WorkflowServiceImpl(
       case Validation => Validation.id -> Seq((Cancelled.id,stepValidationToCancelled _))
       case Deployment => Deployment.id -> Seq((Cancelled.id,stepDeploymentToCancelled _))
       case Deployed   => Deployed.id -> Seq()
-      case Cancelled   => Cancelled.id -> Seq()
+      case Cancelled  => Cancelled.id -> Seq()
     }.toMap
 
   def findStep(changeRequestId: ChangeRequestId) = {
