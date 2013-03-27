@@ -84,8 +84,6 @@ import ChangeRequestEditForm._
   def display: NodeSeq =
     ( "#detailsForm *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
       ClearClearable &
-      "#rebaseButton *" #> {if (info.readOnly) Text("you can't apply those change on actual state anymore") else <span>Reprepare your change request over the current configuration?</span>++SHtml.ajaxButton("Reprepare", () => Noop,("style","margin-left:10px;"))} &
-      "#warning [class+]" #> {if (true/* condition de rebase*/) "" else "nodisplay"} &
       "#CRName *" #> changeRequestName.toForm_! &
       "#CRId *"   #> crId.value &
       "#CRStatusDetails *"   #> workflowService.findStep(crId).value &

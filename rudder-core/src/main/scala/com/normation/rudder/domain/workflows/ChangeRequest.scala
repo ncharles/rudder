@@ -64,9 +64,6 @@ case class ModifyToChangeRequestDiff(
     changeRequest: ChangeRequest
 ) extends ChangeRequestDiff
 
-case class RebaseChangeRequestDiff(
-    changeRequest: ChangeRequest
-) extends ChangeRequestDiff
 
 case class ChangeRequestEventLog(
     actor       : EventActor

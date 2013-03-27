@@ -338,7 +338,6 @@ import ChangeRequestChangesForm._
            case AddChangeRequestDiff(_) => "Change request created"
            case ModifyToChangeRequestDiff(_) => "Change request details changed"
            case DeleteChangeRequestDiff(_) => "Change request deleted"
-           case RebaseChangeRequestDiff(_) => "Rebased"
          }}
       </td>
       <td id="actor">

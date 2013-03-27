@@ -196,7 +196,6 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
           case ModifyToChangeRequestDiff(_) => "Modified"
           case AddChangeRequestDiff(_)    => "Created"
           case DeleteChangeRequestDiff(_) => "Deleted"
-          case RebaseChangeRequestDiff(_) => "Resynchronise with current values"
         }
         (s"${actionName} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}",Some(date))
     }
