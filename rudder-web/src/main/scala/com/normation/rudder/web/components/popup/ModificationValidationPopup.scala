@@ -70,6 +70,7 @@ import com.normation.rudder.services.workflows.WorkflowService
 import com.normation.cfclerk.domain.SectionSpec
 import com.normation.rudder.web.model.RudderBaseField
 import com.normation.cfclerk.domain.TechniqueId
+import com.normation.rudder.domain.nodes.NodeGroupDiff
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -361,6 +362,13 @@ class ModificationValidationPopup(
     }
   }
 
+
+  private[this] def groupDiffFromAction(
+      group        : NodeGroup
+    , initialState : Option[NodeGroup]
+  ) : Box[NodeGroupDiff] = {
+      ???
+  }
   private[this] def onSubmit() : JsCmd = {
 
     if(formTracker.hasErrors) {
@@ -387,11 +395,14 @@ class ModificationValidationPopup(
                 ) )
 
           case Right((nodeGroup, optOriginal)) =>
-              Full(changeRequestService.createChangeRequestFromNodeGroup(
+              val action = groupDiffFromAction(nodeGroup, optOriginal)
+              action.map(
+              changeRequestService.createChangeRequestFromNodeGroup(
                   changeRequestName.get
                 , changeRequestDescription.get
                 , nodeGroup
                 , optOriginal
+                , _
                 , CurrentUser.getActor
                 , crReasons.map(_.get))
               )
@@ -409,7 +420,7 @@ class ModificationValidationPopup(
       savedChangeRequest match {
         case Full(_) =>
           val changeText = workflowEnabled match {
-            case true => 
+            case true =>
               item match {
                 case Left((techniqueName, rootSection, directive, optOriginal)) =>
                   <div>Your change on directive <b>{directive.name}</b> has been submited</div>
@@ -419,7 +430,7 @@ class ModificationValidationPopup(
             case false =>
               // No workflow means nothing to warn the user about
               <div/>
-          }          
+          }
           onSuccessCallback(changeText)
         case eb:EmptyBox =>
           val e = (eb ?~! "Error when trying to save your modification")

@@ -53,7 +53,7 @@ object ChangeRequestEditForm {
     } yield {
       chooseTemplate("component", "details", xml)
     }) openOr Nil
- }
+}
 
 class ChangeRequestEditForm (
     var info: ChangeRequestInfo
@@ -61,11 +61,11 @@ class ChangeRequestEditForm (
   , crId:ChangeRequestId
   , SuccessCallback: ChangeRequestInfo => JsCmd
 ) extends DispatchSnippet with Loggable {
-import ChangeRequestEditForm._
 
-  def dispatch = {
-    case "details" => { _ => display }
-  }
+  import ChangeRequestEditForm._
+
+  def dispatch = { case "details" => { _ => display } }
+
   private[this] val changeRequestName =new WBTextField("Name", info.name) {
     override def setFilter = notNull _ :: trim _ :: Nil
     override def className = "twoCol"
