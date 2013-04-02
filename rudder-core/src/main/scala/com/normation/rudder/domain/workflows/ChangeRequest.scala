@@ -260,25 +260,52 @@ case class DirectiveChanges(
 )extends Changes[(TechniqueName, Directive, SectionSpec), ChangeRequestDirectiveDiff, DirectiveChangeItem]
 
 
+//////////////////// Node Part //////////////////////////////////////////////
+
 case class NodeGroupChangeItem(
   //no ID: that object does not have any meaning outside
   // a change request
     actor       : EventActor
   , creationDate: DateTime
   , reason      : Option[String]
-  , diff        : NodeGroupDiff
-) extends ChangeItem[NodeGroupDiff]
+  , diff        : ChangeRequestNodeGroupDiff
+) extends ChangeItem[ChangeRequestNodeGroupDiff]
 
 case class NodeGroupChange(
     val initialState: Option[NodeGroup]
-  , val firstChange: NodeGroupChangeItem
-  , val nextChanges: Seq[NodeGroupChangeItem]
-) extends Change[NodeGroup, NodeGroupDiff, NodeGroupChangeItem] {
-  def change = ???
+  , val firstChange : NodeGroupChangeItem
+  , val nextChanges : Seq[NodeGroupChangeItem]
+) extends Change[NodeGroup, ChangeRequestNodeGroupDiff, NodeGroupChangeItem] {
+  private[this] def recChange(
+      previousState : Box[NodeGroupChangeItem]    
+    , nexts         : List[NodeGroupChangeItem]) :  Box[NodeGroupChangeItem]  = {
+    previousState match {
+      case eb:EmptyBox => eb
+      case Full(x) => nexts match {
+        case Nil => Full(x) // no other changes
+        case h :: tail => (x.diff,h.diff) match {
+          case ( _ , a:AddNodeGroupDiff) => Failure("Trying to add an already existing NodeGroup (in the context of that change)")
+          case (a:AddNodeGroupDiff, _) => recChange(Full(h), tail)
+          case (d:DeleteNodeGroupDiff, _) => Failure("Trying to apply changes to a deleted NodeGroup (in the context of that change request)")
+          case (m:ModifyToNodeGroupDiff, _) => recChange(Full(h), tail)
+        }
+      }
+    }
+  }
+  
+  // compute the change from the initial state to the end of the change request
+  def change = {
+    val allChanges = firstChange :: nextChanges.toList
+    (initialState, firstChange.diff) match {
+      case (None, a:AddNodeGroupDiff) => recChange(Full(firstChange), nextChanges.toList)
+      case (None, _) => Failure("Trying to modify or delete a non existing Node Group (in the context of that change request)")
+      case (Some(nodeGroupChange), x) => recChange(Full(firstChange.copy( diff = ModifyToNodeGroupDiff(nodeGroupChange))), allChanges)
+    }
+  }
 }
 
 case class NodeGroupChanges(
     val changes: NodeGroupChange
   , val changeHistory: Seq[NodeGroupChange]
-)extends Changes[NodeGroup, NodeGroupDiff, NodeGroupChangeItem]
+)extends Changes[NodeGroup, ChangeRequestNodeGroupDiff, NodeGroupChangeItem]
 
