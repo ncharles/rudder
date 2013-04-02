@@ -80,8 +80,8 @@ case class ChangeRequestEventLog(
  */
 
 
-case class ChangeRequestId(value:String) {
-  override def toString = value
+case class ChangeRequestId(value:Int) {
+  override def toString = value.toString
 }
 
 

@@ -47,6 +47,9 @@ import org.joda.time.DateTime
 import com.normation.rudder.domain.workflows.AddChangeRequestDiff
 import com.normation.rudder.domain.workflows.DeleteChangeRequestDiff
 import com.normation.rudder.domain.workflows.ModifyToChangeRequestDiff
+import com.normation.rudder.domain.policies.DirectiveId
+import com.normation.rudder.domain.nodes.NodeGroupId
+import com.normation.rudder.domain.policies.RuleId
 
 class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepository with WoDraftChangeRequestRepository {
 
@@ -134,5 +137,14 @@ class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends 
       }
 
   }
+  
+  def getByIds(changeRequestId:Seq[ChangeRequestId]) : Box[Seq[ChangeRequest]] =  ???
+  
+  def getByDirective(id : DirectiveId) : Box[Seq[ChangeRequest]] = ???
+  
+  def getByNodeGroup(id : NodeGroupId) : Box[Seq[ChangeRequest]] = ???
+  
+  def getByRule(id : RuleId) : Box[Seq[ChangeRequest]] = ???
+  
 
 }

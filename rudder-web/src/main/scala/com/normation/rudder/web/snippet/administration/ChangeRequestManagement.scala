@@ -98,7 +98,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   def CRLine(cr: ChangeRequest)=
     <tr>
       <td id="crId">
-         {SHtml.a(() => S.redirectTo(s"/secure/utilities/changeRequest/${cr.id}"), Text(cr.id.value))}
+         {SHtml.a(() => S.redirectTo(s"/secure/utilities/changeRequest/${cr.id}"), Text(cr.id.value.toString))}
       </td>
       <td id="crStatus">
          {workflowService.findStep(cr.id)}

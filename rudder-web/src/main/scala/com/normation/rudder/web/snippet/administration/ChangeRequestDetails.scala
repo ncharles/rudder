@@ -92,7 +92,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   private[this] val workflowService = RudderConfig.workflowService
 
   private[this] val changeRequestTableId = "ChangeRequestId"
-  private[this] val CrId: Box[String] = {S.param("crId") }
+  private[this] val CrId: Box[Int] = {S.param("crId").map(x=>x.toInt) }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {
     case Full(id) => roChangeRequestRepository.get(ChangeRequestId(id)) match {
       case Full(Some(cr)) => Full(cr)

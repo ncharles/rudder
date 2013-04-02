@@ -71,6 +71,7 @@ import com.normation.cfclerk.domain.SectionSpec
 import com.normation.rudder.web.model.RudderBaseField
 import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.nodes.NodeGroupDiff
+import com.normation.rudder.domain.nodes.ChangeRequestNodeGroupDiff
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -366,7 +367,7 @@ class ModificationValidationPopup(
   private[this] def groupDiffFromAction(
       group        : NodeGroup
     , initialState : Option[NodeGroup]
-  ) : Box[NodeGroupDiff] = {
+  ) : Box[ChangeRequestNodeGroupDiff] = {
       ???
   }
   private[this] def onSubmit() : JsCmd = {

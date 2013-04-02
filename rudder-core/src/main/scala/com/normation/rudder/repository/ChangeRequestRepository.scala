@@ -40,6 +40,10 @@ import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.eventlog.EventActor
 import com.normation.eventlog.EventActor
+import com.normation.rudder.domain.workflows.WorkflowNode
+import com.normation.rudder.domain.policies.DirectiveId
+import com.normation.rudder.domain.nodes.NodeGroupId
+import com.normation.rudder.domain.policies.RuleId
 
 /**
  * Before going wild, change request are in Draft
@@ -79,6 +83,21 @@ trait RoChangeRequestRepository {
   def getAll() : Box[Seq[ChangeRequest]]
 
   def get(changeRequestId:ChangeRequestId) : Box[Option[ChangeRequest]]
+  
+  /**
+   * Returns all the change request which are within this ids
+   * It is meant to be used with the workflow engine, to fetch all
+   * CRs in a specific state
+   */
+  def getByIds(changeRequestId:Seq[ChangeRequestId]) : Box[Seq[ChangeRequest]]
+  
+  def getByDirective(id : DirectiveId) : Box[Seq[ChangeRequest]]
+  
+  def getByNodeGroup(id : NodeGroupId) : Box[Seq[ChangeRequest]]
+  
+  def getByRule(id : RuleId) : Box[Seq[ChangeRequest]]
+  
+  
 }
 
 /**

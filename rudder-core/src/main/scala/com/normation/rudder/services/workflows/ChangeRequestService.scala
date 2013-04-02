@@ -48,6 +48,7 @@ import com.normation.rudder.domain.policies.DeleteDirectiveDiff
 import com.normation.rudder.domain.policies.ChangeRequestDirectiveDiff
 import com.normation.rudder.domain.policies.DirectiveId
 import com.normation.rudder.domain.nodes.NodeGroupDiff
+import com.normation.rudder.domain.nodes.ChangeRequestNodeGroupDiff
 
 
 
@@ -74,7 +75,7 @@ trait ChangeRequestService {
     , changeRequestDesc: String
     , nodeGroup        : NodeGroup
     , originalNodeGroup: Option[NodeGroup]
-    , diff             : NodeGroupDiff
+    , diff             : ChangeRequestNodeGroupDiff
     , actor            : EventActor
     , reason           : Option[String]
   ) : ConfigurationChangeRequest
@@ -90,7 +91,7 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
   private[this] def getNextId = {
     val id = nextId
     nextId = nextId + 1
-    id.toString
+    id
   }
 
   def createChangeRequestFromDirective(
@@ -132,7 +133,7 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
     , changeRequestDesc: String
     , nodeGroup        : NodeGroup
     , originalNodeGroup: Option[NodeGroup]
-    , diff             : NodeGroupDiff
+    , diff             : ChangeRequestNodeGroupDiff
     , actor            : EventActor
     , reason           : Option[String]
   ) : ConfigurationChangeRequest = {
