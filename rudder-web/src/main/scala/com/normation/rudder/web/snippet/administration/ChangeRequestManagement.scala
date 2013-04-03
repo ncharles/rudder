@@ -90,7 +90,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
         $$('.dataTables_filter input').attr("placeholder", "Search");
         ${initFilter match {
           case Full(filter) => s"$$('#${changeRequestTableId}').dataTable().fnFilter('${filter}',1,true,false,true);"
-          case eb:EmptyBox => ""
+          case eb:EmptyBox => s"$$('#${changeRequestTableId}').dataTable().fnFilter('pending',1,true,false,true);"
           }
         }"""
 
@@ -195,7 +195,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
                                 list.head
           , ("style","width:auto;padding-right:3px;")
         )
-      filterForm(multiSelect,"...",unexpandedFilter)
+      filterForm(multiSelect,".",unexpandedFilter)
     }
 
   unexpandedFilter(initFilter.getOrElse("Pending"))
