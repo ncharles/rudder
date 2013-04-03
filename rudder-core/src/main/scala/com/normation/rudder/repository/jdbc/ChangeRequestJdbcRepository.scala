@@ -54,13 +54,16 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import com.normation.rudder.domain.policies.DirectiveId
 import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.policies.RuleId
+import com.normation.rudder.repository.WoChangeRequestRepository
+import com.normation.rudder.services.marshalling.ChangeRequestChangesSerialisation
+import org.springframework.jdbc.support.GeneratedKeyHolder
+import org.springframework.jdbc.core.PreparedStatementCreator
+import com.normation.eventlog.EventActor
 
 class RoChangeRequestJdbcRepository(
     jdbcTemplate : JdbcTemplate
 ) extends RoChangeRequestRepository with Loggable {
-
-  val INSERT_SQL = "insert into ChangeRequest (name, description, creationTime, content) values (?, ?, ?, ?)"
-    
+   
   val SELECT_SQL = "SELECT id, name, description, creationTime, content FROM ChangeRequest"
     
   def getAll() : Box[Seq[ChangeRequest]] = {
@@ -104,7 +107,7 @@ class RoChangeRequestJdbcRepository(
   }
 
   def getByDirective(id : DirectiveId) : Box[Seq[ChangeRequest]] = {
-    val directiveQuery = " where cast (xpath('/path/to/directive/text()', content) as text[]) = '{?}'"
+    val directiveQuery = " where cast (xpath('/directives/directive/@directive', content) as text[]) = '{?}'"
     Try {
       jdbcTemplate.query(SELECT_SQL + directiveQuery, Array[AnyRef](id.value), ChangeRequestsMapper).toSeq
     } match {
@@ -117,8 +120,98 @@ class RoChangeRequestJdbcRepository(
   
   def getByRule(id : RuleId) : Box[Seq[ChangeRequest]] = ???
   
-  
 }
+
+class WoChangeRequestJdbcRepository(
+    jdbcTemplate : JdbcTemplate
+  , crSerialiser : ChangeRequestChangesSerialisation
+  , roRepo       : RoChangeRequestJdbcRepository
+) extends WoChangeRequestRepository with Loggable {
+
+  val INSERT_SQL = "insert into ChangeRequest (name, description, creationTime, content) values (?, ?, ?, ?)"
+ 
+  val UPDATE_SQL = "update ChangeRequest set name = ?, description = ?,  content = ?) where id = ?"
+ 
+  /**
+   * Save a new change request in the back-end.
+   * The id is ignored, and a new one will be attributed
+   * to the change request.
+   */
+  def createChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest] = {
+    val keyHolder = new GeneratedKeyHolder()
+
+    Try {
+      jdbcTemplate.update(
+        new PreparedStatementCreator() {
+           def createPreparedStatement(connection : Connection) : PreparedStatement = {
+             val sqlXml = connection.createSQLXML()
+             sqlXml.setString(crSerialiser.serialise(changeRequest).toString)
+
+             val ps = connection.prepareStatement(
+                 INSERT_SQL, Seq[String]("id").toArray[String]);
+
+             ps.setString(1, changeRequest.info.name)
+             ps.setString(2, changeRequest.info.description)
+             ps.setTimestamp(3, new Timestamp(DateTime.now().getMillis()))
+             ps.setSQLXML(4, sqlXml) // have a look at the SQLXML
+
+             ps
+           }
+         },
+         keyHolder)
+         roRepo.get(ChangeRequestId(keyHolder.getKey().intValue))
+    } match {
+      case Success(x) => x match {
+        case Full(Some(entry)) => Full(entry)
+        case Full(None) => Failure("Couldn't find newly created entry when saving Change Request")
+        case eb : EmptyBox => eb
+      }
+      case Catch(error) => Failure(error.toString())
+    }
+  }
+  
+  /**
+   * Delete a change request.
+   * (whatever the read/write mode is).
+   */
+  def deleteChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest] = {
+    // we should update it rather, isn't it ?
+    ???
+  }
+  
+  /**
+   * Update a change request. The change request must exists.
+   */
+  def updateChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest] = {
+    // I will need a transaction if I need to change the status http://static.springsource.org/spring/docs/3.0.x/spring-framework-reference/html/transaction.html#transaction-programmatic
+    Try {
+      roRepo.get(changeRequest.id) match {
+        case Full(None) => 
+          logger.warn(s"Cannot update non-existant Change Request with id ${changeRequest.id.value}")
+          Failure(s"Cannot update non-existant Change Request with id ${changeRequest.id.value}")
+        case eb : EmptyBox => eb
+        case Full(Some(entry)) => // ok
+          // we don't change the creation date !
+          jdbcTemplate.update(
+              UPDATE_SQL
+            , changeRequest.info.name
+            , changeRequest.info.description
+            , crSerialiser.serialise(changeRequest).toString
+           )
+           roRepo.get(changeRequest.id)
+      }
+    } match {
+        case Success(x) => x match {
+            case Full(Some(entry)) => Full(entry)
+            case Full(None) => Failure("Couldn't find newly created entry when saving Change Request")
+            case eb : EmptyBox => eb
+          }
+        case Catch(error) => Failure(error.toString())
+    }
+  }
+}
+
+
 
 object ChangeRequestsMapper extends RowMapper[ChangeRequest] with Loggable {
   def mapRow(rs : ResultSet, rowNum: Int) : ChangeRequest = {

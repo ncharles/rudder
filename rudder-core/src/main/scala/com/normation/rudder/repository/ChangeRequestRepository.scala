@@ -106,9 +106,8 @@ trait RoChangeRequestRepository {
 trait WoChangeRequestRepository {
 
   /**
-   *
    * Save a new change request in the back-end.
-   * The idea is ignored, and a new one will be attributed
+   * The id is ignored, and a new one will be attributed
    * to the change request.
    */
   def createChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest]

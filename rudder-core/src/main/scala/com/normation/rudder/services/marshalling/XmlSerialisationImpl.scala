@@ -226,9 +226,9 @@ class DeploymentStatusSerialisationImpl(xmlVersion:String) extends DeploymentSta
  *
  */
 class ChangeRequestChangesSerialisationImpl(
-    xmlVersion:String
-  , nodeGroupSerializer:NodeGroupSerialisation
-  , directiveSerializer:DirectiveSerialisation
+    xmlVersion         : String
+  , nodeGroupSerializer: NodeGroupSerialisation
+  , directiveSerializer: DirectiveSerialisation
   , techniqueRepo      : TechniqueRepository
 ) extends ChangeRequestChangesSerialisation {
   def serialise(changeRequest:ChangeRequest): Elem = {
@@ -272,10 +272,8 @@ class ChangeRequestChangesSerialisationImpl(
     changeRequest match {
 
       case changeRequest : ConfigurationChangeRequest =>
-
-
-    val groups = changeRequest.nodeGroups.map{ case (nodeGroupId,group) =>
-      <group id={nodeGroupId.value}>
+        val groups = changeRequest.nodeGroups.map{ case (nodeGroupId,group) =>
+          <group id={nodeGroupId.value}>
             <initialState>
               {group.changes.initialState.map(nodeGroupSerializer.serialise(_)).getOrElse(NodeSeq.Empty)}
             </initialState>
@@ -286,16 +284,15 @@ class ChangeRequestChangesSerialisationImpl(
               {group.changes.nextChanges.map(serializeGroupChange(_))}
             </nextChanges>
           </group>
-    }
+          }
 
-    val directives = changeRequest.directives.map{ case (directiveId,directive) =>
-      <directive id={directiveId.value}>
+        val directives = changeRequest.directives.map{ case (directiveId,directive) =>
+          <directive id={directiveId.value}>
             <initialState>
               {directive.changes.initialState.map{
-                case (techniqueName,directive,rootSection) =>
-
-                  directiveSerializer.serialise(techniqueName,rootSection,directive)
-               }.getOrElse(NodeSeq.Empty)
+                    case (techniqueName,directive,rootSection) =>
+                      directiveSerializer.serialise(techniqueName,rootSection,directive)
+                 }.getOrElse(NodeSeq.Empty)
               }
             </initialState>
               <firstChange>
@@ -305,9 +302,9 @@ class ChangeRequestChangesSerialisationImpl(
               {directive.changes.nextChanges.map(serializeDirectiveChange(_))}
             </nextChanges>
           </directive>
-    }
+        }
 
-    <changeRequest fileFormat="2">
+    <changeRequest fileFormat={xmlVersion}>
       <groups>
         {groups}
       </groups>
