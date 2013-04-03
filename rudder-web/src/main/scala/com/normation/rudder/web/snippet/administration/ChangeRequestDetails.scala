@@ -90,7 +90,6 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   private[this] val roChangeRequestRepository = RudderConfig.roChangeRequestRepository
   private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
   private[this] val workflowService = RudderConfig.workflowService
-
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[Int] = {S.param("crId").map(x=>x.toInt) }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {
@@ -105,6 +104,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       Failure(s"Error in the cr id asked: ${fail.msg}")
   }
 
+  private[this] var step = changeRequest.map(cr => workflowService.findStep(cr.id))
   def dispatch = {
     // Display Change request Header
     case "header" =>
@@ -148,17 +148,25 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
         changeRequest match {
           case eb:EmptyBox => NodeSeq.Empty
           case Full(cr) =>
-            ("#backStep" #>
-               SHtml.ajaxButton(
-                   "Cancel"
-                 , () => ChangeStepPopup("Cancel",workflowService.backSteps(workflowService.findStep(cr.id)),cr)
-              ) &
-             "#nextStep" #>
+            step match {
+            case eb:EmptyBox =>  NodeSeq.Empty
+            case Full(step) =>
+            ("#backStep" #> { workflowService.backSteps(step) match {
+                  case Nil => NodeSeq.Empty
+                  case steps =>
+                    SHtml.ajaxButton(
+                        "Cancel"
+                      , () => ChangeStepPopup("Cancel",workflowService.backSteps(workflowService.findStep(cr.id)),cr)
+              ) } }  &
+             "#nextStep" #> {workflowService.nextSteps(step) match {
+                             case Nil => NodeSeq.Empty
+              case steps =>
                SHtml.ajaxButton(
                    "Accept"
                  , () => ChangeStepPopup("Accept",workflowService.nextSteps(workflowService.findStep(cr.id)),cr)
-               )
+               ) } }
             ) (xml)
+            }
         }
       )
   }
@@ -201,7 +209,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       case (Some(date),Some(stepDate)) => if (date.isAfter(stepDate)) action else step
     }
     ( "#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
-      "#CRName *" #> s"CR#${cr.id}: ${cr.info.name}" &
+      "#CRName *" #> s"CR #${cr.id}: ${cr.info.name}" &
       "#CRStatus *" #> workflowService.findStep(cr.id).value &
       "#CRLastAction *" #> s"${ last }"
     ) (header)
@@ -253,7 +261,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
 
     val content = {
       ( "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message." &
-        "#header"   #>  s"${action} CR#${cr.id}: ${cr.info.name}" &
+        "#header"   #>  s"${action} CR #${cr.id}: ${cr.info.name}" &
         "#form *+"  #>
           SHtml.ajaxForm(
             ( "#reason"  #> stepMessage.toForm_! &
