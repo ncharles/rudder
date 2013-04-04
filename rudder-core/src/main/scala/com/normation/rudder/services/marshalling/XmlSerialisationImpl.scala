@@ -239,9 +239,9 @@ class ChangeRequestChangesSerialisationImpl(
         <date>{change.creationDate}</date>
         <reason>{change.reason.getOrElse("")}</reason>
         { change.diff match {
-          case  AddNodeGroupDiff(group) => <add>{nodeGroupSerializer.serialise(group)}</add>
-          case DeleteNodeGroupDiff(group) => <delete>{nodeGroupSerializer.serialise(group)}</delete>
-          case ModifyToNodeGroupDiff(group) => <modifyTo>{nodeGroupSerializer.serialise(group)}</modifyTo>
+          case  AddNodeGroupDiff(group) => <diff action="add">{nodeGroupSerializer.serialise(group)}</diff>
+          case DeleteNodeGroupDiff(group) => <diff action="delete">{nodeGroupSerializer.serialise(group)}</diff>
+          case ModifyToNodeGroupDiff(group) => <diff action="modifyTo">{nodeGroupSerializer.serialise(group)}</diff>
           case _ => "should not be here"
         } }
       </change>
@@ -256,14 +256,14 @@ class ChangeRequestChangesSerialisationImpl(
           case  AddDirectiveDiff(techniqueName,directive) =>
             techniqueRepo.get(TechniqueId(techniqueName,directive.techniqueVersion)) match {
               case None => (s"Error, could not retrieve technique ${techniqueName} version ${directive.techniqueVersion.toString}")
-              case Some(technique) => <add>{directiveSerializer.serialise(techniqueName,technique.rootSection,directive)}</add>
+              case Some(technique) => <diff action="add">{directiveSerializer.serialise(techniqueName,technique.rootSection,directive)}</diff>
              }
           case DeleteDirectiveDiff(techniqueName,directive) =>
             techniqueRepo.get(TechniqueId(techniqueName,directive.techniqueVersion)) match {
               case None => (s"Error, could not retrieve technique ${techniqueName} version ${directive.techniqueVersion.toString}")
-              case Some(technique) => <delete>{directiveSerializer.serialise(techniqueName,technique.rootSection,directive)}</delete>
+              case Some(technique) => <diff action="delete">{directiveSerializer.serialise(techniqueName,technique.rootSection,directive)}</diff>
              }
-          case ModifyToDirectiveDiff(techniqueName,directive,rootSection) => <modifyTo>{directiveSerializer.serialise(techniqueName,rootSection,directive)}</modifyTo>
+          case ModifyToDirectiveDiff(techniqueName,directive,rootSection) => <diff action="modifyTo">{directiveSerializer.serialise(techniqueName,rootSection,directive)}</diff>
         } }
       </change>
     }
@@ -307,7 +307,7 @@ class ChangeRequestChangesSerialisationImpl(
           </directive>
     }
 
-    <changeRequest fileFormat="2">
+    createTrimedElem(XML_TAG_CHANGE_REQUEST, xmlVersion)  (
       <groups>
         {groups}
       </groups>
@@ -329,7 +329,7 @@ class ChangeRequestChangesSerialisationImpl(
             </nextChanges>
           </rule>*/}
       </rules>
-      </changeRequest>
+      )
 
    case _ => <not_implemented_yet />
   }
