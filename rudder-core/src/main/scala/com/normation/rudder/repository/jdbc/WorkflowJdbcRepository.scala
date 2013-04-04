@@ -51,7 +51,7 @@ import org.springframework.jdbc.core.PreparedStatementCreator
 class RoWorkflowJdbcRepository(
     jdbcTemplate : JdbcTemplate
 )extends RoWorkflowRepository with Loggable {
-  val SELECT_SQL = "SELECT id, state FROM Workflow"
+  val SELECT_SQL = "SELECT id, state FROM Workflow "
     
   def getAllByState(state : WorkflowNodeId) :  Box[Seq[ChangeRequestId]] = {
     Try {
@@ -67,9 +67,30 @@ class RoWorkflowJdbcRepository(
      Try {
       val list = jdbcTemplate.query(SELECT_SQL + "WHERE id = ?", Array[AnyRef](crId.value.asInstanceOf[AnyRef]), DummyWorkflowsMapper)
       list.toSeq match {
-        case seq if seq.size == 0 => Failure(s"Change request ${crId.value} doesn't exist")
-        case seq if seq.size > 1 => Failure(s"Too many change request with same id ${crId.value}")
+        case seq if seq.size == 0 =>
+          logger.warn(s"Change request ${crId.value} doesn't exist")
+          Failure(s"Change request ${crId.value} doesn't exist")
+        case seq if seq.size > 1 => 
+          logger.error(s"Too many change request with same id ${crId.value}")
+          Failure(s"Too many change request with same id ${crId.value}")
         case seq if seq.size == 1 => Full(WorkflowNodeId(seq.head.state))
+      }
+    } match {
+      case Success(x) => x
+      case Catch(error) => Failure(error.toString())
+    }
+  }
+  
+  def isChangeRequestInWorkflow(crId: ChangeRequestId) : Box[Boolean] = {
+     Try {
+      val list = jdbcTemplate.query(SELECT_SQL + "WHERE id = ?", Array[AnyRef](crId.value.asInstanceOf[AnyRef]), DummyWorkflowsMapper)
+      list.toSeq match {
+        case seq if seq.size == 0 =>
+          Full(true)
+        case seq if seq.size > 1 => 
+          logger.error(s"Too many change request with same id ${crId.value}")
+          Failure(s"Too many change request with same id ${crId.value}")
+        case seq if seq.size == 1 => Full(false)
       }
     } match {
       case Success(x) => x
@@ -80,36 +101,43 @@ class RoWorkflowJdbcRepository(
 
 class WoWorkflowJdbcRepository(
     jdbcTemplate : JdbcTemplate
-  , roRepo       : RoWorkflowJdbcRepository
+  , roRepo       : RoWorkflowRepository
 )extends WoWorkflowRepository with Loggable {
-  val UPDATE_SQL = "update Workflow set state = ? where id = ?"
+  val UPDATE_SQL = "UPDATE Workflow set state = ? where id = ?"
 
-  val INSERT_SQL = "insert into Workflow (id, state) values (?, ?)"
+  val INSERT_SQL = "INSERT into Workflow (id, state) values (?, ?)"
  
   def createWorkflow(crId: ChangeRequestId, state : WorkflowNodeId) : Box[WorkflowNodeId] = {
     Try {
-      roRepo.getStateOfChangeRequest(crId) match {
+      roRepo.isChangeRequestInWorkflow(crId) match {
         case eb : EmptyBox => eb
-        case Full(entry) =>
+        case Full(true) =>
           jdbcTemplate.update(
               INSERT_SQL
-            , Array[AnyRef](crId.value.asInstanceOf[AnyRef], state.value)
+            , new java.lang.Integer(crId.value)
+            , state.value
           )
           roRepo.getStateOfChangeRequest(crId)
+        case _ => 
+          logger.error(s"Cannot start a workflow for Change Request id ${crId.value}, as it is already part of a workflow")
+          Failure(s"Cannot start a workflow for Change Request id ${crId.value}, as it is already part of a workflow")
+          
       }
     } match {
       case Success(x) => x 
-      case Catch(error) => Failure(error.toString())
+      case Catch(error) => 
+        logger.error(error.toString)
+        Failure(error.toString())
     }
   }
 
-  def updateState(crId: ChangeRequestId, state : WorkflowNodeId) : Box[WorkflowNodeId] = {
+  def updateState(crId: ChangeRequestId, from :  WorkflowNodeId, state : WorkflowNodeId) : Box[WorkflowNodeId] = {
     Try {
       roRepo.getStateOfChangeRequest(crId) match {
         case eb : EmptyBox => eb
         case Full(entry) =>
-          if (entry == state) {
-            Failure(s"Cannot change state of ChangeRequest id ${crId.value} to ${state.value} : it already has this value")
+          if (entry != from) {
+            Failure(s"Cannot change state of ChangeRequest id ${crId.value} : it has the state ${entry.value} but we were expecting ${from.value}")
           } else {
             jdbcTemplate.update(
                   UPDATE_SQL

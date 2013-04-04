@@ -176,12 +176,10 @@ class ModificationValidationPopup(
   import ModificationValidationPopup._
 
   private[this] val userPropertyService      = RudderConfig.userPropertyService
-  private[this] val roDraftChangeRequestRepo = RudderConfig.roDraftChangeRequestRepository
   private[this] val woChangeRequestRepo      = RudderConfig.woChangeRequestRepository
   private[this] val changeRequestService     = RudderConfig.changeRequestService
   private[this] val workflowService          = RudderConfig.workflowService
   private[this] val dependencyService        = RudderConfig.dependencyAndDeletionService
-  private[this] val woDraftChangeRequestRepo = RudderConfig.woDraftChangeRequestRepository
   private[this] val workflowEnabled          = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
 
   private[this] val techniqueRepo            = RudderConfig.techniqueRepository

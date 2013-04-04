@@ -122,7 +122,6 @@ class DirectiveEditForm(
   private[this] val directiveEditorService = RudderConfig.directiveEditorService
   private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepo    = RudderConfig.roChangeRequestRepository
-  private[this] val roDraftChangeRequestRepository = RudderConfig.roDraftChangeRequestRepository
   private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
   private[this] val techniqueRepo          = RudderConfig.techniqueRepository
 

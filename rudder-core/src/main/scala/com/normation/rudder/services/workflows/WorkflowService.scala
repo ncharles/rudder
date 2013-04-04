@@ -36,9 +36,7 @@ package com.normation.rudder.services.workflows
 
 import scala.collection.mutable.Buffer
 import scala.collection.mutable.{ Map => MutMap }
-
 import org.joda.time.DateTime
-
 import com.normation.cfclerk.domain.TechniqueName
 import com.normation.eventlog.EventActor
 import com.normation.eventlog.ModificationId
@@ -54,8 +52,10 @@ import com.normation.rudder.repository.WoDirectiveRepository
 import com.normation.rudder.services.policies.DependencyAndDeletionService
 import com.normation.utils.Control._
 import com.normation.utils.StringUuidGenerator
-
 import net.liftweb.common._
+import com.normation.rudder.repository.WoWorkflowRepository
+import com.normation.rudder.repository.jdbc.WoChangeRequestJdbcRepository
+import com.normation.rudder.repository.RoWorkflowRepository
 
 /**
  * That service allows to glue Rudder with the
@@ -76,23 +76,8 @@ trait WorkflowService {
    * That abstraction is likelly to leak.
    *
    */
-  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
+  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId]
 
-  /**
-   * Notify who wants to know about the successful ending of the workflow
-   * process for the given change request
-   */
-  def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-
-  def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-
-  //allowed workflow steps
-
-  def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId]
-  def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
-  def stepValidationToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
-  def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
-  def stepDeploymentToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String])   : Box[ChangeRequestId]
 
   def getValidation : Box[Seq[ChangeRequestId]]
   def getDeployment : Box[Seq[ChangeRequestId]]
@@ -102,9 +87,9 @@ trait WorkflowService {
 
   val stepsValue :List[WorkflowNodeId]
 
-  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]]
-  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]]
-  def findStep(changeRequestId: ChangeRequestId) : WorkflowNodeId
+  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]]
+  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]]
+  def findStep(changeRequestId: ChangeRequestId) : Box[WorkflowNodeId]
 }
 
 
@@ -201,18 +186,19 @@ class NoWorkflowServiceImpl(
     commit: CommitAndDeployChangeRequest
 ) extends WorkflowService with Loggable {
 
+  val noWorfkflow = WorkflowNodeId("No Workflow")
   
-  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] = Map()
+  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] = Map()
 
-  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] = Map()
+  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] = Map()
   
-  def findStep(changeRequestId: ChangeRequestId) : WorkflowNodeId = ???
+  def findStep(changeRequestId: ChangeRequestId) : Box[WorkflowNodeId] = Failure("No state when no workflow")
 
   val stepsValue :List[WorkflowNodeId] = List()
   
-  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     logger.info("Automatically saving change")
-    commit.save(changeRequestId, actor, reason)
+    commit.save(changeRequestId, actor, reason).map(x => noWorfkflow)
   }
   
   // should we keep this one or the previous ??
@@ -264,36 +250,33 @@ class NoWorkflowServiceImpl(
 class WorkflowServiceImpl(
     log   : WorkflowProcessEventLogService
   , commit: CommitAndDeployChangeRequest
+  , roWorkflowRepo : RoWorkflowRepository
+  , woWorkflowRepo : WoWorkflowRepository
 ) extends WorkflowService with Loggable {
   private[this] sealed trait MyWorkflowNode extends WorkflowNode
 
 
   private[this] case object Validation extends MyWorkflowNode {
     val id = WorkflowNodeId("Pending validation")
-
-    val requests = Buffer[ChangeRequestId]()
   }
 
   private[this] case object Deployment extends MyWorkflowNode {
     val id = WorkflowNodeId("Pending deployment")
-    val requests = Buffer[ChangeRequestId]()
   }
 
   private[this] case object Deployed extends MyWorkflowNode {
     val id = WorkflowNodeId("Deployed")
-    val requests = Buffer[ChangeRequestId]()
   }
 
   private[this] case object Cancelled extends MyWorkflowNode {
     val id = WorkflowNodeId("Cancelled")
-    val requests = Buffer[ChangeRequestId]()
   }
 
   private[this] val steps:List[WorkflowNode] = List(Validation,Deployment,Deployed,Cancelled)
 
   val stepsValue = steps.map(_.id)
 
-  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
+  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] =
     steps.map{
       case Validation => Validation.id -> Seq((Deployment.id,stepValidationToDeployment _),(Deployed.id,stepValidationToDeployed _))
       case Deployment => Deployment.id -> Seq((Deployed.id,stepDeploymentToDeployed _))
@@ -301,7 +284,7 @@ class WorkflowServiceImpl(
       case Cancelled  => Cancelled.id -> Seq()
     }.toMap
 
-  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])]] =
+  val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] =
     steps.map{
       case Validation => Validation.id -> Seq((Cancelled.id,stepValidationToCancelled _))
       case Deployment => Deployment.id -> Seq((Cancelled.id,stepDeploymentToCancelled _))
@@ -309,8 +292,8 @@ class WorkflowServiceImpl(
       case Cancelled  => Cancelled.id -> Seq()
     }.toMap
 
-  def findStep(changeRequestId: ChangeRequestId) = {
-    steps.find(_.requests.contains(changeRequestId)).map(_.id).getOrElse(Cancelled.id)
+  def findStep(changeRequestId: ChangeRequestId) : Box[WorkflowNodeId] = {
+    roWorkflowRepo.getStateOfChangeRequest(changeRequestId)
   }
 
   private[this] def changeStep(
@@ -319,84 +302,80 @@ class WorkflowServiceImpl(
     , changeRequestId: ChangeRequestId
     , actor          : EventActor
     , reason         : Option[String]
-  ) : Box[ChangeRequestId] = {
-    //check the presence of the changeRequest in the first state, and migrate
-    //it, logging
-    if(from.requests.contains(changeRequestId)) {
-      from.requests -= changeRequestId
-      to.requests += changeRequestId
-      log.saveEventLog(StepWorkflowProcessEventLog(actor, DateTime.now, reason, from, to),changeRequestId)
-      Full(changeRequestId)
-    } else {
-      Failure(s"The workflow step ${from.id.value} does not contain the change request with ID ${changeRequestId.value}")
-    }
-  }
-
-  private[this] def toSuccess(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  ) : Box[WorkflowNodeId] = {
     for {
-      success <- changeStep(from, Deployed, changeRequestId, actor, reason)
-      saved   <- onSuccessWorkflow(changeRequestId, actor, reason)
+      state <- woWorkflowRepo.updateState(changeRequestId,from.id, to.id)
+      log <- log.saveEventLog(StepWorkflowProcessEventLog(actor, DateTime.now, reason, from, to),changeRequestId)
     } yield {
-      saved
+      state
     }
   }
 
-  private[this] def toFailure(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  private[this] def toFailure(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     for {
-      failure <- changeStep(from, Cancelled, changeRequestId, actor, reason)
-      failed  <- onFailureWorkflow(changeRequestId, actor, reason)
+      
+      failed  <- onFailureWorkflow(changeRequestId, from, actor, reason)
+      failure <- woWorkflowRepo.updateState(changeRequestId, from.id, Cancelled.id)
     } yield {
-      failed
+      failure
     }
   }
 
-  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    logger.info("start")
-    Validation.requests += changeRequestId
-    Full(changeRequestId)
+  def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
+    logger.info("start workflow")
+    woWorkflowRepo.createWorkflow(changeRequestId, Validation.id)
   }
 
-  def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  private[this]  def onSuccessWorkflow(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     logger.info("update")
-    commit.save(changeRequestId, actor, reason)
+    for {
+      save <- commit.save(changeRequestId, actor, reason)
+      state <- woWorkflowRepo.updateState(changeRequestId, from.id, Deployment.id)
+    } yield {
+      state
+    }
+    
   }
 
-  def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    //Only log the fact that something happened
-    logger.info(s"Change request with ID ${changeRequestId.value} was rejected")
-    Full(changeRequestId)
+  private[this] def onFailureWorkflow(changeRequestId: ChangeRequestId, from: MyWorkflowNode, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
+    for { 
+      failed  <- onFailureWorkflow(changeRequestId, from, actor, reason)
+      failure <- woWorkflowRepo.updateState(changeRequestId, from.id, Cancelled.id)
+    } yield {
+      failure
+    }
   }
 
   //allowed workflow steps
 
 
-  def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  private[this] def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     changeStep(Validation, Deployment, changeRequestId, actor, reason)
   }
 
 
-  def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    toSuccess(Validation, changeRequestId, actor, reason)
+  private[this] def stepValidationToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
+    onSuccessWorkflow(Validation, changeRequestId, actor, reason)
   }
 
-  def stepValidationToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  private[this] def stepValidationToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     toFailure(Validation, changeRequestId, actor, reason)
   }
 
-  def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    toSuccess(Deployment, changeRequestId, actor, reason)
+  private[this] def stepDeploymentToDeployed(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
+    onSuccessWorkflow(Deployment, changeRequestId, actor, reason)
   }
 
 
-  def stepDeploymentToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
+  private[this] def stepDeploymentToCancelled(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     toFailure(Deployment, changeRequestId, actor, reason)
   }
 
 
-  def getValidation : Box[Seq[ChangeRequestId]] = Full(Validation.requests)
-  def getDeployment : Box[Seq[ChangeRequestId]] = Full(Deployment.requests)
-  def getDeployed   : Box[Seq[ChangeRequestId]] = Full(Deployed.requests)
-  def getCancelled  : Box[Seq[ChangeRequestId]] = Full(Cancelled.requests)
+  def getValidation : Box[Seq[ChangeRequestId]] = roWorkflowRepo.getAllByState(Validation.id)
+  def getDeployment : Box[Seq[ChangeRequestId]] = roWorkflowRepo.getAllByState(Deployment.id)
+  def getDeployed   : Box[Seq[ChangeRequestId]] = roWorkflowRepo.getAllByState(Deployed.id)
+  def getCancelled  : Box[Seq[ChangeRequestId]] = roWorkflowRepo.getAllByState(Cancelled.id)
 }
 
 

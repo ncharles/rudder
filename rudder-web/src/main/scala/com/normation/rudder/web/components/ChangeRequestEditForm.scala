@@ -86,7 +86,7 @@ class ChangeRequestEditForm (
       ClearClearable &
       "#CRName *" #> changeRequestName.toForm_! &
       "#CRId *"   #> crId.value &
-      "#CRStatusDetails *"   #> workflowService.findStep(crId).value &
+      "#CRStatusDetails *"   #>  workflowService.findStep(crId).map(x => Text(x.value)).openOr(<div class="error">Cannot find the status of this change request</div>) &
       "#CRDescription *" #> changeRequestDescription.toForm_! &
       "#CRSave" #> SHtml.ajaxSubmit("Save", () =>  submit)
     ) (form) ++ Script(JsRaw("correctButtons();"))

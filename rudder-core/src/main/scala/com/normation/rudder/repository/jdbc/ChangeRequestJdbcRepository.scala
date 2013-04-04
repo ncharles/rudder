@@ -125,7 +125,7 @@ class RoChangeRequestJdbcRepository(
 class WoChangeRequestJdbcRepository(
     jdbcTemplate : JdbcTemplate
   , crSerialiser : ChangeRequestChangesSerialisation
-  , roRepo       : RoChangeRequestJdbcRepository
+  , roRepo       : RoChangeRequestRepository
 ) extends WoChangeRequestRepository with Loggable {
 
   val INSERT_SQL = "insert into ChangeRequest (name, description, creationTime, content) values (?, ?, ?, ?)"

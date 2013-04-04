@@ -50,8 +50,7 @@ case class WorkflowNodeId(value:String){
  * information between Rudder and the Workflow engine
  */
 trait WorkflowNode {
-  def id  : WorkflowNodeId
-  def requests: Buffer[ChangeRequestId]
+  def id      : WorkflowNodeId
 }
 
 sealed trait WorkflowProcessEventLog

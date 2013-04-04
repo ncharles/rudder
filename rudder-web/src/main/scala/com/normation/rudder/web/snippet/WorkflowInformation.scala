@@ -64,7 +64,7 @@ class WorkflowInformation extends DispatchSnippet with Loggable {
     workflowService.getValidation match {
       case Full(seq) =>
         seq.size match {
-          case 0 => ".pendingModifications" #> <span>There is no change request pending review</span>
+          case 0 => ".pendingModifications" #> <span>There are no change request pending review</span>
           case 1 => ".pendingModifications" #> <span>There is <a href="/secure/utilities/changeRequests/Pending_validation">1</a> change request pending review</span>
           case size => ".pendingModifications" #>  <span>There are <a href="/secure/utilities/changeRequests/Pending_validation">{size}</a> change requests pending review</span>
         }
@@ -76,7 +76,7 @@ class WorkflowInformation extends DispatchSnippet with Loggable {
     workflowService.getDeployment match {
       case Full(seq) =>
         seq.size match {
-          case 0 => ".pendingDeployment" #> <span>There is no change request pending deployment</span>
+          case 0 => ".pendingDeployment" #> <span>There are no change request pending deployment</span>
           case 1 => ".pendingDeployment" #> <span>There is <a href="/secure/utilities/changeRequests/Pending_deployment">1</a> change request pending deployment</span>
           case size => ".pendingDeployment" #>  <span>There are <a href="/secure/utilities/changeRequests/Pending_deployment">{size}</a> changes requests pending deployment</span>
         }
