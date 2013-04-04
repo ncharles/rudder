@@ -311,13 +311,19 @@ object RudderConfig extends Loggable {
   val allBootstrapChecks : BootstrapChecks = allChecks
   val srvGrid = new SrvGrid
 
+  val roWorkflowRepository : RoWorkflowRepository = new RoWorkflowJdbcRepository(jdbcTemplate)
+  val woWorkflowRepository : WoWorkflowRepository = new WoWorkflowJdbcRepository(jdbcTemplate, roWorkflowRepository)
+  
+  val roChangeRequestRepository : RoChangeRequestRepository = new RoChangeRequestJdbcRepository(
+      jdbcTemplate
+    , new ChangeRequestsMapper(changeRequestChangesUnserialisation))
+  val woChangeRequestRepository : WoChangeRequestRepository = new WoChangeRequestJdbcRepository(
+        jdbcTemplate
+      , changeRequestChangesSerialisation
+      , roChangeRequestRepository
+      )
+  
   val changeRequestEventLogService : ChangeRequestEventLogService = new InMemoryChangeRequestEventLogService
-  private[this] val crRepo = new InMemoryChangeRequestRepository(changeRequestEventLogService)
-  val roChangeRequestRepository: RoChangeRequestRepository = crRepo
-  val woChangeRequestRepository: WoChangeRequestRepository = crRepo
-  private[this] val draftRepo = new InMemoryDraftChangeRequestRepository
-  val roDraftChangeRequestRepository: RoDraftChangeRequestRepository = draftRepo
-  val woDraftChangeRequestRepository: WoDraftChangeRequestRepository = draftRepo
   val workflowEventLogService =    new InMemoryWorkflowProcessEventLogService
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
   val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
@@ -331,6 +337,8 @@ object RudderConfig extends Loggable {
               , asyncDeploymentAgent
               , dependencyAndDeletionService
             )
+          , roWorkflowRepository
+          , woWorkflowRepository
         )
     case false => new NoWorkflowServiceImpl(
           new CommitAndDeployChangeRequest(
@@ -412,6 +420,12 @@ object RudderConfig extends Loggable {
     new NodeGroupSerialisationImpl(Constants.XML_CURRENT_FILE_FORMAT.toString)
   private[this] lazy val deploymentStatusSerialisation : DeploymentStatusSerialisation =
     new DeploymentStatusSerialisationImpl(Constants.XML_CURRENT_FILE_FORMAT.toString)
+  private[this] lazy val changeRequestChangesSerialisation : ChangeRequestChangesSerialisation = 
+    new ChangeRequestChangesSerialisationImpl(
+        Constants.XML_CURRENT_FILE_FORMAT.toString
+      , nodeGroupSerialisation
+      , directiveSerialisation
+      , techniqueRepositoryImpl)
   private[this] lazy val eventLogFactory = new EventLogFactoryImpl(
     ruleSerialisation,
     directiveSerialisation,
@@ -441,6 +455,11 @@ object RudderConfig extends Loggable {
   private[this] lazy val nodeGroupCategoryUnserialisation = new NodeGroupCategoryUnserialisationImpl
   private[this] lazy val nodeGroupUnserialisation = new NodeGroupUnserialisationImpl(queryParser)
   private[this] lazy val ruleUnserialisation = new RuleUnserialisationImpl
+  private[this] lazy val changeRequestChangesUnserialisation = new ChangeRequestChangesUnserialisationImpl(
+      nodeGroupUnserialisation
+    , directiveUnserialisation
+    , techniqueRepository
+  )
   private[this] lazy val deploymentStatusUnserialisation = new DeploymentStatusUnserialisationImpl
   private[this] lazy val xmlMigration_2_3 = new XmlMigration_2_3()
   private[this] lazy val xmlMigration_10_2 = new XmlMigration_10_2()

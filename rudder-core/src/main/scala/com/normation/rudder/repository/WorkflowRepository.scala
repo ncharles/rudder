@@ -31,35 +31,30 @@
 *
 *************************************************************************************
 */
+package com.normation.rudder.repository
 
-package com.normation.rudder.domain.workflows
-
-import scala.collection.mutable.Buffer
-import net.liftweb.common._
-import com.normation.eventlog.EventActor
-import org.joda.time.DateTime
-
-case class WorkflowNodeId(value:String){
-  override def toString = value
-}
-
-
+import net.liftweb.common.Box
+import com.normation.rudder.domain.workflows.WorkflowNode
+import com.normation.rudder.domain.workflows.WorkflowNodeId
+import com.normation.rudder.domain.workflows.ChangeRequestId
 
 /**
- * TODO: the datastructure that allows to share
- * information between Rudder and the Workflow engine
+ * Repository to manage the Workflow part
  */
-trait WorkflowNode {
-  def id      : WorkflowNodeId
+trait RoWorkflowRepository {
+  def getAllByState(state : WorkflowNodeId) :  Box[Seq[ChangeRequestId]]
+
+  def getStateOfChangeRequest(crId: ChangeRequestId) : Box[WorkflowNodeId]
+  
+  /**
+   * Check if a change request is already part of a workflow
+   * If so, returns true, if not returns false
+   */
+  def isChangeRequestInWorkflow(crId: ChangeRequestId) : Box[Boolean]
 }
 
-sealed trait WorkflowProcessEventLog
+trait WoWorkflowRepository {
+  def createWorkflow(crId: ChangeRequestId, state : WorkflowNodeId) : Box[WorkflowNodeId]
 
-
-case class StepWorkflowProcessEventLog(
-    actor : EventActor
-  , date  : DateTime
-  , reason: Option[String]
-  , from  : WorkflowNode
-  , to    : WorkflowNode
-) extends WorkflowProcessEventLog
+  def updateState(crId: ChangeRequestId, from :  WorkflowNodeId, state : WorkflowNodeId) : Box[WorkflowNodeId]
+}

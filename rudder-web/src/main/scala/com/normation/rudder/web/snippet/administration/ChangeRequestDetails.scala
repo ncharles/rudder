@@ -104,7 +104,8 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       Failure(s"Error in the cr id asked: ${fail.msg}")
   }
 
-  private[this] var step = changeRequest.map(cr => workflowService.findStep(cr.id))
+  private[this] def step = changeRequest.flatMap(cr => workflowService.findStep(cr.id))
+
   def dispatch = {
     // Display Change request Header
     case "header" =>
@@ -151,21 +152,22 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
             step match {
             case eb:EmptyBox =>  NodeSeq.Empty
             case Full(step) =>
-            ("#backStep" #> { workflowService.backSteps(step) match {
+              
+              ("#backStep" #> { workflowService.backSteps(step) match {
                   case Nil => NodeSeq.Empty
                   case steps =>
                     SHtml.ajaxButton(
                         "Cancel"
-                      , () => ChangeStepPopup("Cancel",workflowService.backSteps(workflowService.findStep(cr.id)),cr)
+                      , () => ChangeStepPopup("Cancel", steps, cr)
               ) } }  &
-             "#nextStep" #> {workflowService.nextSteps(step) match {
+               "#nextStep" #> {workflowService.nextSteps(step) match {
                              case Nil => NodeSeq.Empty
-              case steps =>
-               SHtml.ajaxButton(
-                   "Accept"
-                 , () => ChangeStepPopup("Accept",workflowService.nextSteps(workflowService.findStep(cr.id)),cr)
-               ) } }
-            ) (xml)
+                              case steps =>
+                               SHtml.ajaxButton(
+                                   "Accept"
+                                 , () => ChangeStepPopup("Accept",steps,cr)
+                               ) } }
+             ) (xml)
             }
         }
       )
@@ -210,18 +212,18 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     }
     ( "#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
       "#CRName *" #> s"CR #${cr.id}: ${cr.info.name}" &
-      "#CRStatus *" #> workflowService.findStep(cr.id).value &
+      "#CRStatus *" #> workflowService.findStep(cr.id).map(x => Text(x.value)).openOr(<div class="error">Cannot find the status of this change request</div>) &
       "#CRLastAction *" #> s"${ last }"
     ) (header)
 
   }
 
-  def ChangeStepPopup(action:String,nextSteps:Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId])],cr:ChangeRequest) = {
-    type stepChangeFunction = (ChangeRequestId,EventActor, Option[String]) => Box[ChangeRequestId]
+  def ChangeStepPopup(action:String,nextSteps:Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])],cr:ChangeRequest) = {
+    type stepChangeFunction = (ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId]
 
     def closePopup : JsCmd =
       SetHtml("changeRequestHeader", displayHeader(cr)) &
-      SetHtml("CRStatusDetails",Text(workflowService.findStep(cr.id).value )) &
+      SetHtml("CRStatusDetails",workflowService.findStep(cr.id).map(x => Text(x.value)).openOr(<div class="error">Cannot find the status of this change request</div>) ) &
       SetHtml("changeRequestChanges", new ChangeRequestChangesForm(cr).dispatch("changes")(NodeSeq.Empty)) &
       JsRaw("""correctButtons();
                $.modal.close();""")
