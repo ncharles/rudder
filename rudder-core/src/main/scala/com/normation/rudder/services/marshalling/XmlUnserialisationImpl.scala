@@ -84,6 +84,8 @@ import com.normation.cfclerk.domain.TechniqueName
 import com.normation.cfclerk.services.TechniqueRepository
 import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.workflows.DirectiveChangeItem
+import com.normation.cfclerk.xmlparsers.SectionSpecParser
+import com.normation.cfclerk.domain.TechniqueId
 
 
 class DirectiveUnserialisationImpl extends DirectiveUnserialisation {
@@ -377,6 +379,7 @@ class ChangeRequestChangesUnserialisationImpl (
     nodeGroupUnserialiser : NodeGroupUnserialisation
   , directiveUnserialiser : DirectiveUnserialisation
   , techRepo : TechniqueRepository
+  , sectionSpecUnserialiser : SectionSpecParser
 ) extends ChangeRequestChangesUnserialisation with Loggable {
   def unserialise(xml:XNode): Box[(Map[DirectiveId,DirectiveChanges],Map[NodeGroupId,NodeGroupChanges]/*,Map[RuleId,RuleChange]*/)] = {
     def unserialiseNodeGroupChange(changeRequest:XNode): Box[Map[NodeGroupId,NodeGroupChanges]]= {
@@ -440,12 +443,20 @@ class ChangeRequestChangesUnserialisationImpl (
             reason       =  (changeNode \\ "reason").headOption.map(_.text)
             diff         <- (changeNode \\ "diff").headOption.flatMap(_.attribute("action").headOption.map(_.text))
             diffDirective <- (changeNode \\ "directive").headOption
+
             (techniqueName,changeDirective,_)  <- directiveUnserialiser.unserialise(diffDirective)
             change <- { val res = diff match {
               case "add" => Full(AddDirectiveDiff(techniqueName,changeDirective))
               case "delete" => Full(DeleteDirectiveDiff(techniqueName,changeDirective))
-              case "modifyTo" =>                     val rootSection = techRepo.get(TechniqueId(techniqueName,changeDirective.techniqueVersion)).map(_.rootSection).get
-                Full(ModifyToDirectiveDiff(techniqueName,changeDirective,rootSection))
+              case "modifyTo" => (changeNode \\ "rootSection").headOption match {
+                case Some(rsXml) =>
+                  val techId = TechniqueId(techniqueName,changeDirective.techniqueVersion)
+                  val rootSection = sectionSpecUnserialiser.parseSectionsInPolicy(rsXml, techId, techniqueName.value)
+                  Full(ModifyToDirectiveDiff(techniqueName,changeDirective,rootSection))
+                case None => Failure(s"Could not find rootSection node in ${changeNode}")
+
+              }
+
               case  _ => Failure("should not happen")
             }
             logger.info(res)

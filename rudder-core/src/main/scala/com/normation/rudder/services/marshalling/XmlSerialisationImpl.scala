@@ -78,6 +78,8 @@ import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.policies.DeleteDirectiveDiff
 import com.normation.rudder.domain.policies.ModifyToDirectiveDiff
 import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
+import com.normation.cfclerk.xmlwriters.SectionSpecWriter
+import com.normation.rudder.domain.workflows.ModifyToChangeRequestDiff
 
 
 class RuleSerialisationImpl(xmlVersion:String) extends RuleSerialisation {
@@ -230,7 +232,8 @@ class ChangeRequestChangesSerialisationImpl(
   , nodeGroupSerializer: NodeGroupSerialisation
   , directiveSerializer: DirectiveSerialisation
   , techniqueRepo      : TechniqueRepository
-) extends ChangeRequestChangesSerialisation {
+  , sectionSerializer  : SectionSpecWriter
+) extends ChangeRequestChangesSerialisation with Loggable {
   def serialise(changeRequest:ChangeRequest): Elem = {
 
     def serializeGroupChange(change :NodeGroupChangeItem) : NodeSeq = {
@@ -263,7 +266,17 @@ class ChangeRequestChangesSerialisationImpl(
               case None => (s"Error, could not retrieve technique ${techniqueName} version ${directive.techniqueVersion.toString}")
               case Some(technique) => <diff action="delete">{directiveSerializer.serialise(techniqueName,technique.rootSection,directive)}</diff>
              }
-          case ModifyToDirectiveDiff(techniqueName,directive,rootSection) => <diff action="modifyTo">{directiveSerializer.serialise(techniqueName,rootSection,directive)}</diff>
+          case ModifyToDirectiveDiff(techniqueName,directive,rootSection) =>
+             val rootSectionXml = change.diff match {
+               case ModifyToDirectiveDiff(_,_,rs) =>
+                 logger.warn(rs)
+                 logger.error(sectionSerializer.serialize(rs))
+                 sectionSerializer.serialize(rs).getOrElse(NodeSeq.Empty)
+               case _ => NodeSeq.Empty
+             }
+             logger.error(rootSection)
+            <diff action="modifyTo">{directiveSerializer.serialise(techniqueName,rootSection,directive)}</diff> ++
+            <rootSection>{rootSectionXml}</rootSection>
         } }
       </change>
     }
@@ -286,8 +299,8 @@ class ChangeRequestChangesSerialisationImpl(
           </group>
           }
 
-        val directives = changeRequest.directives.map{ case (directiveId,directive) =>
-          <directive id={directiveId.value}>
+    val directives = changeRequest.directives.map{ case (directiveId,directive) =>
+      <directive id={directiveId.value}>
             <initialState>
               {directive.changes.initialState.map{
                     case (techniqueName,directive,rootSection) =>
@@ -296,7 +309,7 @@ class ChangeRequestChangesSerialisationImpl(
               }
             </initialState>
               <firstChange>
-                {serializeDirectiveChange(directive.changes.firstChange)}
+                { serializeDirectiveChange(directive.changes.firstChange) }
               </firstChange>
             <nextChanges>
               {directive.changes.nextChanges.map(serializeDirectiveChange(_))}
