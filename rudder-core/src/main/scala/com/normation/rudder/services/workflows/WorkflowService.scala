@@ -248,27 +248,25 @@ class NoWorkflowServiceImpl(
 }
 
 class WorkflowServiceImpl(
-    log   : WorkflowProcessEventLogService
-  , commit: CommitAndDeployChangeRequest
+    log            : WorkflowProcessEventLogService
+  , commit         : CommitAndDeployChangeRequest
   , roWorkflowRepo : RoWorkflowRepository
   , woWorkflowRepo : WoWorkflowRepository
 ) extends WorkflowService with Loggable {
-  private[this] sealed trait MyWorkflowNode extends WorkflowNode
 
-
-  private[this] case object Validation extends MyWorkflowNode {
+  private[this] case object Validation extends WorkflowNode {
     val id = WorkflowNodeId("Pending validation")
   }
 
-  private[this] case object Deployment extends MyWorkflowNode {
+  private[this] case object Deployment extends WorkflowNode {
     val id = WorkflowNodeId("Pending deployment")
   }
 
-  private[this] case object Deployed extends MyWorkflowNode {
+  private[this] case object Deployed extends WorkflowNode {
     val id = WorkflowNodeId("Deployed")
   }
 
-  private[this] case object Cancelled extends MyWorkflowNode {
+  private[this] case object Cancelled extends WorkflowNode {
     val id = WorkflowNodeId("Cancelled")
   }
 
@@ -297,23 +295,28 @@ class WorkflowServiceImpl(
   }
 
   private[this] def changeStep(
-      from           : MyWorkflowNode
-    , to             : MyWorkflowNode
+      from           : WorkflowNode
+    , to             : WorkflowNode
     , changeRequestId: ChangeRequestId
     , actor          : EventActor
     , reason         : Option[String]
   ) : Box[WorkflowNodeId] = {
-    for {
+    (for {
       state <- woWorkflowRepo.updateState(changeRequestId,from.id, to.id)
-      log <- log.saveEventLog(StepWorkflowProcessEventLog(actor, DateTime.now, reason, from, to),changeRequestId)
+      log   <- log.saveEventLog(StepWorkflowProcessEventLog(actor, DateTime.now, reason, from, to),changeRequestId)
     } yield {
       state
+    }) match {
+      case Full(state) => Full(state)
+      case e:Failure => logger.error(s"Error when changing step in workflow for Change Request ${changeRequestId.value} : ${e.msg}")
+                        e
+      case Empty => logger.error(s"Error when changing step in workflow for Change Request ${changeRequestId.value} : no reason given")
+                    Empty
     }
   }
 
-  private[this] def toFailure(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
+  private[this] def toFailure(from: WorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     for {
-      
       failed  <- onFailureWorkflow(changeRequestId, from, actor, reason)
       failure <- woWorkflowRepo.updateState(changeRequestId, from.id, Cancelled.id)
     } yield {
@@ -326,18 +329,18 @@ class WorkflowServiceImpl(
     woWorkflowRepo.createWorkflow(changeRequestId, Validation.id)
   }
 
-  private[this]  def onSuccessWorkflow(from: MyWorkflowNode, changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
+  private[this]  def onSuccessWorkflow(from: WorkflowNode, changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     logger.info("update")
     for {
-      save <- commit.save(changeRequestId, actor, reason)
-      state <- woWorkflowRepo.updateState(changeRequestId, from.id, Deployment.id)
+      save  <- commit.save(changeRequestId, actor, reason)
+      state <- woWorkflowRepo.updateState(changeRequestId, from.id, Deployed.id)
     } yield {
       state
     }
     
   }
 
-  private[this] def onFailureWorkflow(changeRequestId: ChangeRequestId, from: MyWorkflowNode, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
+  private[this] def onFailureWorkflow(changeRequestId: ChangeRequestId, from: WorkflowNode, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     for { 
       failed  <- onFailureWorkflow(changeRequestId, from, actor, reason)
       failure <- woWorkflowRepo.updateState(changeRequestId, from.id, Cancelled.id)

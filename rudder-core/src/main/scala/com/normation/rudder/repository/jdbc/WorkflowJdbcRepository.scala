@@ -59,7 +59,9 @@ class RoWorkflowJdbcRepository(
       list.toSeq.map(x => ChangeRequestId(x.crId))
     } match {
       case Success(x) => Full(x)
-      case Catch(error) => Failure(error.toString())
+      case Catch(error) => 
+        logger.error(s"Error when fetching all change request by state ${state.value} : ${error.toString()}")
+        Failure(error.toString())
     }
   }
 
@@ -77,7 +79,9 @@ class RoWorkflowJdbcRepository(
       }
     } match {
       case Success(x) => x
-      case Catch(error) => Failure(error.toString())
+      case Catch(error) => 
+        logger.error(s"Error when fetching state of change request ${crId.value} : ${error.toString()}")
+        Failure(error.toString())
     }
   }
   
@@ -94,7 +98,9 @@ class RoWorkflowJdbcRepository(
       }
     } match {
       case Success(x) => x
-      case Catch(error) => Failure(error.toString())
+      case Catch(error) => 
+        logger.error(s"Error when fetching existance of change request ${crId.value} : ${error.toString()}")
+        Failure(error.toString())
     }
   }
 }
@@ -126,7 +132,7 @@ class WoWorkflowJdbcRepository(
     } match {
       case Success(x) => x 
       case Catch(error) => 
-        logger.error(error.toString)
+        logger.error(s"Error when updating state of change request ${crId.value}: ${error.toString}")
         Failure(error.toString())
     }
   }
@@ -141,14 +147,17 @@ class WoWorkflowJdbcRepository(
           } else {
             jdbcTemplate.update(
                   UPDATE_SQL
-                , Array[AnyRef](state.value, crId.value.asInstanceOf[AnyRef])
+                , state.value
+                , new java.lang.Integer(crId.value)
               )
           }
           roRepo.getStateOfChangeRequest(crId)
       }
     } match {
       case Success(x) => x 
-      case Catch(error) => Failure(error.toString())
+      case Catch(error) => 
+        logger.error(s"Error when updating state of change request ${crId.value} : ${error.toString()}")
+        Failure(error.toString())
     }
   }
 

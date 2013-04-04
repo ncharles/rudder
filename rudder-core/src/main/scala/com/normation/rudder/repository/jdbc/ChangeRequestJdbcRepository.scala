@@ -59,16 +59,19 @@ import com.normation.rudder.services.marshalling.ChangeRequestChangesSerialisati
 import org.springframework.jdbc.support.GeneratedKeyHolder
 import org.springframework.jdbc.core.PreparedStatementCreator
 import com.normation.eventlog.EventActor
+import com.normation.rudder.services.marshalling.ChangeRequestChangesUnserialisation
+import scala.xml.XML
 
 class RoChangeRequestJdbcRepository(
-    jdbcTemplate : JdbcTemplate
+    jdbcTemplate         : JdbcTemplate
+  , changeRequestsMapper : ChangeRequestsMapper
 ) extends RoChangeRequestRepository with Loggable {
    
   val SELECT_SQL = "SELECT id, name, description, creationTime, content FROM ChangeRequest"
     
   def getAll() : Box[Seq[ChangeRequest]] = {
     Try {
-      jdbcTemplate.query(SELECT_SQL, Array[AnyRef](), ChangeRequestsMapper).toSeq
+      jdbcTemplate.query(SELECT_SQL, Array[AnyRef](), changeRequestsMapper).toSeq
     } match {
       case Success(x) => Full(x)
       case Catch(error) => Failure(error.toString())
@@ -80,7 +83,7 @@ class RoChangeRequestJdbcRepository(
       jdbcTemplate.query(
           SELECT_SQL + " where id = ?"
         , Array[AnyRef](changeRequestId.value.asInstanceOf[AnyRef])
-        , ChangeRequestsMapper).toSeq
+        , changeRequestsMapper).toSeq
     } match {
       case Success(x) => x.size match {
         case 0 => Full(None)
@@ -98,7 +101,7 @@ class RoChangeRequestJdbcRepository(
     Try {
       jdbcTemplate.query(
           SELECT_SQL + " where id in (:ids)"
-        , ChangeRequestsMapper
+        , changeRequestsMapper
         , parameters).toSeq
     } match {
       case Success(x) => Full(x)
@@ -109,7 +112,7 @@ class RoChangeRequestJdbcRepository(
   def getByDirective(id : DirectiveId) : Box[Seq[ChangeRequest]] = {
     val directiveQuery = " where cast (xpath('/directives/directive/@directive', content) as text[]) = '{?}'"
     Try {
-      jdbcTemplate.query(SELECT_SQL + directiveQuery, Array[AnyRef](id.value), ChangeRequestsMapper).toSeq
+      jdbcTemplate.query(SELECT_SQL + directiveQuery, Array[AnyRef](id.value), changeRequestsMapper).toSeq
     } match {
       case Success(x) => Full(x)
       case Catch(error) => Failure(error.toString())
@@ -130,7 +133,7 @@ class WoChangeRequestJdbcRepository(
 
   val INSERT_SQL = "insert into ChangeRequest (name, description, creationTime, content) values (?, ?, ?, ?)"
  
-  val UPDATE_SQL = "update ChangeRequest set name = ?, description = ?,  content = ?) where id = ?"
+  val UPDATE_SQL = "update ChangeRequest set name = ?, description = ?, content = ? where id = ?"
  
   /**
    * Save a new change request in the back-end.
@@ -164,7 +167,12 @@ class WoChangeRequestJdbcRepository(
       case Success(x) => x match {
         case Full(Some(entry)) => Full(entry)
         case Full(None) => Failure("Couldn't find newly created entry when saving Change Request")
-        case eb : EmptyBox => eb
+        case e : Failure => 
+              logger.error(s"Error when creating change request: ${e.msg}")
+              e
+        case Empty => 
+              logger.error(s"Error when creating a change request: no reason given")
+              Empty
       }
       case Catch(error) => Failure(error.toString())
     }
@@ -193,37 +201,72 @@ class WoChangeRequestJdbcRepository(
         case Full(Some(entry)) => // ok
           // we don't change the creation date !
           jdbcTemplate.update(
-              UPDATE_SQL
-            , changeRequest.info.name
-            , changeRequest.info.description
-            , crSerialiser.serialise(changeRequest).toString
+              new PreparedStatementCreator() {
+                 def createPreparedStatement(connection : Connection) : PreparedStatement = {
+                   val sqlXml = connection.createSQLXML()
+                   sqlXml.setString(crSerialiser.serialise(changeRequest).toString)
+      
+                   val ps = connection.prepareStatement(
+                       UPDATE_SQL, Seq[String]("id").toArray[String]);
+      
+                   ps.setString(1, changeRequest.info.name)
+                   ps.setString(2, changeRequest.info.description)
+                   ps.setSQLXML(3, sqlXml) 
+                   ps.setInt(4, new java.lang.Integer(changeRequest.id.value))
+                   ps
+                 }
+               }
            )
-           roRepo.get(changeRequest.id)
+         roRepo.get(changeRequest.id)
       }
     } match {
         case Success(x) => x match {
             case Full(Some(entry)) => Full(entry)
-            case Full(None) => Failure("Couldn't find newly created entry when saving Change Request")
-            case eb : EmptyBox => eb
+            case Full(None) => 
+              logger.error(s"Couldn't find the updated entry when updating Change Request ${changeRequest.id.value}")
+              Failure("Couldn't find the updated entry when saving Change Request")
+            case e : Failure => 
+              logger.error(s"Error when updating change request ${changeRequest.id.value}: ${e.msg}")
+              e
+            case Empty => 
+              logger.error(s"Error when updating change request ${changeRequest.id.value}: no reason given")
+              Empty
           }
-        case Catch(error) => Failure(error.toString())
+        case Catch(error) => 
+          logger.error(s"Error when creating a Change Request : ${error.toString}")
+          Failure(error.toString())
     }
   }
 }
 
 
 
-object ChangeRequestsMapper extends RowMapper[ChangeRequest] with Loggable {
+class ChangeRequestsMapper(
+    changeRequestChangesUnserialisation : ChangeRequestChangesUnserialisation
+) extends RowMapper[ChangeRequest] with Loggable {
   def mapRow(rs : ResultSet, rowNum: Int) : ChangeRequest = {
-    // dummy code
+
+    // unserialize the XML.
+    // If it fails, throw an exception (I'm in a jdbc context, within a Try, that would catch it)
+    val (directivesMaps, nodesMaps) = changeRequestChangesUnserialisation.unserialise(XML.load(rs.getSQLXML("content").getBinaryStream() )) match {
+      case Full(maps) => maps
+      case e:Failure =>
+        logger.error(s"Error when trying to get the content of the change request ${rs.getInt("id")} : ${e.messageChain}")
+        throw new Exception(s"Error when trying to get the content of the change request ${rs.getInt("id")} : ${e.messageChain}")
+      case Empty => 
+        logger.error(s"Error when trying to get the content of the change request ${rs.getInt("id")} : no details attached")
+        throw new Exception(s"Error when trying to get the content of the change request ${rs.getInt("id")}")
+    }
+    
+    
     ConfigurationChangeRequest(
         ChangeRequestId(rs.getInt("id"))
       , ChangeRequestInfo(
             rs.getString("name")
           , rs.getString("description")
         )
-      , Map()
-      , Map()
+      , directivesMaps
+      , nodesMaps
       , Map()
     )
   }

@@ -314,7 +314,9 @@ object RudderConfig extends Loggable {
   val roWorkflowRepository : RoWorkflowRepository = new RoWorkflowJdbcRepository(jdbcTemplate)
   val woWorkflowRepository : WoWorkflowRepository = new WoWorkflowJdbcRepository(jdbcTemplate, roWorkflowRepository)
   
-  val roChangeRequestRepository : RoChangeRequestRepository = new RoChangeRequestJdbcRepository(jdbcTemplate)
+  val roChangeRequestRepository : RoChangeRequestRepository = new RoChangeRequestJdbcRepository(
+      jdbcTemplate
+    , new ChangeRequestsMapper(changeRequestChangesUnserialisation))
   val woChangeRequestRepository : WoChangeRequestRepository = new WoChangeRequestJdbcRepository(
         jdbcTemplate
       , changeRequestChangesSerialisation
@@ -453,6 +455,11 @@ object RudderConfig extends Loggable {
   private[this] lazy val nodeGroupCategoryUnserialisation = new NodeGroupCategoryUnserialisationImpl
   private[this] lazy val nodeGroupUnserialisation = new NodeGroupUnserialisationImpl(queryParser)
   private[this] lazy val ruleUnserialisation = new RuleUnserialisationImpl
+  private[this] lazy val changeRequestChangesUnserialisation = new ChangeRequestChangesUnserialisationImpl(
+      nodeGroupUnserialisation
+    , directiveUnserialisation
+    , techniqueRepository
+  )
   private[this] lazy val deploymentStatusUnserialisation = new DeploymentStatusUnserialisationImpl
   private[this] lazy val xmlMigration_2_3 = new XmlMigration_2_3()
   private[this] lazy val xmlMigration_10_2 = new XmlMigration_10_2()

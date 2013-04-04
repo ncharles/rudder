@@ -66,6 +66,24 @@ import com.normation.rudder.domain.nodes.NodeGroupCategory
 import com.normation.rudder.domain.nodes.NodeGroupCategoryId
 import scala.xml.Node
 import com.normation.rudder.domain.Constants._
+import com.normation.rudder.domain.workflows.DirectiveChange
+import com.normation.rudder.domain.workflows.NodeGroupChange
+import com.normation.rudder.domain.workflows.DirectiveChanges
+import com.normation.rudder.domain.workflows.NodeGroupChanges
+import com.normation.rudder.domain.nodes.NodeGroupId
+import com.normation.rudder.domain.nodes.NodeGroupId
+import com.normation.rudder.domain.workflows.NodeGroupChanges
+import com.normation.rudder.domain.nodes._
+import com.normation.rudder.domain.workflows.NodeGroupChange
+import com.normation.rudder.domain.workflows.NodeGroupChangeItem
+import com.normation.eventlog.EventActor
+import com.normation.rudder.domain.policies.DirectiveId
+import com.normation.rudder.domain.workflows.DirectiveChanges
+import com.normation.rudder.domain.policies._
+import com.normation.cfclerk.domain.TechniqueName
+import com.normation.cfclerk.services.TechniqueRepository
+import com.normation.cfclerk.domain.TechniqueId
+import com.normation.rudder.domain.workflows.DirectiveChangeItem
 
 
 class DirectiveUnserialisationImpl extends DirectiveUnserialisation {
@@ -347,6 +365,129 @@ class DeploymentStatusUnserialisationImpl extends DeploymentStatusUnserialisatio
         case "failure" => ErrorStatus(id, started, ended, errorMessage.map(x => Failure(x)).getOrElse(Failure("")) )
         case s       => NoStatus
       }
+    }
+  }
+}
+
+/**
+ * That trait allow to unserialise change request changes from an XML file.
+ *
+ */
+class ChangeRequestChangesUnserialisationImpl (
+    nodeGroupUnserialiser : NodeGroupUnserialisation
+  , directiveUnserialiser : DirectiveUnserialisation
+  , techRepo : TechniqueRepository
+) extends ChangeRequestChangesUnserialisation with Loggable {
+  def unserialise(xml:XNode): Box[(Map[DirectiveId,DirectiveChanges],Map[NodeGroupId,NodeGroupChanges]/*,Map[RuleId,RuleChange]*/)] = {
+    def unserialiseNodeGroupChange(changeRequest:XNode): Box[Map[NodeGroupId,NodeGroupChanges]]= {
+      (for {
+          groupsNode  <- (changeRequest \ "groups").headOption ?~! s"Missing child 'groups' in entry type changeRequest : ${xml}"
+      } yield {
+        (groupsNode\"group").flatMap{ group =>
+          for {
+            nodeGroupId  <- group.attribute("id").map(id => NodeGroupId(id.text)) ?~!
+                             s"Missing attribute 'id' in entry type changeRequest group changes  : ${group}"
+            initialNode  <- (group \ "initialState").headOption
+            initialState <- (group \ "nodeGroup").headOption match {
+              case Some(initialState) => nodeGroupUnserialiser.unserialise(initialState) match {
+                case Full(group) => Full(Some(group))
+                case eb : EmptyBox => eb ?~! "could not unserialize group"
+              }
+              case None => Full(None)
+            }
+
+            changeNode   <- (group \ "firstChange" \ "change").headOption
+            actor        <- (changeNode \\ "actor").headOption.map(actor => EventActor(actor.text))
+            date         <- (changeNode \\ "date").headOption.map(date => ISODateTimeFormat.dateTimeParser.parseDateTime(date.text))
+            reason       =  (changeNode \\ "reason").headOption.map(_.text)
+            diff         <- (changeNode \\ "diff").headOption.flatMap(_.attribute("action").headOption.map(_.text))
+            diffGroup <- (changeNode \\ "nodeGroup").headOption
+            changeGroup  <- nodeGroupUnserialiser.unserialise(diffGroup)
+            change <- diff match {
+              case "add" => Full(AddNodeGroupDiff(changeGroup))
+              case "delete" => Full(DeleteNodeGroupDiff(changeGroup))
+              case "modifyTo" => Full(ModifyToNodeGroupDiff(changeGroup))
+              case  _ => Failure("should not happen")
+            }
+        } yield {
+          val groupChange = NodeGroupChange(initialState,NodeGroupChangeItem(actor,date,reason,change),Seq())
+
+          (nodeGroupId -> NodeGroupChanges(groupChange,Seq()))
+        } }.toMap
+      })
+    }
+
+    def unserialiseDirectiveChange(changeRequest:XNode): Box[Map[DirectiveId,DirectiveChanges]]= {
+      (for {
+          directivesNode  <- (changeRequest \ "directives").headOption ?~! s"Missing child 'directives' in entry type changeRequest : ${xml}"
+      } yield {
+        (directivesNode\"directive").flatMap{ directive =>
+          for {
+            directiveId  <- directive.attribute("id").map(id => DirectiveId(id.text)) ?~!
+                             s"Missing attribute 'id' in entry type changeRequest directive changes  : ${directive}"
+            initialNode  <- (directive \ "initialState").headOption
+            initialState <- (initialNode \\ "directive").headOption match {
+              case Some(initialState) => directiveUnserialiser.unserialise(initialState) match {
+                case Full((techName,directive,_)) => Full(Some((techName,directive)))
+                case eb : EmptyBox => eb ?~! "could not unserialize directive"
+              }
+              case None => Full(None)
+            }
+
+            changeNode   <- (directive \ "firstChange" \ "change").headOption
+            actor        <- (changeNode \\ "actor").headOption.map(actor => EventActor(actor.text))
+            date         <- (changeNode \\ "date").headOption.map(date => ISODateTimeFormat.dateTimeParser.parseDateTime(date.text))
+            reason       =  (changeNode \\ "reason").headOption.map(_.text)
+            diff         <- (changeNode \\ "diff").headOption.flatMap(_.attribute("action").headOption.map(_.text))
+            diffDirective <- (changeNode \\ "directive").headOption
+            (techniqueName,changeDirective,_)  <- directiveUnserialiser.unserialise(diffDirective)
+            change <- { val res = diff match {
+              case "add" => Full(AddDirectiveDiff(techniqueName,changeDirective))
+              case "delete" => Full(DeleteDirectiveDiff(techniqueName,changeDirective))
+              case "modifyTo" =>                     val rootSection = techRepo.get(TechniqueId(techniqueName,changeDirective.techniqueVersion)).map(_.rootSection).get
+                Full(ModifyToDirectiveDiff(techniqueName,changeDirective,rootSection))
+              case  _ => Failure("should not happen")
+            }
+            logger.info(res)
+            res
+            }
+        } yield {
+
+          val directiveChange = DirectiveChange(initialState.map{case (techName,directive) =>
+                      val rootSection = techRepo.get(TechniqueId(techName,directive.techniqueVersion)).map(_.rootSection).get
+                          (techName,directive,rootSection)},DirectiveChangeItem(actor,date,reason,change),Seq())
+
+          (directiveId -> DirectiveChanges(directiveChange,Seq()))
+        } }.toMap
+      })
+    }
+
+    for {
+      changeRequest  <- {
+                            if(xml.label ==  XML_TAG_CHANGE_REQUEST) Full(xml)
+                            else Failure("Entry type is not a <%s>: ".format(XML_TAG_CHANGE_REQUEST, xml))
+                          }
+      fileFormatOk     <- TestFileFormat(changeRequest)
+      groups          <-      unserialiseNodeGroupChange(changeRequest)/*
+          case Some(groups) => sequence(groups \ "group") {
+            group => group.attribute("id").map(id => NodeGroupId(id.text)) match {
+              case None =>  Failure(s"Missing attribute 'id' in entry type changeRequest group changes  : ${group}")
+              case Some(nodeGroupId) =>
+                val initialState:Box[Option[NodeGroup]] = (group \ "initialState").headOption match {
+                  case Some(initial) => initial.child.headOption.map(nodeGroupUnserialiser.unserialise(_)) match {
+                    case Some(Full(group)) => Full(Some(group))
+                    case Some(eb:EmptyBox) => eb ?~! s"could not create group initialState when unserializing change request ${initial}"
+                    case None => Full(None)
+                  }
+                  case None => Failure(s"Missing child 'initialState' in entry type changeRequest group changes : ${group}")
+                }
+                Full(Map[NodeGroupId,NodeGroupChanges]())
+            }
+          }
+      }*/
+      directives       <-  unserialiseDirectiveChange(changeRequest)
+    } yield {
+      (directives,groups)
     }
   }
 
