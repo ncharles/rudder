@@ -337,6 +337,7 @@ class DirectiveEditForm(
       onFailure
     } else {
       if (isADirectiveCreation) {
+        // On creation, don't create workflow
         val newDirective = directive.copy(
           parameters = parameterEditor.mapValueSeq,
           name = piName.is,

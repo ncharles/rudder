@@ -192,7 +192,7 @@ class ModificationValidationPopup(
   def popupContent() : NodeSeq = {
     val name = if(item.isLeft) "Directive" else "Group"
     val buttonName = workflowEnabled match {
-      case true => "Create Draft"
+      case true => "Submit for Validation"
       case false => "Save"
     }
     (
@@ -215,7 +215,7 @@ class ModificationValidationPopup(
       "#changeRequestDescription" #> changeRequestDescription.toForm &
       "#existingChangeRequest" #> existingChangeRequest.toForm &
 //      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
-      "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, onSubmitStartWorkflow _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
+      "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, onSubmitStartWorkflow _, ("class" -> "wideButton")) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
     )(html ++ Script(OnLoad(
         JsRaw("correctButtons();"))))
   }
@@ -285,7 +285,7 @@ class ModificationValidationPopup(
     case Right((g,opt)) => s"Update Group ${g.name}"
   }
 
-  private[this] val changeRequestName = new WBTextField("Name", defaultRequestName) {
+  private[this] val changeRequestName = new WBTextField("Title", defaultRequestName) {
     override def setFilter = notNull _ :: trim _ :: Nil
     override def errorClassName = ""
     override def inputField = super.inputField % ("onkeydown" , "return processKey(event , 'createDirectiveSaveButton')") % ("tabindex","1")

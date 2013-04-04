@@ -1794,6 +1794,12 @@ popin Alert
   width:130px;
   text-align: center;
 }
+
+#simplemodal-container .simplemodal-bottom input.wideButton {
+  width:190px;
+  text-align: center;
+}
+
 #simplemodal-container .simplemodal-bottom hr {
  margin: 0px;
  width:100%;
