@@ -213,6 +213,13 @@ class ModificationValidationPopup(
         }
       case false => ("Save", "")
     }
+    val titleWorkflow = workflowEnabled match {
+      case true => 
+        <div>
+          <h2 style="padding-left:42px;">Workflows are enabled in Rudder, your change has to be validated in a change request</h2>
+        </div>
+      case false => NodeSeq.Empty
+    }
     (
       "#validationForm" #> { (xml:NodeSeq) => SHtml.ajaxForm(xml) } andThen
       "#dialogTitle *" #> titles(name)(action) &
@@ -228,11 +235,13 @@ class ModificationValidationPopup(
         </div>
         }
       } &
-      "#changeRequestName" #> changeRequestName.toForm &
+      "#titleWorkflow *" #> titleWorkflow &
       "#changeRequestName [class]" #> (if ((workflowEnabled)&(!isANewItem)) Text("display") else Text("nodisplay")) &
-      ".notifications *" #> updateAndDisplayNotifications() &
+      "#changeRequestName" #> changeRequestName.toForm &
 //      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
-      "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, () => onSubmitStartWorkflow(), ("class" -> classForButton)) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
+      "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, () => onSubmitStartWorkflow(), ("class" -> classForButton)) % ("id", "createDirectiveSaveButton") % ("tabindex","3")) andThen
+       ".notifications *" #> updateAndDisplayNotifications()
+      
     )(html ++ Script(OnLoad(JsRaw("correctButtons();"))))
   }
 
@@ -407,7 +416,7 @@ class ModificationValidationPopup(
                 action.map(
                   changeRequestService.createChangeRequestFromDirective(
                         changeRequestName.get
-                      , changeRequestDescription.get
+                      , crReasons.map( _.get ).getOrElse("")
                       , techniqueName
                       , oldRootSection
                       , directive.id
@@ -422,7 +431,7 @@ class ModificationValidationPopup(
                 action.map(
                 changeRequestService.createChangeRequestFromNodeGroup(
                     changeRequestName.get
-                  , changeRequestDescription.get
+                  , crReasons.map( _.get ).getOrElse("")
                   , nodeGroup
                   , optOriginal
                   , _
