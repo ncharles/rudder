@@ -90,6 +90,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   private[this] val roChangeRequestRepository = RudderConfig.roChangeRequestRepository
   private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
   private[this] val workflowService = RudderConfig.workflowService
+  private[this] val userPropertyService      = RudderConfig.userPropertyService
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[Int] = {S.param("crId").map(x=>x.toInt) }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {
@@ -241,6 +242,33 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
           {next}
         </span>
 
+  def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
+    new WBTextAreaField("Message", "") {
+      override def setFilter = notNull _ :: trim _ :: Nil
+      override def inputField = super.inputField  %  ("style" -> "height:8em;")
+      //override def subContainerClassName = containerClass
+      override def validations() = {
+        if(mandatory){
+          valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
+        } else {
+          Nil
+        }
+      }
+    }
+  }
+    val changeMessage = {
+    import com.normation.rudder.web.services.ReasonBehavior._
+    userPropertyService.reasonsFieldBehavior match {
+      case Disabled => NodeSeq.Empty
+      case Mandatory => buildReasonField(true, "subContainerReasonField").toForm_!
+      case Optionnal => buildReasonField(false, "subContainerReasonField").toForm_!
+    }
+  }
+
+
+
+
+
     val stepMessage =
       new WBTextAreaField("Message", "") {
         override def setFilter = notNull _ :: trim _ :: Nil
@@ -266,7 +294,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       ( "#header"   #>  s"${action} CR #${cr.id}: ${cr.info.name}" &
         "#form -*"  #>
           SHtml.ajaxForm(
-            ( "#reason"  #> stepMessage.toForm_! &
+            ( "#reason"  #> changeMessage &
               "#next"    #> next &
               "#cancel"  #> SHtml.ajaxButton("Cancel", () => closePopup ) &
               "#confirm" #> SHtml.ajaxSubmit("Confirm", () => confirm()) &

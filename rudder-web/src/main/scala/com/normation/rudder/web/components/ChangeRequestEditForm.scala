@@ -66,7 +66,7 @@ class ChangeRequestEditForm (
 
   def dispatch = { case "details" => { _ => display } }
 
-  private[this] val changeRequestName =new WBTextField("Name", info.name) {
+  private[this] val changeRequestName =new WBTextField("Title", info.name) {
     override def setFilter = notNull _ :: trim _ :: Nil
     override def className = "twoCol"
     override def validations =
