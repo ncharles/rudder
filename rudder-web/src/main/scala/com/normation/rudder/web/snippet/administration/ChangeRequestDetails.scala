@@ -85,12 +85,12 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   private[this] val techRepo = RudderConfig.techniqueRepository
   private[this] val rodirective = RudderConfig.roDirectiveRepository
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
+  private[this] val userPropertyService      = RudderConfig.userPropertyService
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
   private[this] val woChangeRequestRepository = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepository = RudderConfig.roChangeRequestRepository
   private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
   private[this] val workflowService = RudderConfig.workflowService
-  private[this] val userPropertyService      = RudderConfig.userPropertyService
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[Int] = {S.param("crId").map(x=>x.toInt) }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {
@@ -242,6 +242,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
           {next}
         </span>
 
+
   def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
     new WBTextAreaField("Message", "") {
       override def setFilter = notNull _ :: trim _ :: Nil
@@ -259,12 +260,11 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     val changeMessage = {
     import com.normation.rudder.web.services.ReasonBehavior._
     userPropertyService.reasonsFieldBehavior match {
-      case Disabled => NodeSeq.Empty
-      case Mandatory => buildReasonField(true, "subContainerReasonField").toForm_!
-      case Optionnal => buildReasonField(false, "subContainerReasonField").toForm_!
+      case Disabled => None
+      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
+      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
     }
   }
-
 
 
 
@@ -294,7 +294,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       ( "#header"   #>  s"${action} CR #${cr.id}: ${cr.info.name}" &
         "#form -*"  #>
           SHtml.ajaxForm(
-            ( "#reason"  #> changeMessage &
+            ( "#reason"  #> stepMessage.toForm_! &
               "#next"    #> next &
               "#cancel"  #> SHtml.ajaxButton("Cancel", () => closePopup ) &
               "#confirm" #> SHtml.ajaxSubmit("Confirm", () => confirm()) &

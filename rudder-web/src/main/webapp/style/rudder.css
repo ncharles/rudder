@@ -1301,7 +1301,7 @@ span.ui-button-text {
   font-size: 1.4em;
   font-weight: bold;
   clear : both;
-  float : right;
+  float : left;
 }
 .modificationsDisplayer a{
   text-decoration: underline;

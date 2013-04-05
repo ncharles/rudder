@@ -85,11 +85,11 @@ import com.normation.rudder.domain.eventlog.RudderEventActor
  * - the list of impacted Rules by that modification
  * - the change message
  * - the workflows part (asking what to do if the wf is enable)
- * 
+ *
  * For Creation or Clone, there is no Workflow, hence no ChangeRequest !
  * On success, we return on the forms with the newly created directive
  * On failure, we return on the form with the error
- * 
+ *
  *
  */
 
@@ -206,7 +206,7 @@ class ModificationValidationPopup(
   def popupContent() : NodeSeq = {
     val name = if(item.isLeft) "Directive" else "Group"
     val (buttonName, classForButton) = workflowEnabled match {
-      case true => 
+      case true =>
         isANewItem match {
           case false => ("Submit for Validation", "wideButton")
           case true => ("Create", "")
@@ -333,7 +333,7 @@ class ModificationValidationPopup(
              :: changeRequestDescription
              :: Nil
         )
-        
+
     } else {
       new FormTracker(
                crReasons.toList
@@ -344,7 +344,7 @@ class ModificationValidationPopup(
 
 
   private[this] def closePopup() : JsCmd = {
-    JsRaw("""$.modal.close();""") 
+    JsRaw("""$.modal.close();""")
   }
 
   /**
@@ -416,7 +416,7 @@ class ModificationValidationPopup(
                       , CurrentUser.getActor
                       , crReasons.map( _.get )
                   ) )
-  
+
             case Right((nodeGroup, optOriginal)) =>
                 val action = groupDiffFromAction(nodeGroup, optOriginal)
                 action.map(
@@ -439,7 +439,7 @@ class ModificationValidationPopup(
             }
           }
         }
-  
+
         savedChangeRequest match {
           case Full(cr) =>
             onSuccessCallback(cr)
@@ -455,7 +455,7 @@ class ModificationValidationPopup(
         item match {
           case Left((techniqueName, activeTechniqueId, oldRootSection, directive, optOriginal)) =>
             saveAndDeployDirective(directive, activeTechniqueId, crReasons.map( _.get ))
-          case _ => 
+          case _ =>
             Alert("var")
         }
       }
@@ -475,29 +475,28 @@ class ModificationValidationPopup(
             asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
           case None => // No change, don't launch a deployment
         }
-        println("this exactly")
         closePopup() & onCreateSuccessCallBack(Left(directive))
-      case Empty => 
+      case Empty =>
         parentFormTracker match {
-          case None => 
-            logger.error("Invalid use of modificationValidationPopup : no parentFormTracker defined when creating/cloning directive") 
-          case Some(tracker) => 
+          case None =>
+            logger.error("Invalid use of modificationValidationPopup : no parentFormTracker defined when creating/cloning directive")
+          case Some(tracker) =>
             tracker.addFormError(Text("There was an error on creating this directive"))
-        
+
         }
         closePopup() & onCreateFailureCallBack
       case Failure(m, _, _) =>
         parentFormTracker match {
-          case None => 
+          case None =>
             logger.error("Invalid use of modificationValidationPopup : no parentFormTracker defined when creating/cloning directive")
           case Some(tracker) =>
             tracker.addFormError(Text(m))
 
         }
-        closePopup() & onCreateFailureCallBack        
+        closePopup() & onCreateFailureCallBack
     }
   }
-  
+
   private[this] def onFailure : JsCmd = {
     formTracker.addFormError(error("The form contains some errors, please correct them"))
     updateFormClientSide()

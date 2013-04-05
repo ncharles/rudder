@@ -78,7 +78,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
             "sSearch": ""
           },
           "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
-          "aaSorting": [[ 1, "asc" ]],
+          "aaSorting": [[ 0, "asc" ]],
           "aoColumns": [
             { "sWidth": "20px" },
             { "sWidth": "40px" },

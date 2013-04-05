@@ -230,7 +230,6 @@ case class DirectiveChange(
   private[this] def recChange(
       previousState: Box[DirectiveChangeItem]
     , nexts:List[DirectiveChangeItem]): Box[DirectiveChangeItem] = {
-    println(previousState)
     previousState match {
       case eb:EmptyBox => eb
       case Full(x) => nexts match {
@@ -278,7 +277,7 @@ case class NodeGroupChange(
   , val nextChanges : Seq[NodeGroupChangeItem]
 ) extends Change[NodeGroup, ChangeRequestNodeGroupDiff, NodeGroupChangeItem] {
   private[this] def recChange(
-      previousState : Box[NodeGroupChangeItem]    
+      previousState : Box[NodeGroupChangeItem]
     , nexts         : List[NodeGroupChangeItem]) :  Box[NodeGroupChangeItem]  = {
     previousState match {
       case eb:EmptyBox => eb
@@ -293,7 +292,7 @@ case class NodeGroupChange(
       }
     }
   }
-  
+
   // compute the change from the initial state to the end of the change request
   def change = {
     val allChanges = firstChange :: nextChanges.toList
