@@ -178,9 +178,9 @@ class ModificationValidationPopup(
                         ]
   , action            : String //one among: save, delete, enable, disable or create
   , isANewItem        : Boolean
-  , onSuccessCallback : NodeSeq => JsCmd = { x => Noop }
+  , onSuccessCallback : ChangeRequestId => JsCmd = { x => Noop }
   , onFailureCallback : NodeSeq => JsCmd = { x => Noop }
-  , onCreateSuccessCallBack : (Directive) => JsCmd = { x => Noop }
+  , onCreateSuccessCallBack : (Either[Directive,ChangeRequestId]) => JsCmd = { x => Noop }
   , onCreateFailureCallBack : JsCmd = { Noop }
   , parentFormTracker : Option[FormTracker] = None
 ) extends DispatchSnippet with Loggable {
@@ -445,20 +445,8 @@ class ModificationValidationPopup(
         }
   
         savedChangeRequest match {
-          case Full(_) =>
-            val changeText = workflowEnabled match {
-              case true =>
-                item match {
-                  case Left((techniqueName, activeTechniqueId, rootSection, directive, optOriginal)) =>
-                    <div>Your change on directive <b>{directive.name}</b> has been submited</div>
-                  case Right((nodeGroup, optOriginal)) =>
-                    <div>Your change on group <b>{nodeGroup.name}</b> has been submited</div>
-                }
-              case false =>
-                // No workflow means nothing to warn the user about
-                <div/>
-            }
-            onSuccessCallback(changeText)
+          case Full(cr) =>
+            onSuccessCallback(cr)
           case eb:EmptyBox =>
             val e = (eb ?~! "Error when trying to save your modification")
             e.rootExceptionCause.foreach { ex =>
@@ -493,7 +481,7 @@ class ModificationValidationPopup(
           case None => // No change, don't launch a deployment
         }
         println("this exactly")
-        closePopup() & onCreateSuccessCallBack(directive)
+        closePopup() & onCreateSuccessCallBack(Left(directive))
       case Empty => 
         parentFormTracker match {
           case None => 

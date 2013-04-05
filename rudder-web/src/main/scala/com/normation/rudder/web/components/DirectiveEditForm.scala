@@ -110,7 +110,7 @@ class DirectiveEditForm(
   , activeTechnique   : ActiveTechnique
   , val directive     : Directive
   , oldDirective      : Option[Directive]
-  , onSuccessCallback : (Directive) => JsCmd = { (Directive) => Noop }
+  , onSuccessCallback : (Either[Directive,ChangeRequestId]) => JsCmd = { (Directive) => Noop }
   , onFailureCallback : () => JsCmd = { () => Noop }
   , isADirectiveCreation : Boolean = false
 ) extends DispatchSnippet with Loggable {
@@ -370,7 +370,7 @@ class DirectiveEditForm(
   private[this] def onSubmitDisable(action:String): JsCmd = {
     displayConfirmationPopup(
         action
-      , directive
+      , directive.copy(isEnabled = !directive.isEnabled)
     )
   }
 
@@ -398,7 +398,7 @@ class DirectiveEditForm(
             Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
           , action
           , isADirectiveCreation
-          , xml => JsRaw("$.modal.close();") & onSuccessCallback(newDirective) & successPopup(xml)
+          , cr => JsRaw("$.modal.close();") & onSuccessCallback(Right(cr))
           , xml => onFailureCallback() & failurePopup(xml)
         )
       } else {
@@ -439,7 +439,7 @@ class DirectiveEditForm(
     val popup = new CreateCloneDirectivePopup(
       technique.name, technique.description,
       technique.id.version, directive,
-      onSuccessCallback =  onSuccessCallback)
+      onSuccessCallback =  dir => onSuccessCallback(Left(dir)))
 
     popup.popupContent
   }

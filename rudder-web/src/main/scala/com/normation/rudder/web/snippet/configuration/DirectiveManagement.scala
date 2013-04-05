@@ -54,6 +54,7 @@ import net.liftweb.util._
 import com.normation.cfclerk.domain.TechniqueVersion
 import com.normation.rudder.web.services.JsTreeUtilService
 import bootstrap.liftweb.RudderConfig
+import com.normation.rudder.domain.workflows.ChangeRequestId
 
 /**
  * Snippet for managing the System and Active Technique libraries.
@@ -430,7 +431,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
       , technique, activeTechnique
       , directive
       , oldDirective
-      , onSuccessCallback = directiveEditFormSuccessCallBack(isADirectiveCreation)
+      , onSuccessCallback = directiveEditFormSuccessCallBack
       , isADirectiveCreation = isADirectiveCreation
     )
 
@@ -440,13 +441,12 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
   /**
    * Callback used to update the form when the edition of the directive have 
    * been done
-   * If we have workflow enabled, then the form is not updated, rather
-   * it tells that the modification are pending
+   * If it is given a directive, it updated the form, else goes to the changerequest page
    */
-  private[this] def directiveEditFormSuccessCallBack(creation:Boolean)(dir: Directive): JsCmd = {  
-    // if it's a creation, or there is no workflow, then everything is direct
-    if ( (creation) | (!workflowEnabled) ) {
-      directiveRepository.getDirectiveWithContext(dir.id) match {
+  private[this] def directiveEditFormSuccessCallBack(returns: Either[Directive,ChangeRequestId]): JsCmd = {  
+    returns match {
+      case Left(dir) => // ok, we've received a directive, show it
+          directiveRepository.getDirectiveWithContext(dir.id) match {
             case Full((technique, activeTechnique, directive)) => {
               updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique, dir,None)
               Replace(htmlId_policyConf, showDirectiveDetails) &
@@ -465,20 +465,9 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
               Alert("Error when trying to get display the page. Please, try again")
             }
           }
-    } else { 
-        // in this case, the modification has not been done, and the repo has 
-        // not been updated.
-        val updated = <div id="editForm" class="object-details">
-          <fieldset class="editZone">
-            <legend>Change request requested</legend>
-            <hr class="spacer"/>
-            <p>The change on Directive <b>{dir.name}</b> has been submited</p>
-          </fieldset>
-          </div>
-          
-        SetHtml(htmlId_policyConf, updated)
+      case Right(changeRequest) => // oh, we have a change request, go to it
+        RedirectTo(s"""/secure/utilities/changeRequest/${changeRequest.value}""")
     }
-
   }
 
   private[this] def onRemoveSuccessCallBack(): JsCmd = {

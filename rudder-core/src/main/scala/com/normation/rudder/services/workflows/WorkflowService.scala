@@ -341,12 +341,7 @@ class WorkflowServiceImpl(
   }
 
   private[this] def onFailureWorkflow(changeRequestId: ChangeRequestId, from: WorkflowNode, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
-    for { 
-      failed  <- onFailureWorkflow(changeRequestId, from, actor, reason)
-      failure <- woWorkflowRepo.updateState(changeRequestId, from.id, Cancelled.id)
-    } yield {
-      failure
-    }
+    woWorkflowRepo.updateState(changeRequestId, from.id, Cancelled.id)
   }
 
   //allowed workflow steps
