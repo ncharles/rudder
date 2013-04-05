@@ -101,13 +101,14 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          {SHtml.a(() => S.redirectTo(s"/secure/utilities/changeRequest/${cr.id}"), Text(cr.id.value.toString))}
       </td>
       <td id="crStatus">
-         {workflowService.findStep(cr.id)}
+         {workflowService.findStep(cr.id).getOrElse("Unknown")}
       </td>
       <td id="crName">
          {cr.info.name}
       </td>
       <td id="crOwner">
-         {changeRequestEventLogService.getChangeRequestHistory(cr.id) match {
+         {
+           changeRequestEventLogService.getChangeRequestHistory(cr.id) match {
            case eb :EmptyBox => "Error while fetching Creator"
            case Full(seq) => seq.headOption.map(_.actor.name).getOrElse("Unknown User")
          }}
@@ -136,21 +137,30 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
     val filterFunction =
       s"""var filter = [];
-          $$(this).children(":selected").each(function () {
-            filter.push($$(this).attr("value"));
-          } );
-          $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);"""
+          var selected = $$(this).find(":selected")
+          if (selected.size() > 0) {
+            selected.each(function () {
+              filter.push($$(this).attr("value"));
+            } );
+
+            $$('#${changeRequestTableId}').dataTable().fnFilter(filter.join("|"),1,true,false,true);
+          }
+          else {
+            // No filter, display nothing
+            $$('#${changeRequestTableId}').dataTable().fnFilter(".",1);
+          }"""
     val onChange = ("onchange" -> JsRaw(filterFunction))
 
 
 
-    def filterForm (select:Elem,text:String, transform: String => NodeSeq) = {
+    def filterForm (select:Elem,link:String, transform: String => NodeSeq) = {
       val submit =
+          SHtml.a(Text(link),JsRaw(s"$$('.expand').click();"), ("style"," float:right;font-size:9px;margin-top:12px; margin-left: 5px;")) ++
           SHtml.ajaxSubmit(
-              text
+              link
             , () => SetHtml("actualFilter",transform(value))
             , ("class","expand")
-            , ("style","margin: 5px 10px; float:right; height:15px; width:18px;  padding: 0; border-radius:25px")
+            , ("style","margin: 5px 10px; float:right; height:15px; width:18px;  padding: 0; border-radius:25px; display:none")
          ) ++ Script(JsRaw("correctButtons()"))
 
       SHtml.ajaxForm(
@@ -159,43 +169,46 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
     )
     }
     def unexpandedFilter(default:String):NodeSeq = {
-      val select = SHtml.select(
-          ("","All") :: ("Pending","Pending") :: selectValues
+      val multipleValues = ("","All") :: ("Pending","Open") :: ("^(?!Pending)","Closed") :: Nil
+      val select :Elem =SHtml.select(
+          multipleValues ::: selectValues
         , Full(default)
-        , list => value = list
+        , list => {logger.info(list)
+        value = list}
         , ("style","width:auto;")
       )
-      filterForm(select,"...",expandedFilter)
+      (s"value='${default}' [selected]" #> "selected").apply(
+              ("select *" #> {<optgroup label="Multiple" style="margin-bottom:10px" value="" >{multipleValues.map{case (value,label) => <option value={value} style="margin-left:10px">{label}</option>}}</optgroup>++
+               <optgroup label="Single">{selectValues.map{case (value,label) => <option value={value} style="margin-left:10px">{label}</option>}}</optgroup> }  ).apply(
+      filterForm(select,"more",expandedFilter)))
   }
 
     def expandedFilter(default:String) = {
       val extendedDefault =
-        if (default == "Pending")
-          values.filter(_.contains("Pending"))
-        else if (values.exists(_ == default))
-            List(default)
-          else
-            Nil
+        default match {
+          case ""     =>  values
+          case "Pending" => values.filter(_.contains("Pending"))
+          case "^(?!Pending)" => values.filterNot(_.contains("Pending"))
+          case default if (values.exists(_ == default)) =>  List(default)
+          case _         =>  Nil
+        }
 
-      def computeDefault(list:List[String]) =
-        value = if (list.size==4)
-          "All"
-                            else if (list.forall(_.contains("Pending") && list.size == 2))
-                                "Pending"
-                              else
-                                list.head
+      def computeDefault(selectedValues:List[String]) = selectedValues match {
+          case allValues if allValues.size==4 => ""
+          case value :: Nil => value
+          case openValues if openValues.forall(_.contains("Pending")) => "Pending"
+          case closedValues if closedValues.forall(!_.contains("Pending")) => "^(?!Pending)"
+          case _ => selectedValues.head
+      }
+
+      logger.warn(extendedDefault)
       val multiSelect =  SHtml.multiSelect(
             selectValues
           , extendedDefault
-          , list => value = if (list.size==4)
-                              "All"
-                            else if (list.forall(_.contains("Pending") && list.size == 2))
-                                "Pending"
-                              else
-                                list.head
+          , list => value = computeDefault(list)
           , ("style","width:auto;padding-right:3px;")
         )
-      filterForm(multiSelect,".",unexpandedFilter)
+      filterForm(multiSelect,"less",unexpandedFilter)
     }
 
   unexpandedFilter(initFilter.getOrElse("Pending"))

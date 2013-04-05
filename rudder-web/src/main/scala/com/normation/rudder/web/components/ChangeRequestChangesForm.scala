@@ -56,6 +56,7 @@ import com.normation.cfclerk.domain.TechniqueName
 import com.normation.cfclerk.domain.SectionSpec
 import com.normation.eventlog.EventActor
 import org.joda.time.DateTime
+import com.normation.rudder.web.model.JsInitContextLinkUtil._
 
 
 object ChangeRequestChangesForm {
@@ -66,7 +67,6 @@ object ChangeRequestChangesForm {
       chooseTemplate("component", "changes", xml)
     } ) openOr Nil
 }
-
 class ChangeRequestChangesForm(
   var changeRequest:ChangeRequest
 ) extends DispatchSnippet with Loggable {
@@ -345,34 +345,33 @@ class ChangeRequestChangesForm(
       <td id="date"/>
    </tr>
 
-  def displayEvent(action:String, actor:EventActor, date:DateTime ) =
+  def displayEvent(action:NodeSeq, actor:EventActor, date:DateTime ) =
    ( "#action *" #> {action } &
      "#actor *" #> actor.name &
      "#date *"  #> DateFormaterService.getFormatedDate(date)
    ).apply(CRLine)
 
-
   def displayChangeRequestEvent(crEvent:ChangeRequestEventLog) = {
-    val action = crEvent.diff match {
+    val action = Text(crEvent.diff match {
            case AddChangeRequestDiff(_) => "Change request created"
            case ModifyToChangeRequestDiff(_) => "Change request details changed"
            case DeleteChangeRequestDiff(_) => "Change request deleted"
-    }
+    })
     displayEvent(action,crEvent.actor,crEvent.creationDate)
   }
 
   def displayWorkflowEvent(wfEvent: WorkflowProcessEventLog)=
     wfEvent match {
       case StepWorkflowProcessEventLog(actor, date, reason, from, to) =>
-        val action = s"Change workflow step from ${from} to ${to}"
+        val action = Text(s"Change workflow step from ${from} to ${to}")
         displayEvent(action,actor,date)
     }
 
   def displayDirectiveChange(directiveChange: DirectiveChange) = {
     val action = directiveChange.firstChange.diff match {
-           case a : AddDirectiveDiff => s"Create Directive ${a.directive.name}"
-           case d : DeleteDirectiveDiff => s"Delete Directive ${d.directive.name}"
-           case m : ModifyToDirectiveDiff => s"Modify Directive ${m.directive.name}"
+           case a : AddDirectiveDiff => Text(s"Create Directive ${a.directive.name}")
+           case d : DeleteDirectiveDiff => <span>Delete Directive {<a href={directiveLink(d.directive.id)} onclick="noBubble(event);">{d.directive.name}</a>}</span>
+           case m : ModifyToDirectiveDiff => <span>Modify Directive {<a href={directiveLink(m.directive.id)} onclick="noBubble(event);">{m.directive.name}</a>}</span>
          }
    displayEvent(action,directiveChange.firstChange.actor,directiveChange.firstChange.creationDate)
   }

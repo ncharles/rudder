@@ -152,13 +152,13 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
             step match {
             case eb:EmptyBox =>  NodeSeq.Empty
             case Full(step) =>
-              
+
               ("#backStep" #> { workflowService.backSteps(step) match {
                   case Nil => NodeSeq.Empty
                   case steps =>
                     SHtml.ajaxButton(
                         "Cancel"
-                      , () => ChangeStepPopup("Cancel", steps, cr)
+                      , () => ChangeStepPopup("Refuse", steps, cr)
               ) } }  &
                "#nextStep" #> {workflowService.nextSteps(step) match {
                              case Nil => NodeSeq.Empty
@@ -210,7 +210,8 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       case (None,Some(_)) => step
       case (Some(date),Some(stepDate)) => if (date.isAfter(stepDate)) action else step
     }
-    ( "#backButton *" #> SHtml.ajaxButton("← Back",() => S.redirectTo("/secure/utilities/changeRequests")) &
+    val link = <b style="margin-top:10px"> ← Back to change request list</b>
+    ( "#backButton *" #> SHtml.a(() => S.redirectTo("/secure/utilities/changeRequests"),link) &
       "#CRName *" #> s"CR #${cr.id}: ${cr.info.name}" &
       "#CRStatus *" #> workflowService.findStep(cr.id).map(x => Text(x.value)).openOr(<div class="error">Cannot find the status of this change request</div>) &
       "#CRLastAction *" #> s"${ last }"
