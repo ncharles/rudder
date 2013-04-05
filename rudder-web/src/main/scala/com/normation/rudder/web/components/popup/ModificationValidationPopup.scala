@@ -81,6 +81,8 @@ import com.normation.rudder.domain.nodes.ChangeRequestNodeGroupDiff
  * - the list of impacted Rules by that modification
  * - the change message
  * - the workflows part (asking what to do if the wf is enable)
+ * 
+ * For Creation or Clone, there is no Workflow, hence no ChangeRequest !
  *
  */
 
@@ -181,6 +183,8 @@ class ModificationValidationPopup(
   private[this] val workflowService          = RudderConfig.workflowService
   private[this] val dependencyService        = RudderConfig.dependencyAndDeletionService
   private[this] val workflowEnabled          = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
+
+  private[this] val directiveRepository      = RudderConfig.woDirectiveRepository
 
   private[this] val techniqueRepo            = RudderConfig.techniqueRepository
 
@@ -307,13 +311,23 @@ class ModificationValidationPopup(
     override def inputField = super.inputField % ("class" -> "nodisplay")
   }
 
-  private[this] val formTracker = new FormTracker(
-        crReasons.toList
-    ::: changeRequestName
-     :: changeRequestDescription
-     :: existingChangeRequest
-     :: Nil
-  )
+  // The formtracker needs to check everything only if its not a creation and there is workflow
+  private[this] val formTracker = {
+    if ((workflowEnabled)&(!isANewItem)) {
+        new FormTracker(
+                crReasons.toList
+            ::: changeRequestName
+             :: changeRequestDescription
+             :: existingChangeRequest
+             :: Nil
+        )
+        
+    } else {
+      new FormTracker(
+                crReasons.toList
+      )
+    }
+  }
 
   private[this] var notifications = List.empty[NodeSeq]
 
