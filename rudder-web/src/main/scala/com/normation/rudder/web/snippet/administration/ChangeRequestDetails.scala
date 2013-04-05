@@ -157,7 +157,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
                   case Nil => NodeSeq.Empty
                   case steps =>
                     SHtml.ajaxButton(
-                        "Cancel"
+                        "Decline"
                       , () => ChangeStepPopup("Refuse", steps, cr)
               ) } }  &
                "#nextStep" #> {workflowService.nextSteps(step) match {
@@ -263,14 +263,14 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     }
 
     val content = {
-      ( "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message." &
-        "#header"   #>  s"${action} CR #${cr.id}: ${cr.info.name}" &
-        "#form *+"  #>
+      ( "#header"   #>  s"${action} CR #${cr.id}: ${cr.info.name}" &
+        "#form -*"  #>
           SHtml.ajaxForm(
             ( "#reason"  #> stepMessage.toForm_! &
               "#next"    #> next &
               "#cancel"  #> SHtml.ajaxButton("Cancel", () => closePopup ) &
-              "#confirm" #> SHtml.ajaxSubmit("Confirm", () => confirm())
+              "#confirm" #> SHtml.ajaxSubmit("Confirm", () => confirm()) &
+               "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message."
             ) (popupContent)
           )
       ) ( popup ) ++

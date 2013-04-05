@@ -3,7 +3,7 @@
 
 <component:header>
   <div id="backButton" style ="float: left; margin-left: 40px; margin-top:5px;"/>
-  <div id="CRStatus" class="ui-button  ui-corner-all ui-state-default" style="float: right; font-size: 15px; font-weight: bold; padding: 7px; margin-right: 40px; cursor:default;" />
+  <div id="CRStatus" class="ui-corner-all ui-state-default" style="background-color:#2E2D2D; color:#F79D10; float: right; font-size: 15px; font-weight: bold; padding: 7px; margin-right: 40px; cursor:default;   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1) inset, 0 1px 2px rgba(0, 0, 0, 0.25);" />
   <hr class="spacer"/>
   <div id="CRName" style="margin-left: 60px; font-weight: bold; font-size: 25px;"/>
   <hr class="spacer"/>
@@ -57,20 +57,24 @@
 </component:changes>
 
 <component:popup>
-  <div id="changeStatePopup" class="nodisplay ui-widget" style="overflow: auto; max-height:500px;">
+  <div id="changeStatePopup" class="nodisplay ui-widget" style="max-height:500px;">
     <div class="simplemodal-title">
       <h1 ><span id="header"></span></h1>
       <hr/>
     </div>
-    <div class="simplemodal-content">
-      <br />
-      <div class="popupContent" id="intro"/>
-      <div id="form" />
-    </div>
+        <div id="form" >
+
+
+  </div>
   </div>
 </component:popup>
 
 <component:popupContent>
+    <div class="simplemodal-content">
+      <br />
+      <div class="popupContent" id="intro"/>
+  
+  <div style="padding:20px">
   <hr class="spacer" />
   <div class="wbBaseField">
     <b class="threeCol">Next status: </b>
@@ -80,13 +84,15 @@
   </div>
   <hr class="spacer" />
   <div id ="reason" />
-  <div class="simplemodal-bottom">
-    <div style="float:left; padding:5px;">
+    <hr class="spacer" />
+</div>
+</div>
+      <div class="simplemodal-bottom">
+    <hr/>
+    <div class="popupButton">
       <button class="simplemodal-close" id="cancel">
         Cancel
       </button>
-    </div>
-    <div class="popupButton">
       <button id="confirm">
         Confirm
       </button>

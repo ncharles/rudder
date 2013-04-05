@@ -103,11 +103,14 @@
     </lift:authz>
     <div class="lift:WorkflowInformation.pendingModification modificationsDisplayer">
       <lift:authz role="validator_read">
-        <span>Open change requests:</span>
-        <span class="pendingModifications">[here comes the modifications]</span>
+        <span >Open change requests:</span>
+        <hr/>
+        <span class="pendingModifications" >[here comes the modifications]</span>
+        <hr/>
       </lift:authz>
-      <lift:authz role="deployer_read">      
-        <span class="pendingDeployment">[here comes the pending deployment]</span>
+      <lift:authz role="deployer_read">
+        <hr/> 
+        <span class="pendingDeployment" >[here comes the pending deployment]</span>
       </lift:authz>
     </div>
     
