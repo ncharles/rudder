@@ -430,7 +430,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
       , technique, activeTechnique
       , directive
       , oldDirective
-      , onSuccessCallback = directiveEditFormSuccessCallBack
+      , onSuccessCallback = directiveEditFormSuccessCallBack(isADirectiveCreation)
       , isADirectiveCreation = isADirectiveCreation
     )
 
@@ -443,10 +443,10 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
    * If we have workflow enabled, then the form is not updated, rather
    * it tells that the modification are pending
    */
-  private[this] def directiveEditFormSuccessCallBack(dir: Directive): JsCmd = {  
-    workflowEnabled match {
-      case false => 
-            directiveRepository.getDirectiveWithContext(dir.id) match {
+  private[this] def directiveEditFormSuccessCallBack(creation:Boolean)(dir: Directive): JsCmd = {  
+    // if it's a creation, or there is no workflow, then everything is direct
+    if ( (creation) | (!workflowEnabled) ) {
+      directiveRepository.getDirectiveWithContext(dir.id) match {
             case Full((technique, activeTechnique, directive)) => {
               updateCf3PolicyDraftInstanceSettingFormComponent(technique, activeTechnique, dir,None)
               Replace(htmlId_policyConf, showDirectiveDetails) &
@@ -465,7 +465,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
               Alert("Error when trying to get display the page. Please, try again")
             }
           }
-      case true => 
+    } else { 
         // in this case, the modification has not been done, and the repo has 
         // not been updated.
         val updated = <div id="editForm" class="object-details">

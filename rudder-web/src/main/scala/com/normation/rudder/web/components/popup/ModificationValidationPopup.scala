@@ -72,6 +72,10 @@ import com.normation.rudder.web.model.RudderBaseField
 import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.nodes.NodeGroupDiff
 import com.normation.rudder.domain.nodes.ChangeRequestNodeGroupDiff
+import com.normation.eventlog.ModificationId
+import com.normation.rudder.batch.AutomaticStartDeployment
+import com.normation.rudder.domain.eventlog.RudderEventActor
+
 
 /**
  * Validation pop-up for modification on group and directive.
@@ -81,6 +85,11 @@ import com.normation.rudder.domain.nodes.ChangeRequestNodeGroupDiff
  * - the list of impacted Rules by that modification
  * - the change message
  * - the workflows part (asking what to do if the wf is enable)
+ * 
+ * For Creation or Clone, there is no Workflow, hence no ChangeRequest !
+ * On success, we return on the forms with the newly created directive
+ * On failure, we return on the form with the error
+ * 
  *
  */
 
@@ -155,7 +164,7 @@ object ModificationValidationPopup extends Loggable {
          </div>
       </div>
     , "create"    ->
-      <div><h2>Are you sure that you want to create this {item}?</h2></div>
+      <div>Are you sure you want to create the {item}?</div>
   )
 
 }
@@ -164,13 +173,16 @@ object ModificationValidationPopup extends Loggable {
 class ModificationValidationPopup(
     //if we are creating a new item, then None, else Some(x)
     item              : Either[
-                            (TechniqueName, SectionSpec ,Directive, Option[Directive])
+                            (TechniqueName, ActiveTechniqueId, SectionSpec ,Directive, Option[Directive])
                           , (NodeGroup, Option[NodeGroup])
                         ]
   , action            : String //one among: save, delete, enable, disable or create
   , isANewItem        : Boolean
   , onSuccessCallback : NodeSeq => JsCmd = { x => Noop }
   , onFailureCallback : NodeSeq => JsCmd = { x => Noop }
+  , onCreateSuccessCallBack : (Directive) => JsCmd = { x => Noop }
+  , onCreateFailureCallBack : JsCmd = { Noop }
+  , parentFormTracker : Option[FormTracker] = None
 ) extends DispatchSnippet with Loggable {
 
   import ModificationValidationPopup._
@@ -182,8 +194,10 @@ class ModificationValidationPopup(
   private[this] val dependencyService        = RudderConfig.dependencyAndDeletionService
   private[this] val workflowEnabled          = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
 
+  private[this] val directiveRepository      = RudderConfig.woDirectiveRepository
+  private[this] val uuidGen                  = RudderConfig.stringUuidGenerator
   private[this] val techniqueRepo            = RudderConfig.techniqueRepository
-
+  private[this] val asyncDeploymentAgent     = RudderConfig.asyncDeploymentAgent
 
   def dispatch = {
     case "popupContent" => { _ => popupContent }
@@ -191,9 +205,13 @@ class ModificationValidationPopup(
 
   def popupContent() : NodeSeq = {
     val name = if(item.isLeft) "Directive" else "Group"
-    val buttonName = workflowEnabled match {
-      case true => "Create Draft"
-      case false => "Save"
+    val (buttonName, classForButton) = workflowEnabled match {
+      case true => 
+        isANewItem match {
+          case false => ("Submit for Validation", "wideButton")
+          case true => ("Create", "")
+        }
+      case false => ("Save", "")
     }
     (
       "#validationForm" #> { (xml:NodeSeq) => SHtml.ajaxForm(xml) } andThen
@@ -210,14 +228,12 @@ class ModificationValidationPopup(
         </div>
         }
       } &
-      "#newChangeRequest [class]" #> (if (workflowEnabled) Text("display") else Text("nodisplay")) &
+      "#newChangeRequest [class]" #> (if ((workflowEnabled)&(!isANewItem)) Text("display") else Text("nodisplay")) &
       "#changeRequestName" #> changeRequestName.toForm &
       "#changeRequestDescription" #> changeRequestDescription.toForm &
-      "#existingChangeRequest" #> existingChangeRequest.toForm &
 //      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
-      "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, onSubmitStartWorkflow _) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
-    )(html ++ Script(OnLoad(
-        JsRaw("correctButtons();"))))
+      "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, () => onSubmitStartWorkflow(), ("class" -> classForButton)) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
+    )(html ++ Script(OnLoad(JsRaw("correctButtons();"))))
   }
 
   private[this] def showError(field:RudderBaseField) : NodeSeq = {
@@ -232,7 +248,7 @@ class ModificationValidationPopup(
     } else {
 
       val rules = item match {
-        case Left((_, _, directive, _)) =>
+        case Left((_, _, _, directive, _)) =>
           action match {
             case "delete" => dependencyService.directiveDependencies(directive.id).map(_.rules)
             case "disable" | "save" => dependencyService.directiveDependencies(directive.id, OnlyEnableable).map(_.rules)
@@ -281,11 +297,11 @@ class ModificationValidationPopup(
   }
 
   private[this] val defaultRequestName = item match {
-    case Left((t,r,d,opt)) => s"Update Directive ${d.name}"
+    case Left((t,a,r,d,opt)) => s"Update Directive ${d.name}"
     case Right((g,opt)) => s"Update Group ${g.name}"
   }
 
-  private[this] val changeRequestName = new WBTextField("Name", defaultRequestName) {
+  private[this] val changeRequestName = new WBTextField("Title", defaultRequestName) {
     override def setFilter = notNull _ :: trim _ :: Nil
     override def errorClassName = ""
     override def inputField = super.inputField % ("onkeydown" , "return processKey(event , 'createDirectiveSaveButton')") % ("tabindex","1")
@@ -302,18 +318,28 @@ class ModificationValidationPopup(
   }
 
   //TODO : get existing change request
+  /*
   private[this] val changeRequestList = Seq(("Private Draft 1", "pvd1"), ("Change Request 42", "cr42"))
   private[this] val existingChangeRequest = new WBSelectField("Existing change requests", changeRequestList, "") {
     override def inputField = super.inputField % ("class" -> "nodisplay")
-  }
+  }*/
 
-  private[this] val formTracker = new FormTracker(
-        crReasons.toList
-    ::: changeRequestName
-     :: changeRequestDescription
-     :: existingChangeRequest
-     :: Nil
-  )
+  // The formtracker needs to check everything only if its not a creation and there is workflow
+  private[this] val formTracker = {
+    if ((workflowEnabled)&(!isANewItem)) {
+        new FormTracker(
+                crReasons.toList
+            ::: changeRequestName
+             :: changeRequestDescription
+             :: Nil
+        )
+        
+    } else {
+      new FormTracker(
+               // crReasons.toList
+      )
+    }
+  }
 
   private[this] var notifications = List.empty[NodeSeq]
 
@@ -321,7 +347,8 @@ class ModificationValidationPopup(
 
 
   private[this] def closePopup() : JsCmd = {
-    JsRaw(""" $.modal.close();""")
+    println("close that popup")
+    JsRaw("""$.modal.close();""") 
   }
 
   /**
@@ -373,75 +400,121 @@ class ModificationValidationPopup(
     if(formTracker.hasErrors) {
       onFailure
     } else {
-
-      //based on the choice of the user, create or update a Change request
-      val savedChangeRequest = {
-        // we only have quick change request now
-        val cr = item match {
-          case Left((techniqueName, oldRootSection, directive, optOriginal)) =>
-              val action = DirectiveDiffFromAction(techniqueName, directive, optOriginal)
-              action.map(
-                changeRequestService.createChangeRequestFromDirective(
-                      changeRequestName.get
-                    , changeRequestDescription.get
-                    , techniqueName
-                    , oldRootSection
-                    , directive.id
-                    , optOriginal
-                    , _
-                    , CurrentUser.getActor
-                    , crReasons.map( _.get )
-                ) )
-
-          case Right((nodeGroup, optOriginal)) =>
-              val action = groupDiffFromAction(nodeGroup, optOriginal)
-              action.map(
-              changeRequestService.createChangeRequestFromNodeGroup(
-                  changeRequestName.get
-                , changeRequestDescription.get
-                , nodeGroup
-                , optOriginal
-                , _
-                , CurrentUser.getActor
-                , crReasons.map(_.get))
-              )
-        }
-        cr.flatMap { cr =>
-          for {
-            saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map(_.get))
-            wfStarted <- workflowService.startWorkflow(saved.id, CurrentUser.getActor, crReasons.map(_.get))
-          } yield {
-            saved.id
+      // we create a CR only if we are not creating
+      if (!isANewItem) {
+        //based on the choice of the user, create or update a Change request
+        val savedChangeRequest = {
+          // we only have quick change request now
+          val cr = item match {
+            case Left((techniqueName, activeTechniqueId, oldRootSection, directive, optOriginal)) =>
+                val action = DirectiveDiffFromAction(techniqueName, directive, optOriginal)
+                action.map(
+                  changeRequestService.createChangeRequestFromDirective(
+                        changeRequestName.get
+                      , changeRequestDescription.get
+                      , techniqueName
+                      , oldRootSection
+                      , directive.id
+                      , optOriginal
+                      , _
+                      , CurrentUser.getActor
+                      , crReasons.map( _.get )
+                  ) )
+  
+            case Right((nodeGroup, optOriginal)) =>
+                val action = groupDiffFromAction(nodeGroup, optOriginal)
+                action.map(
+                changeRequestService.createChangeRequestFromNodeGroup(
+                    changeRequestName.get
+                  , changeRequestDescription.get
+                  , nodeGroup
+                  , optOriginal
+                  , _
+                  , CurrentUser.getActor
+                  , crReasons.map(_.get))
+                )
+          }
+          cr.flatMap { cr =>
+            for {
+              saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map(_.get))
+              wfStarted <- workflowService.startWorkflow(saved.id, CurrentUser.getActor, crReasons.map(_.get))
+            } yield {
+              saved.id
+            }
           }
         }
-      }
-
-      savedChangeRequest match {
-        case Full(_) =>
-          val changeText = workflowEnabled match {
-            case true =>
-              item match {
-                case Left((techniqueName, rootSection, directive, optOriginal)) =>
-                  <div>Your change on directive <b>{directive.name}</b> has been submited</div>
-                case Right((nodeGroup, optOriginal)) =>
-                  <div>Your change on group <b>{nodeGroup.name}</b> has been submited</div>
-              }
-            case false =>
-              // No workflow means nothing to warn the user about
-              <div/>
-          }
-          onSuccessCallback(changeText)
-        case eb:EmptyBox =>
-          val e = (eb ?~! "Error when trying to save your modification")
-          e.rootExceptionCause.foreach { ex =>
-            logger.error(s"Exception when trying to update a change request:", ex)
-          }
-          onFailureCallback(Text(e.messageChain))
+  
+        savedChangeRequest match {
+          case Full(_) =>
+            val changeText = workflowEnabled match {
+              case true =>
+                item match {
+                  case Left((techniqueName, activeTechniqueId, rootSection, directive, optOriginal)) =>
+                    <div>Your change on directive <b>{directive.name}</b> has been submited</div>
+                  case Right((nodeGroup, optOriginal)) =>
+                    <div>Your change on group <b>{nodeGroup.name}</b> has been submited</div>
+                }
+              case false =>
+                // No workflow means nothing to warn the user about
+                <div/>
+            }
+            onSuccessCallback(changeText)
+          case eb:EmptyBox =>
+            val e = (eb ?~! "Error when trying to save your modification")
+            e.rootExceptionCause.foreach { ex =>
+              logger.error(s"Exception when trying to update a change request:", ex)
+            }
+            onFailureCallback(Text(e.messageChain))
+        }
+      } else {
+        // if creation or clone, we create everything immediately
+        item match {
+          case Left((techniqueName, activeTechniqueId, oldRootSection, directive, optOriginal)) =>
+            saveAndDeployDirective(directive, activeTechniqueId, crReasons.map( _.get ))
+          case _ => 
+            Alert("var")
+        }
       }
     }
   }
 
+  private[this] def saveAndDeployDirective(
+      directive: Directive
+    , activeTechniqueId: ActiveTechniqueId
+    , why:Option[String]
+    ): JsCmd = {
+    println("i'm passing here")
+    val modId = ModificationId(uuidGen.newUuid)
+    directiveRepository.saveDirective(activeTechniqueId, directive, modId, CurrentUser.getActor, why) match {
+      case Full(optChanges) =>
+        optChanges match {
+          case Some(_) => // There is a modification diff, launch a deployment.
+            asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
+          case None => // No change, don't launch a deployment
+        }
+        println("this exactly")
+        closePopup() & onCreateSuccessCallBack(directive)
+      case Empty => 
+        parentFormTracker match {
+          case None => 
+            logger.error("Invalid use of modificationValidationPopup : no parentFormTracker defined when creating/cloning directive") 
+          case Some(tracker) => 
+            tracker.addFormError(Text("There was an error on creating this directive"))
+        
+        }
+        closePopup() & onCreateFailureCallBack
+      case Failure(m, _, _) =>
+        parentFormTracker match {
+          case None => 
+            logger.error("Invalid use of modificationValidationPopup : no parentFormTracker defined when creating/cloning directive")
+          case Some(tracker) =>
+            tracker.addFormError(Text(m))
 
+        }
+        closePopup() & onCreateFailureCallBack        
+    }
+  }
+  
   private[this] def onFailure : JsCmd = {
     formTracker.addFormError(error("The form contains some errors, please correct them"))
     updateFormClientSide()

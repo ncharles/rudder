@@ -122,7 +122,6 @@ class DirectiveEditForm(
   private[this] val directiveEditorService = RudderConfig.directiveEditorService
   private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepo    = RudderConfig.roChangeRequestRepository
-  private[this] val directiveRepo          = RudderConfig.woDirectiveRepository
   private[this] val techniqueRepo          = RudderConfig.techniqueRepository
 
 
@@ -206,7 +205,7 @@ class DirectiveEditForm(
       """) &
       JsVar("""
           $("input").not("#treeSearch").keydown( function(event) {
-            processKey(event , '%s')
+            processKey(event , '%s');
           } );
           """.format(htmlId_save)))
     )
@@ -215,7 +214,7 @@ class DirectiveEditForm(
   private[this] def clone(): JsCmd = {
     SetHtml(CreateCloneDirectivePopup.htmlId_popup,
         newCreationPopup(technique, activeTechnique)) &
-    JsRaw(""" createPopup("%s",300,400) """
+    JsRaw(""" createPopup("%s",300,400); """
         .format(CreateCloneDirectivePopup.htmlId_popup))
   }
 
@@ -337,6 +336,7 @@ class DirectiveEditForm(
       onFailure
     } else {
       if (isADirectiveCreation) {
+        // On creation, don't create workflow
         val newDirective = directive.copy(
           parameters = parameterEditor.mapValueSeq,
           name = piName.is,
@@ -391,16 +391,31 @@ class DirectiveEditForm(
     val optOriginal = { if(isADirectiveCreation) None else if(oldDirective.isEmpty) Some(directive) else oldDirective }
     // Find old root section if there is an initial State
     val rootSection = optOriginal.flatMap(old => techniqueRepo.get(TechniqueId(activeTechnique.techniqueName,old.techniqueVersion)).map(_.rootSection)).getOrElse(technique.rootSection)
-    val popup = new ModificationValidationPopup(
-        Left(technique.id.name,rootSection, newDirective, optOriginal)
-      , action
-      , isADirectiveCreation
-      , xml => JsRaw("$.modal.close();") & onSuccessCallback(newDirective) & successPopup(xml)
-      , xml => onFailureCallback() & failurePopup(xml)
-    )
+    
+    val popup = {
+      if (!isADirectiveCreation) {
+        new ModificationValidationPopup(
+            Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
+          , action
+          , isADirectiveCreation
+          , xml => JsRaw("$.modal.close();") & onSuccessCallback(newDirective) & successPopup(xml)
+          , xml => onFailureCallback() & failurePopup(xml)
+        )
+      } else {
+        new ModificationValidationPopup(
+            Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
+          , action
+          , isADirectiveCreation
+          , onCreateSuccessCallBack = onSuccessCallback 
+          , onCreateFailureCallBack = onFailure
+          , parentFormTracker = Some(formTracker)
+        )        
+      }
+    } 
+      
 
     SetHtml("confirmUpdateActionDialog", popup.popupContent) &
-    createPopup("confirmUpdateActionDialog",450,850)
+    createPopup("confirmUpdateActionDialog",400,800)
   }
 
   private[this] def updateAndDisplayNotifications() : NodeSeq = {
