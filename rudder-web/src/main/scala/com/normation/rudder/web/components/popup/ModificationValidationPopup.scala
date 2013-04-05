@@ -178,9 +178,9 @@ class ModificationValidationPopup(
                         ]
   , action            : String //one among: save, delete, enable, disable or create
   , isANewItem        : Boolean
-  , onSuccessCallback : NodeSeq => JsCmd = { x => Noop }
+  , onSuccessCallback : ChangeRequestId => JsCmd = { x => Noop }
   , onFailureCallback : NodeSeq => JsCmd = { x => Noop }
-  , onCreateSuccessCallBack : (Directive) => JsCmd = { x => Noop }
+  , onCreateSuccessCallBack : (Either[Directive,ChangeRequestId]) => JsCmd = { x => Noop }
   , onCreateFailureCallBack : JsCmd = { Noop }
   , parentFormTracker : Option[FormTracker] = None
 ) extends DispatchSnippet with Loggable {
@@ -228,9 +228,9 @@ class ModificationValidationPopup(
         </div>
         }
       } &
-      "#newChangeRequest [class]" #> (if ((workflowEnabled)&(!isANewItem)) Text("display") else Text("nodisplay")) &
       "#changeRequestName" #> changeRequestName.toForm &
-      "#changeRequestDescription" #> changeRequestDescription.toForm &
+      "#changeRequestName [class]" #> (if ((workflowEnabled)&(!isANewItem)) Text("display") else Text("nodisplay")) &
+      ".notifications *" #> updateAndDisplayNotifications() &
 //      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
       "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, () => onSubmitStartWorkflow(), ("class" -> classForButton)) % ("id", "createDirectiveSaveButton") % ("tabindex","3"))
     )(html ++ Script(OnLoad(JsRaw("correctButtons();"))))
@@ -336,18 +336,14 @@ class ModificationValidationPopup(
         
     } else {
       new FormTracker(
-               // crReasons.toList
+               crReasons.toList
       )
     }
   }
-
-  private[this] var notifications = List.empty[NodeSeq]
-
   private[this] def error(msg:String) = <span class="error">{msg}</span>
 
 
   private[this] def closePopup() : JsCmd = {
-    println("close that popup")
     JsRaw("""$.modal.close();""") 
   }
 
@@ -445,20 +441,8 @@ class ModificationValidationPopup(
         }
   
         savedChangeRequest match {
-          case Full(_) =>
-            val changeText = workflowEnabled match {
-              case true =>
-                item match {
-                  case Left((techniqueName, activeTechniqueId, rootSection, directive, optOriginal)) =>
-                    <div>Your change on directive <b>{directive.name}</b> has been submited</div>
-                  case Right((nodeGroup, optOriginal)) =>
-                    <div>Your change on group <b>{nodeGroup.name}</b> has been submited</div>
-                }
-              case false =>
-                // No workflow means nothing to warn the user about
-                <div/>
-            }
-            onSuccessCallback(changeText)
+          case Full(cr) =>
+            onSuccessCallback(cr)
           case eb:EmptyBox =>
             val e = (eb ?~! "Error when trying to save your modification")
             e.rootExceptionCause.foreach { ex =>
@@ -483,7 +467,6 @@ class ModificationValidationPopup(
     , activeTechniqueId: ActiveTechniqueId
     , why:Option[String]
     ): JsCmd = {
-    println("i'm passing here")
     val modId = ModificationId(uuidGen.newUuid)
     directiveRepository.saveDirective(activeTechniqueId, directive, modId, CurrentUser.getActor, why) match {
       case Full(optChanges) =>
@@ -493,7 +476,7 @@ class ModificationValidationPopup(
           case None => // No change, don't launch a deployment
         }
         println("this exactly")
-        closePopup() & onCreateSuccessCallBack(directive)
+        closePopup() & onCreateSuccessCallBack(Left(directive))
       case Empty => 
         parentFormTracker match {
           case None => 
@@ -522,13 +505,11 @@ class ModificationValidationPopup(
 
 
   private[this] def updateAndDisplayNotifications() : NodeSeq = {
-    notifications :::= formTracker.formErrors
+    val notifications = formTracker.formErrors
     formTracker.cleanErrors
-
     if(notifications.isEmpty) NodeSeq.Empty
     else {
       val html = <div id="notifications" class="notify"><ul>{notifications.map( n => <li>{n}</li>) }</ul></div>
-      notifications = Nil
       html
     }
   }
