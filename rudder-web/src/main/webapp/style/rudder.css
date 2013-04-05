@@ -1300,7 +1300,7 @@ span.ui-button-text {
   color: #F79D10;
   font-size: 1.4em;
   font-weight: bold;
-  clear : left;
+  clear : both;
   float : right;
 }
 .modificationsDisplayer a{
