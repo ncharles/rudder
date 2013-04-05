@@ -121,6 +121,8 @@ import com.normation.rudder.services.modification.DiffServiceImpl
 import com.normation.rudder.services.workflows.WorkflowProcessEventLogService
 import com.normation.rudder.services.workflows.CommitAndDeployChangeRequest
 import com.normation.rudder.services.workflows.InMemoryWorkflowProcessEventLogService
+import com.normation.cfclerk.xmlwriters.SectionSpecWriter
+import com.normation.cfclerk.xmlwriters.SectionSpecWriterImpl
 
 /**
  * Define a resource for configuration.
@@ -408,6 +410,7 @@ object RudderConfig extends Loggable {
 
   ///// items serializer - service that transforms items to XML /////
   private[this] lazy val ruleSerialisation: RuleSerialisation = new RuleSerialisationImpl(Constants.XML_CURRENT_FILE_FORMAT.toString)
+  private[this] lazy val rootSectionSerialisation : SectionSpecWriter = new SectionSpecWriterImpl()
   private[this] lazy val activeTechniqueCategorySerialisation: ActiveTechniqueCategorySerialisation =
     new ActiveTechniqueCategorySerialisationImpl(Constants.XML_CURRENT_FILE_FORMAT.toString)
   private[this] lazy val activeTechniqueSerialisation: ActiveTechniqueSerialisation =
@@ -425,7 +428,9 @@ object RudderConfig extends Loggable {
         Constants.XML_CURRENT_FILE_FORMAT.toString
       , nodeGroupSerialisation
       , directiveSerialisation
-      , techniqueRepositoryImpl)
+      , techniqueRepositoryImpl
+      , rootSectionSerialisation
+    )
   private[this] lazy val eventLogFactory = new EventLogFactoryImpl(
     ruleSerialisation,
     directiveSerialisation,
@@ -459,6 +464,7 @@ object RudderConfig extends Loggable {
       nodeGroupUnserialisation
     , directiveUnserialisation
     , techniqueRepository
+    , sectionSpecParser
   )
   private[this] lazy val deploymentStatusUnserialisation = new DeploymentStatusUnserialisationImpl
   private[this] lazy val xmlMigration_2_3 = new XmlMigration_2_3()
@@ -482,9 +488,10 @@ object RudderConfig extends Loggable {
 
   // => because of systemVariableSpecService
   // metadata.xml parser
+  private[this] lazy val variableSpecParser = new VariableSpecParser
+  private[this] lazy val sectionSpecParser = new SectionSpecParser(variableSpecParser)
   private[this] lazy val techniqueParser = {
-    val variableSpecParser = new VariableSpecParser()
-    new TechniqueParser(variableSpecParser,new SectionSpecParser(variableSpecParser),new Cf3PromisesFileTemplateParser,systemVariableSpecService)
+    new TechniqueParser(variableSpecParser,sectionSpecParser,new Cf3PromisesFileTemplateParser,systemVariableSpecService)
   }
 
   ////////////////////////////////////
