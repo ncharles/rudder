@@ -269,12 +269,10 @@ class ChangeRequestChangesSerialisationImpl(
           case ModifyToDirectiveDiff(techniqueName,directive,rootSection) =>
              val rootSectionXml = change.diff match {
                case ModifyToDirectiveDiff(_,_,rs) =>
-                 logger.warn(rs)
                  logger.error(sectionSerializer.serialize(rs))
                  sectionSerializer.serialize(rs).getOrElse(NodeSeq.Empty)
                case _ => NodeSeq.Empty
              }
-             logger.error(rootSection)
             <diff action="modifyTo">{directiveSerializer.serialise(techniqueName,rootSection,directive)}</diff> ++
             <rootSection>{rootSectionXml}</rootSection>
         } }
