@@ -57,6 +57,10 @@ import com.normation.cfclerk.domain.SectionSpec
 import com.normation.eventlog.EventActor
 import org.joda.time.DateTime
 import com.normation.rudder.web.model.JsInitContextLinkUtil._
+import com.normation.rudder.domain.eventlog.AddChangeRequest
+import com.normation.rudder.domain.eventlog.ModifyChangeRequest
+import com.normation.rudder.domain.eventlog.DeleteChangeRequest
+import com.normation.rudder.domain.eventlog.ChangeRequestEventLog
 
 
 object ChangeRequestChangesForm {
@@ -352,12 +356,12 @@ class ChangeRequestChangesForm(
    ).apply(CRLine)
 
   def displayChangeRequestEvent(crEvent:ChangeRequestEventLog) = {
-    val action = Text(crEvent.diff match {
-           case AddChangeRequestDiff(_) => "Change request created"
-           case ModifyToChangeRequestDiff(_) => "Change request details changed"
-           case DeleteChangeRequestDiff(_) => "Change request deleted"
+    val action = Text(crEvent match {
+           case AddChangeRequest(_) => "Change request created"
+           case ModifyChangeRequest(_) => "Change request details changed"
+           case DeleteChangeRequest(_) => "Change request deleted"
     })
-    displayEvent(action,crEvent.actor,crEvent.creationDate)
+    displayEvent(action,crEvent.principal,crEvent.creationDate)
   }
 
   def displayWorkflowEvent(wfEvent: WorkflowProcessEventLog)=

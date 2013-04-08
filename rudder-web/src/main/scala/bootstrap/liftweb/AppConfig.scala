@@ -315,7 +315,7 @@ object RudderConfig extends Loggable {
 
   val roWorkflowRepository : RoWorkflowRepository = new RoWorkflowJdbcRepository(jdbcTemplate)
   val woWorkflowRepository : WoWorkflowRepository = new WoWorkflowJdbcRepository(jdbcTemplate, roWorkflowRepository)
-  
+
   val roChangeRequestRepository : RoChangeRequestRepository = new RoChangeRequestJdbcRepository(
       jdbcTemplate
     , new ChangeRequestsMapper(changeRequestChangesUnserialisation))
@@ -324,8 +324,8 @@ object RudderConfig extends Loggable {
       , changeRequestChangesSerialisation
       , roChangeRequestRepository
       )
-  
-  val changeRequestEventLogService : ChangeRequestEventLogService = new InMemoryChangeRequestEventLogService
+
+  val changeRequestEventLogService : ChangeRequestEventLogService = new ChangeRequestEventLogServiceImpl(eventLogRepository)
   val workflowEventLogService =    new InMemoryWorkflowProcessEventLogService
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
   val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
@@ -423,7 +423,7 @@ object RudderConfig extends Loggable {
     new NodeGroupSerialisationImpl(Constants.XML_CURRENT_FILE_FORMAT.toString)
   private[this] lazy val deploymentStatusSerialisation : DeploymentStatusSerialisation =
     new DeploymentStatusSerialisationImpl(Constants.XML_CURRENT_FILE_FORMAT.toString)
-  private[this] lazy val changeRequestChangesSerialisation : ChangeRequestChangesSerialisation = 
+  private[this] lazy val changeRequestChangesSerialisation : ChangeRequestChangesSerialisation =
     new ChangeRequestChangesSerialisationImpl(
         Constants.XML_CURRENT_FILE_FORMAT.toString
       , nodeGroupSerialisation

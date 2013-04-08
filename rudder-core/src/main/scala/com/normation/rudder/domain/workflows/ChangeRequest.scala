@@ -45,32 +45,10 @@ import net.liftweb.common.Full
 import net.liftweb.common.Failure
 import com.normation.cfclerk.domain.TechniqueName
 import com.normation.cfclerk.domain.SectionSpec
+import com.normation.eventlog.EventLog
+import com.normation.rudder.domain.eventlog.ChangeRequestLogCategory
 
 
-/*
- * Event log on change request
- */
-sealed trait ChangeRequestDiff
-
-case class AddChangeRequestDiff(
-    changeRequest: ChangeRequest
-)extends ChangeRequestDiff
-
-case class DeleteChangeRequestDiff(
-    changeRequest: ChangeRequest
-) extends ChangeRequestDiff
-
-case class ModifyToChangeRequestDiff(
-    changeRequest: ChangeRequest
-) extends ChangeRequestDiff
-
-
-case class ChangeRequestEventLog(
-    actor       : EventActor
-  , creationDate: DateTime
-  , reason      : Option[String]
-  , diff        : ChangeRequestDiff
-)
 
 /*
  * Question:

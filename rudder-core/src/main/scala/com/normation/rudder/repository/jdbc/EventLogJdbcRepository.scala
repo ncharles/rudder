@@ -57,6 +57,8 @@ import com.normation.rudder.domain.policies.RuleId
 import com.normation.inventory.domain.NodeId
 import com.normation.rudder.services.eventlog.EventLogFactory
 import com.normation.rudder.domain.eventlog._
+import com.normation.rudder.repository.QueryParameter
+import scala.collection.mutable.Buffer
 
 /**
  * The EventLog repository
@@ -145,17 +147,22 @@ class EventLogJdbcRepository(
     }
   }
 
-  def getEventLogByCriteria(criteria : Option[String], limit:Option[Int] = None, orderBy:Option[String]) : Box[Seq[EventLog]] = {
-    val select = SELECT_SQL +
-        criteria.map( c => " and " + c).getOrElse("") +
-        orderBy.map(o => " order by " + o).getOrElse("") +
-        limit.map( l => " limit " + l).getOrElse("")
+  def getEventLogByCriteria(criteria : Option[QueryParameter], optLimit:Option[Int] = None, orderBy:Option[String]) : Box[Seq[EventLog]] = {
+    val array = Buffer[AnyRef]()
 
-    val list = jdbcTemplate.query(select, EventLogReportsMapper)
-
-    list.size match {
-      case 0 => Empty
-      case _ => Full(Seq[EventLog]() ++ list)
+    criteria.map(_.addToQuery(SELECT_SQL, array)).getOrElse(Full((SELECT_SQL,array))) match {
+      case Full((query,parameters)) =>
+        val order = orderBy.map(o => " order by " + o).getOrElse("")
+        val limit = optLimit.map( l => " limit " + l).getOrElse("")
+        val select = s"query ${order} ${limit}"
+        val list = jdbcTemplate.query(select,parameters.toArray, EventLogReportsMapper)
+        list.size match {
+          case 0 => Empty
+          case _ => Full(Seq[EventLog]() ++ list)
+        }
+      case eb : EmptyBox => val failure = eb ?~! s"could not get Event log with criteria ${criteria.map(_.query).getOrElse("nothing")}"
+        logger.error(failure.msg)
+        failure
     }
   }
 }

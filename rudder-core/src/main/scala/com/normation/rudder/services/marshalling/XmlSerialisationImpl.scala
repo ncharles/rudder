@@ -79,7 +79,6 @@ import com.normation.rudder.domain.policies.DeleteDirectiveDiff
 import com.normation.rudder.domain.policies.ModifyToDirectiveDiff
 import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
 import com.normation.cfclerk.xmlwriters.SectionSpecWriter
-import com.normation.rudder.domain.workflows.ModifyToChangeRequestDiff
 
 
 class RuleSerialisationImpl(xmlVersion:String) extends RuleSerialisation {

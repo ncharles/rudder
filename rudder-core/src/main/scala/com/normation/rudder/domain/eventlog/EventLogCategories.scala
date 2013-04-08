@@ -46,6 +46,7 @@ final case object DeploymentLogCategory extends EventLogCategory
 final case object NodeGroupLogCategory extends EventLogCategory
 final case object AssetLogCategory extends EventLogCategory
 final case object RedButtonLogCategory extends EventLogCategory
+final case object ChangeRequestLogCategory extends EventLogCategory
 
 final case object PolicyServerLogCategory extends EventLogCategory
 final case object ImportExportItemsLogCategory extends EventLogCategory
@@ -87,6 +88,18 @@ final case object DeleteNodeGroupEventType extends RollbackEventLogType {
 final case object ModifyNodeGroupEventType extends RollbackEventLogType {
   def serialize = "NodeGroupModified"
 }
+
+// change request related
+final case object AddChangeRequestEventType extends NoRollbackEventLogType {
+  def serialize = "ChangeRequestAdded"
+}
+final case object DeleteChangeRequestEventType extends NoRollbackEventLogType {
+  def serialize = "ChangeRequestDeleted"
+}
+final case object ModifyChangeRequestEventType extends NoRollbackEventLogType {
+  def serialize = "ChangeRequestModified"
+}
+
 // directive related
 final case object AddDirectiveEventType extends RollbackEventLogType {
   def serialize = "DirectiveAdded"
@@ -257,6 +270,9 @@ object EventTypeFactory {
     , ExportFullArchiveEventType
     , ImportFullArchiveEventType
     , RollbackEventType
+
+    , AddChangeRequestEventType
+    , ModifyChangeRequestEventType
   )
 
   def apply(s:String) : EventLogType = {

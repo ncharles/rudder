@@ -110,7 +110,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          {
            changeRequestEventLogService.getChangeRequestHistory(cr.id) match {
            case eb :EmptyBox => "Error while fetching Creator"
-           case Full(seq) => seq.headOption.map(_.actor.name).getOrElse("Unknown User")
+           case Full(seq) => seq.headOption.map(_.principal.name).getOrElse("Unknown User")
          }}
       </td>
       <td id="crDate">

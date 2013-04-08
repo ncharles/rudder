@@ -52,6 +52,10 @@ import com.normation.cfclerk.domain.TechniqueId
 import com.normation.rudder.domain.policies._
 import com.normation.rudder.web.components._
 import com.normation.eventlog.EventActor
+import com.normation.eventlog.EventLog
+import com.normation.rudder.domain.eventlog.ModifyChangeRequest
+import com.normation.rudder.domain.eventlog.AddChangeRequest
+import com.normation.rudder.domain.eventlog.DeleteChangeRequest
 
 
 object ChangeRequestDetails {
@@ -187,13 +191,13 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     val (action,date) = changeRequestEventLogService.getLastLog(cr.id) match {
       case eb:EmptyBox => ("Error when retrieving the last action",None)
       case Full(None)  => ("Error, no action were recorded for that change request",None) //should not happen here !
-      case Full(Some(ChangeRequestEventLog(actor,date,reason,diff))) =>
-        val actionName = diff match {
-          case ModifyToChangeRequestDiff(_) => "Modified"
-          case AddChangeRequestDiff(_)    => "Created"
-          case DeleteChangeRequestDiff(_) => "Deleted"
+      case Full(Some(e:EventLog)) =>
+        val actionName = e match {
+          case ModifyChangeRequest(_) => "Modified"
+          case AddChangeRequest(_)    => "Created"
+          case DeleteChangeRequest(_) => "Deleted"
         }
-        (s"${actionName} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}",Some(date))
+        (s"${actionName} on ${DateFormaterService.getFormatedDate(e.creationDate)} by ${e.principal.name}",Some(e.creationDate))
     }
 
     // Last workflow change on that change Request

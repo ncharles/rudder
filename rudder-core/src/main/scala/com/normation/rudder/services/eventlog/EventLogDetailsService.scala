@@ -708,6 +708,21 @@ class EventLogDetailsServiceImpl(
     }
   }
 
+  /*def getChangeRequestDetails(xml:NodeSeq) : Box[ChangeRequestDiff] = {
+    for {
+      entry         <- getEntryContent(xml)
+      changeRequest <- (entry \ "changeRequest").headOption ?~! (s"Entry type is not a 'changeRequest': ${entry}"
+      kind <- (entry \ "changeType").headOption
+
+        fileFormatOk <- TestFileFormat(details)
+        commitId <- (details \ "commit").headOption.map( _.text ) ?~! ("Missing attribute 'commit' in entry: " + xml)
+      } yield {
+        GitCommitId(commitId)
+      }
+    }
+  }*/
+
+
   def getRollbackDetails(xml:NodeSeq) : Box[RollbackInfo] = {
   def getEvents(xml:NodeSeq)= {
     for{

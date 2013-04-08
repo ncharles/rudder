@@ -41,15 +41,13 @@ import com.normation.rudder.repository.{ RoChangeRequestRepository, RoDraftChang
 import net.liftweb.common._
 import com.normation.rudder.services.eventlog.ChangeRequestEventLogService
 import com.normation.eventlog.EventActor
-import com.normation.rudder.domain.workflows.ChangeRequestEventLog
-import com.normation.rudder.domain.workflows.ChangeRequestEventLog
 import org.joda.time.DateTime
-import com.normation.rudder.domain.workflows.AddChangeRequestDiff
-import com.normation.rudder.domain.workflows.DeleteChangeRequestDiff
-import com.normation.rudder.domain.workflows.ModifyToChangeRequestDiff
 import com.normation.rudder.domain.policies.DirectiveId
 import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.policies.RuleId
+import com.unboundid.ldap.sdk.Modification
+import com.normation.eventlog.ModificationId
+import com.normation.rudder.domain.eventlog._
 
 class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepository with WoDraftChangeRequestRepository {
 
@@ -105,10 +103,7 @@ class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends 
         case Some(x) => Failure(s"Change request with ID ${changeRequest.id} is already created")
         case None =>
           repo += (changeRequest.id-> changeRequest)
-          log.saveChangeRequestLog(
-              changeRequest.id
-            , ChangeRequestEventLog(actor, DateTime.now, reason, AddChangeRequestDiff(changeRequest))
-          ).map( _ => changeRequest)
+          log.saveChangeRequestLog(ModificationId("test"), actor, AddChangeRequestDiff(changeRequest), reason).map( _ => changeRequest)
       }
 
   }
@@ -118,10 +113,7 @@ class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends 
         case None => Full(changeRequest)
         case Some(_) =>
            repo -= changeRequest.id
-          log.saveChangeRequestLog(
-              changeRequest.id
-            , ChangeRequestEventLog(actor, DateTime.now, reason, DeleteChangeRequestDiff(changeRequest))
-          ).map( _ => changeRequest)
+          log.saveChangeRequestLog(ModificationId("test"), actor, DeleteChangeRequestDiff(changeRequest), reason).map( _ => changeRequest)
       }
   }
 
@@ -130,21 +122,18 @@ class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends 
         case None => Failure(s"Change request with ID ${changeRequest.id} does not exists")
         case Some(_) =>
           repo += (changeRequest.id-> changeRequest)
-          log.saveChangeRequestLog(
-              changeRequest.id
-            , ChangeRequestEventLog(actor, DateTime.now, reason, AddChangeRequestDiff(changeRequest))
-          ).map( _ => changeRequest)
+          log.saveChangeRequestLog(ModificationId("test"), actor, ModifyToChangeRequestDiff(changeRequest), reason).map( _ => changeRequest)
       }
 
   }
-  
+
   def getByIds(changeRequestId:Seq[ChangeRequestId]) : Box[Seq[ChangeRequest]] =  ???
-  
+
   def getByDirective(id : DirectiveId) : Box[Seq[ChangeRequest]] = ???
-  
+
   def getByNodeGroup(id : NodeGroupId) : Box[Seq[ChangeRequest]] = ???
-  
+
   def getByRule(id : RuleId) : Box[Seq[ChangeRequest]] = ???
-  
+
 
 }

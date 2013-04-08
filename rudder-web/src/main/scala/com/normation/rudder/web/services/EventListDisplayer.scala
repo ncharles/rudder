@@ -361,15 +361,21 @@ class EventListDisplayer(
         SHtml.ajaxButton(
           "Confirm"
         , () => {
-            val select = event.id.map(action.selectRollbackedEventsRequest)
-            repos.getEventLogByCriteria(select) match {
-              case Full(events) =>
-                val rollbackedEvents = events.filter(_.canRollBack)
-                action.action(event,commiter,rollbackedEvents,event)
-                S.redirectTo("eventLogs")
-              case eb => S.error("Problem while performing a rollback")
-              logger.error("Problem while performing a rollback : ",eb)
-              cancel
+            event.id match {
+              case Some(id) => val select = action.selectRollbackedEventsRequest(id)
+                repos.getEventLogByCriteria(Some(select)) match {
+                  case Full(events) =>
+                    val rollbackedEvents = events.filter(_.canRollBack)
+                    action.action(event,commiter,rollbackedEvents,event)
+                    S.redirectTo("eventLogs")
+                  case eb => S.error("Problem while performing a rollback")
+                  logger.error("Problem while performing a rollback : ",eb)
+                  cancel
+              }
+              case None => val failure = "Problem while performing a rollback, could not find event id"
+                S.error(failure)
+                logger.error(failure)
+                cancel
             }
           }
         )
@@ -1347,7 +1353,7 @@ trait RollBackAction {
   def name   : String
   def op     : String
   def action : (EventLog,PersonIdent,Seq[EventLog],EventLog) => Box[GitCommitId]
-  def selectRollbackedEventsRequest(id:Int): String =" id %s %d and modificationid IS NOT NULL".format(op,id)
+  def selectRollbackedEventsRequest(id:Int): QueryParameter = QueryParameter(s" id ${op} ? and modificationid IS NOT NULL",Some(id.toString))
 }
 
 case object RollbackTo extends RollBackAction{
