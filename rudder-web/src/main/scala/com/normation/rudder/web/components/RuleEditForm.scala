@@ -72,6 +72,8 @@ import net.liftweb.http.SHtml.BasicElemAttr
 import com.normation.rudder.web.components.popup.CreateOrCloneRulePopup
 import com.normation.eventlog.ModificationId
 import bootstrap.liftweb.RudderConfig
+import com.normation.rudder.web.components.popup.RuleModificationValidationPopup
+import com.normation.rudder.domain.workflows.ChangeRequestId
 
 object RuleEditForm {
 
@@ -166,6 +168,8 @@ class RuleEditForm(
   private[this] val nodeGroupRepository  = RudderConfig.roNodeGroupRepository
   private[this] val treeUtilService      = RudderConfig.jsTreeUtilService
   private[this] val userPropertyService  = RudderConfig.userPropertyService
+
+  private[this] val workflowEnabled      = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
 
   private[this] var crCurrentStatusIsActivated = rule.isEnabledStatus
   private[this] var selectedTargets = rule.targets
@@ -632,8 +636,53 @@ class RuleEditForm(
         directiveIds = selectedDirectiveIds,
         isEnabledStatus = crCurrentStatusIsActivated
       )
-      saveAndDeployRule(newCr, crReasons.map(_.is))
+      displayConfirmationPopup("save", newCr)
     }
+  }
+  
+  // Create the popup for workflow
+  private[this] def displayConfirmationPopup(
+      action  : String
+    , newRule : Rule
+  ) : JsCmd = {
+    // for the moment, we don't have creation from here
+    val optOriginal = Some(rule)
+    
+    val popup = {
+      // if we have workflow, then we redirect to the CR
+      if (workflowEnabled) {
+          new RuleModificationValidationPopup(
+              newRule
+            , optOriginal
+            , action
+            , cr => JsRaw("$.modal.close();") & workflowCallBack(cr)
+            , JsRaw("$.modal.close();") & onFailure
+            , parentFormTracker = Some(formTracker)
+          )
+      } else {
+          new RuleModificationValidationPopup(
+              newRule
+            , optOriginal
+            , action
+            , cr => JsRaw("$.modal.close();") & successPopup & workflowCallBack(cr)
+            , JsRaw("$.modal.close();") & onFailure
+            , parentFormTracker = Some(formTracker)
+          )
+      }
+    }
+    SetHtml("confirmUpdateActionDialog", popup.popupContent) &
+    createPopup("confirmUpdateActionDialog",400,800)
+  }
+  
+  private[this] def workflowCallBack(returns : Either[Rule,ChangeRequestId]) : JsCmd = {
+    returns match {
+      case Left(rule) => // ok, we've received a rule, do as before
+        this.rule = rule
+        onSuccess
+      case Right(changeRequest) => // oh, we have a change request, go to it
+        RedirectTo(s"""/secure/utilities/changeRequest/${changeRequest.value}""")
+    }
+    
   }
 
   private[this] def saveAndDeployRule(rule:Rule, reason: Option[String]) : JsCmd = {

@@ -402,8 +402,8 @@ class ModificationValidationPopup(
   ) : Box[ChangeRequestNodeGroupDiff] = {
       ???
   }
-  private[this] def onSubmit() : JsCmd = {
 
+  private[this] def onSubmit() : JsCmd = {
     if(formTracker.hasErrors) {
       onFailure
     } else {
