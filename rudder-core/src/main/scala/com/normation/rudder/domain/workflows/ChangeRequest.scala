@@ -325,7 +325,7 @@ case class RuleChangeItem(
   , creationDate: DateTime
   , reason      : Option[String]
   , diff        : ChangeRequestRuleDiff
-) extends ChangeItem[RuleDiff]
+) extends ChangeItem[ChangeRequestRuleDiff]
 
 case class RuleChange(
     val initialState: Option[Rule]
