@@ -123,7 +123,7 @@ class DirectiveEditForm(
   private[this] val woChangeRequestRepo    = RudderConfig.woChangeRequestRepository
   private[this] val roChangeRequestRepo    = RudderConfig.roChangeRequestRepository
   private[this] val techniqueRepo          = RudderConfig.techniqueRepository
-
+  private[this] val workflowEnabled        = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
 
   private[this] val htmlId_save = htmlId_policyConf + "Save"
   private[this] val parameterEditor = {
@@ -393,14 +393,27 @@ class DirectiveEditForm(
     val rootSection = optOriginal.flatMap(old => techniqueRepo.get(TechniqueId(activeTechnique.techniqueName,old.techniqueVersion)).map(_.rootSection)).getOrElse(technique.rootSection)
     
     val popup = {
+      // if it's not a creation and we have workflow, then we redirect to the CR
       if (!isADirectiveCreation) {
-        new ModificationValidationPopup(
-            Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
-          , action
-          , isADirectiveCreation
-          , cr => JsRaw("$.modal.close();") & onSuccessCallback(Right(cr))
-          , xml => onFailureCallback() & failurePopup(xml)
-        )
+        if (workflowEnabled) {
+          new ModificationValidationPopup(
+              Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
+            , action
+            , isADirectiveCreation
+            , cr => JsRaw("$.modal.close();") & onSuccessCallback(Right(cr))
+            , xml => JsRaw("$.modal.close();") & onFailure
+            , parentFormTracker = Some(formTracker)
+          )
+        } else {
+          new ModificationValidationPopup(
+              Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
+            , action
+            , isADirectiveCreation
+            , cr => JsRaw("$.modal.close();") & successPopup(NodeSeq.Empty) & onSuccessCallback(Left(newDirective))
+            , xml => JsRaw("$.modal.close();") & onFailure
+            , parentFormTracker = Some(formTracker)
+          )
+        }
       } else {
         new ModificationValidationPopup(
             Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)

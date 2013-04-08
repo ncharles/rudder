@@ -56,6 +56,7 @@ import net.liftweb.common._
 import com.normation.rudder.repository.WoWorkflowRepository
 import com.normation.rudder.repository.jdbc.WoChangeRequestJdbcRepository
 import com.normation.rudder.repository.RoWorkflowRepository
+import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
 
 /**
  * That service allows to glue Rudder with the
@@ -183,7 +184,8 @@ class CommitAndDeployChangeRequest(
  * It has only one state : Deployed
  */
 class NoWorkflowServiceImpl(
-    commit: CommitAndDeployChangeRequest
+    commit : CommitAndDeployChangeRequest
+  , crRepo : InMemoryChangeRequestRepository
 ) extends WorkflowService with Loggable {
 
   val noWorfkflow = WorkflowNodeId("No Workflow")
@@ -198,13 +200,27 @@ class NoWorkflowServiceImpl(
   
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     logger.info("Automatically saving change")
-    commit.save(changeRequestId, actor, reason).map(x => noWorfkflow)
+    for {
+      result <- commit.save(changeRequestId, actor, reason)
+    } yield {
+      // always delete the CR
+      crRepo.deleteChangeRequest(changeRequestId, actor, reason)
+      // and return a no workflow
+      noWorfkflow
+    }
   }
   
   // should we keep this one or the previous ??
   def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     logger.info("Automatically saving change")
-    commit.save(changeRequestId, actor, reason)
+    for {
+      result <- commit.save(changeRequestId, actor, reason)
+    } yield {
+       // always delete the CR
+      crRepo.deleteChangeRequest(changeRequestId, actor, reason)
+      // and return a no workflow
+      result
+    }
   }
   
   def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {

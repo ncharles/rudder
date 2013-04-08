@@ -182,7 +182,7 @@ class WoChangeRequestJdbcRepository(
    * Delete a change request.
    * (whatever the read/write mode is).
    */
-  def deleteChangeRequest(changeRequest:ChangeRequest, actor:EventActor, reason: Option[String]) : Box[ChangeRequest] = {
+  def deleteChangeRequest(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequest] = {
     // we should update it rather, isn't it ?
     ???
   }

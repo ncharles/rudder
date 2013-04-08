@@ -236,9 +236,12 @@ class ModificationValidationPopup(
         }
       } &
       "#titleWorkflow *" #> titleWorkflow &
-      "#changeRequestName [class]" #> (if ((workflowEnabled)&(!isANewItem)) Text("display") else Text("nodisplay")) &
-      "#changeRequestName" #> changeRequestName.toForm &
-//      "#cancel" #> (SHtml.ajaxButton("Cancel", { () => closePopup() }) % ("tabindex","5")) &
+      "#changeRequestName" #> { 
+          if ((workflowEnabled)&(!isANewItem)) {
+            changeRequestName.toForm
+          } else 
+            Full(NodeSeq.Empty) 
+      } &
       "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, () => onSubmitStartWorkflow(), ("class" -> classForButton)) % ("id", "createDirectiveSaveButton") % ("tabindex","3")) andThen
        ".notifications *" #> updateAndDisplayNotifications()
       
@@ -454,7 +457,8 @@ class ModificationValidationPopup(
             onSuccessCallback(cr)
           case eb:EmptyBox =>
             val e = (eb ?~! "Error when trying to save your modification")
-            e.rootExceptionCause.foreach { ex =>
+            e.chain.foreach { ex =>
+              parentFormTracker.map(x => x.addFormError(error(ex.messageChain)))
               logger.error(s"Exception when trying to update a change request:", ex)
             }
             onFailureCallback(Text(e.messageChain))

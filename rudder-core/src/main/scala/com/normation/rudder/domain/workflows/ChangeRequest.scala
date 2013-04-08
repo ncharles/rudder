@@ -101,7 +101,15 @@ object ChangeRequest {
         x.copy(info = newInfo).asInstanceOf[T]
     }
   }
-
+  
+  def updateId[T <: ChangeRequest](cr:T, newId:ChangeRequestId): T = {
+    cr match {
+      case x:ConfigurationChangeRequest =>
+        x.copy(id = newId).asInstanceOf[T]
+      case x:RollbackChangeRequest =>
+        x.copy(id = newId).asInstanceOf[T]
+    }
+  }
 }
 
 sealed trait ChangeRequest {
@@ -109,6 +117,7 @@ sealed trait ChangeRequest {
   def id: ChangeRequestId //modification Id ?
 
   def info: ChangeRequestInfo
+
 }
 
 

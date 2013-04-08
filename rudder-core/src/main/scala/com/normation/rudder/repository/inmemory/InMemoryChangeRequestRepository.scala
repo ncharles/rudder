@@ -50,6 +50,7 @@ import com.normation.rudder.domain.workflows.ModifyToChangeRequestDiff
 import com.normation.rudder.domain.policies.DirectiveId
 import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.policies.RuleId
+import com.normation.utils.StringUuidGenerator
 
 class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepository with WoDraftChangeRequestRepository {
 
@@ -85,9 +86,21 @@ class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepositor
   }
 }
 
-class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends RoChangeRequestRepository with WoChangeRequestRepository with Loggable {
+class InMemoryChangeRequestRepository
+ extends RoChangeRequestRepository with WoChangeRequestRepository with Loggable {
+
+  imMemoryRepo => 
 
   private[this] val repo = MutMap[ChangeRequestId, ChangeRequest]()
+  
+  private[this] var id = 0;
+  
+  private[this] def getNextId : Int = {
+    imMemoryRepo.synchronized {
+      id = id + 1
+      id
+    }
+  }
 
   /** As seen from class InMemoryChangeRequestRepository, the missing signatures are as follows.
    *  For convenience, these are usable as stub implementations.
@@ -101,27 +114,23 @@ class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends 
   }
 
   def createChangeRequest(changeRequest: ChangeRequest,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
-      repo.get(changeRequest.id) match {
-        case Some(x) => Failure(s"Change request with ID ${changeRequest.id} is already created")
-        case None =>
-          repo += (changeRequest.id-> changeRequest)
-          log.saveChangeRequestLog(
-              changeRequest.id
-            , ChangeRequestEventLog(actor, DateTime.now, reason, AddChangeRequestDiff(changeRequest))
-          ).map( _ => changeRequest)
+    val crId = ChangeRequestId(getNextId) 
+    repo.get(crId) match {
+      case Some(x) => Failure(s"Change request with ID ${crId} is already created")
+      case None =>
+        val serializedCr = ChangeRequest.updateId(changeRequest, crId)
+        repo += (crId -> serializedCr)
+        Full(serializedCr)
       }
 
   }
 
-  def deleteChangeRequest(changeRequest: ChangeRequest,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
-      repo.get(changeRequest.id) match {
-        case None => Full(changeRequest)
-        case Some(_) =>
-           repo -= changeRequest.id
-          log.saveChangeRequestLog(
-              changeRequest.id
-            , ChangeRequestEventLog(actor, DateTime.now, reason, DeleteChangeRequestDiff(changeRequest))
-          ).map( _ => changeRequest)
+  def deleteChangeRequest(changeRequestId: ChangeRequestId,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
+      repo.get(changeRequestId) match {
+        case None => Failure(s"Could not delete non existing CR with id ${changeRequestId.value}")
+        case Some(request) =>
+          repo -= changeRequestId
+          Full(request) 
       }
   }
 
@@ -130,10 +139,7 @@ class InMemoryChangeRequestRepository(log:ChangeRequestEventLogService) extends 
         case None => Failure(s"Change request with ID ${changeRequest.id} does not exists")
         case Some(_) =>
           repo += (changeRequest.id-> changeRequest)
-          log.saveChangeRequestLog(
-              changeRequest.id
-            , ChangeRequestEventLog(actor, DateTime.now, reason, AddChangeRequestDiff(changeRequest))
-          ).map( _ => changeRequest)
+          Full(changeRequest)
       }
 
   }
