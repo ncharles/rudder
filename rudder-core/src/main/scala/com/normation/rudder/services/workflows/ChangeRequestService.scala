@@ -49,6 +49,9 @@ import com.normation.rudder.domain.policies.ChangeRequestDirectiveDiff
 import com.normation.rudder.domain.policies.DirectiveId
 import com.normation.rudder.domain.nodes.NodeGroupDiff
 import com.normation.rudder.domain.nodes.ChangeRequestNodeGroupDiff
+import com.normation.rudder.domain.policies.RuleId
+import com.normation.rudder.domain.policies.Rule
+import com.normation.rudder.domain.policies.ChangeRequestRuleDiff
 
 
 
@@ -70,6 +73,16 @@ trait ChangeRequestService {
     , reason           : Option[String]
   ) : ConfigurationChangeRequest
 
+  def createChangeRequestFromRule(
+      changeRequestName: String
+    , changeRequestDesc: String
+    , rule             : Rule
+    , originalRule     : Option[Rule]
+    , diff             : ChangeRequestRuleDiff
+    , actor            : EventActor
+    , reason           : Option[String]
+  ) : ConfigurationChangeRequest
+  
   def createChangeRequestFromNodeGroup(
       changeRequestName: String
     , changeRequestDesc: String
@@ -128,6 +141,34 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
     )
   }
 
+  def createChangeRequestFromRule(
+      changeRequestName: String
+    , changeRequestDesc: String
+    , rule             : Rule
+    , originalRule     : Option[Rule]
+    , diff             : ChangeRequestRuleDiff
+    , actor            : EventActor
+    , reason           : Option[String]
+  ) : ConfigurationChangeRequest = {
+   val change = RuleChange(
+                     initialState = originalRule
+                   , firstChange = RuleChangeItem(actor, DateTime.now, reason, diff)
+                   , Seq()
+                 )
+    logger.debug(change)
+    ConfigurationChangeRequest(
+        ChangeRequestId(getNextId)
+      , ChangeRequestInfo(
+            changeRequestName
+          , changeRequestDesc
+        )
+      , Map()
+      , Map()
+      , Map(rule.id -> RuleChanges(change, Seq()))
+    )
+    
+  }
+  
   def createChangeRequestFromNodeGroup(
       changeRequestName: String
     , changeRequestDesc: String

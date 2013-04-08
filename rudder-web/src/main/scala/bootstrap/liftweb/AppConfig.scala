@@ -123,6 +123,7 @@ import com.normation.rudder.services.workflows.CommitAndDeployChangeRequest
 import com.normation.rudder.services.workflows.InMemoryWorkflowProcessEventLogService
 import com.normation.cfclerk.xmlwriters.SectionSpecWriter
 import com.normation.cfclerk.xmlwriters.SectionSpecWriterImpl
+import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
 
 /**
  * Define a resource for configuration.
@@ -316,16 +317,32 @@ object RudderConfig extends Loggable {
   val roWorkflowRepository : RoWorkflowRepository = new RoWorkflowJdbcRepository(jdbcTemplate)
   val woWorkflowRepository : WoWorkflowRepository = new WoWorkflowJdbcRepository(jdbcTemplate, roWorkflowRepository)
 
-  val roChangeRequestRepository : RoChangeRequestRepository = new RoChangeRequestJdbcRepository(
-      jdbcTemplate
-    , new ChangeRequestsMapper(changeRequestChangesUnserialisation))
-  val woChangeRequestRepository : WoChangeRequestRepository = new WoChangeRequestJdbcRepository(
-        jdbcTemplate
-      , changeRequestChangesSerialisation
-      , roChangeRequestRepository
-      )
+  val inMemoryChangeRequestRepository : InMemoryChangeRequestRepository = new InMemoryChangeRequestRepository
+
+
+  val roChangeRequestRepository : RoChangeRequestRepository = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
+      case true =>
+        inMemoryChangeRequestRepository
+      case false =>
+        new RoChangeRequestJdbcRepository(
+          jdbcTemplate
+        , new ChangeRequestsMapper(changeRequestChangesUnserialisation))
+    }
+
+  val woChangeRequestRepository : WoChangeRequestRepository = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
+    case true =>
+      inMemoryChangeRequestRepository
+    case false =>
+      new WoChangeRequestJdbcRepository(
+          jdbcTemplate
+        , changeRequestChangesSerialisation
+        , roChangeRequestRepository
+        )
+    }
 
   val changeRequestEventLogService : ChangeRequestEventLogService = new ChangeRequestEventLogServiceImpl(eventLogRepository)
+
+
   val workflowEventLogService =    new InMemoryWorkflowProcessEventLogService
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
   val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
@@ -351,6 +368,7 @@ object RudderConfig extends Loggable {
               , asyncDeploymentAgent
               , dependencyAndDeletionService
             )
+          , inMemoryChangeRequestRepository
         )
   }
   val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl

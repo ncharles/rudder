@@ -80,6 +80,14 @@ object ChangeRequest {
     }
   }
 
+  def updateId[T <: ChangeRequest](cr:T, newId:ChangeRequestId): T = {
+    cr match {
+      case x:ConfigurationChangeRequest =>
+        x.copy(id = newId).asInstanceOf[T]
+      case x:RollbackChangeRequest =>
+        x.copy(id = newId).asInstanceOf[T]
+    }
+  }
 }
 
 sealed trait ChangeRequest {
@@ -87,6 +95,7 @@ sealed trait ChangeRequest {
   def id: ChangeRequestId //modification Id ?
 
   def info: ChangeRequestInfo
+
 }
 
 
@@ -293,14 +302,14 @@ case class RuleChangeItem(
     actor       : EventActor
   , creationDate: DateTime
   , reason      : Option[String]
-  , diff        : RuleDiff
-) extends ChangeItem[RuleDiff]
+  , diff        : ChangeRequestRuleDiff
+) extends ChangeItem[ChangeRequestRuleDiff]
 
 case class RuleChange(
     val initialState: Option[Rule]
   , val firstChange: RuleChangeItem
   , val nextChanges: Seq[RuleChangeItem]
-) extends Change[Rule, RuleDiff, RuleChangeItem] {
+) extends Change[Rule, ChangeRequestRuleDiff, RuleChangeItem] {
 
   val change = Full(firstChange)
 }
@@ -308,5 +317,5 @@ case class RuleChange(
 case class RuleChanges(
     val changes: RuleChange
   , val changeHistory: Seq[RuleChange]
-)extends Changes[Rule, RuleDiff, RuleChangeItem]
+)extends Changes[Rule, ChangeRequestRuleDiff, RuleChangeItem]
 
