@@ -52,6 +52,15 @@ import com.normation.rudder.domain.nodes.ChangeRequestNodeGroupDiff
 import com.normation.rudder.domain.policies.RuleId
 import com.normation.rudder.domain.policies.Rule
 import com.normation.rudder.domain.policies.ChangeRequestRuleDiff
+import com.normation.rudder.repository.RoChangeRequestRepository
+import com.normation.rudder.repository.WoChangeRequestRepository
+import com.normation.rudder.services.eventlog.ChangeRequestEventLogService
+import com.normation.eventlog.EventActor
+import com.normation.eventlog.ModificationId
+import com.normation.rudder.domain.eventlog.AddChangeRequestDiff
+import net.liftweb.common.Full
+import net.liftweb.common.EmptyBox
+import net.liftweb.common.Box
 
 
 
@@ -71,7 +80,7 @@ trait ChangeRequestService {
     , diff             : ChangeRequestDirectiveDiff
     , actor            : EventActor
     , reason           : Option[String]
-  ) : ConfigurationChangeRequest
+  ) : Box[ChangeRequest]
 
   def createChangeRequestFromRule(
       changeRequestName: String
@@ -81,8 +90,8 @@ trait ChangeRequestService {
     , diff             : ChangeRequestRuleDiff
     , actor            : EventActor
     , reason           : Option[String]
-  ) : ConfigurationChangeRequest
-  
+  ) : Box[ChangeRequest]
+
   def createChangeRequestFromNodeGroup(
       changeRequestName: String
     , changeRequestDesc: String
@@ -91,20 +100,29 @@ trait ChangeRequestService {
     , diff             : ChangeRequestNodeGroupDiff
     , actor            : EventActor
     , reason           : Option[String]
-  ) : ConfigurationChangeRequest
-
+  ) : Box[ChangeRequest]
 
 }
 
 
-class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
+class ChangeRequestServiceImpl(
+    roChangeRequestRepository    : RoChangeRequestRepository
+  , woChangeRequestRepository    : WoChangeRequestRepository
+  , changeRequestEventLogService : ChangeRequestEventLogService
+  , uuidGen                      : StringUuidGenerator
+) extends ChangeRequestService with Loggable {
 
-  private[this] var nextId:Int = 1042
-
-  private[this] def getNextId = {
-    val id = nextId
-    nextId = nextId + 1
-    id
+  private[this] def saveAndLogChangeRequest(changeRequest:ChangeRequest,actor:EventActor,reason:Option[String]) = {
+    woChangeRequestRepository.createChangeRequest(changeRequest, actor, reason) match {
+      case Full(changeRequest) =>
+        val modId = ModificationId(uuidGen.newUuid)
+        val diff = AddChangeRequestDiff(changeRequest)
+        changeRequestEventLogService.saveChangeRequestLog(modId, actor, diff, reason) match {
+          case Full(event) => Full(changeRequest)
+          case eb:EmptyBox => eb ?~! s"could not save event log for change request ${changeRequest.id} creation"
+        }
+      case eb:EmptyBox => eb ?~! s"could not save change request ${changeRequest.info.name}"
+    }
   }
 
   def createChangeRequestFromDirective(
@@ -117,7 +135,7 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
     , diff             : ChangeRequestDirectiveDiff
     , actor            : EventActor
     , reason           : Option[String]
-  ) : ConfigurationChangeRequest = {
+  ) : Box[ChangeRequest] = {
 
     val initialState = originalDirective match {
       case None =>  None
@@ -129,8 +147,8 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
                    , Seq()
                  )
     logger.debug(change)
-    ConfigurationChangeRequest(
-        ChangeRequestId(getNextId)
+    val changeRequest =  ConfigurationChangeRequest(
+        ChangeRequestId(0)
       , ChangeRequestInfo(
             changeRequestName
           , changeRequestDesc
@@ -139,6 +157,7 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
       , Map()
       , Map()
     )
+    saveAndLogChangeRequest(changeRequest, actor, reason)
   }
 
   def createChangeRequestFromRule(
@@ -149,15 +168,15 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
     , diff             : ChangeRequestRuleDiff
     , actor            : EventActor
     , reason           : Option[String]
-  ) : ConfigurationChangeRequest = {
+  ) : Box[ChangeRequest] = {
    val change = RuleChange(
                      initialState = originalRule
                    , firstChange = RuleChangeItem(actor, DateTime.now, reason, diff)
                    , Seq()
                  )
     logger.debug(change)
-    ConfigurationChangeRequest(
-        ChangeRequestId(getNextId)
+   val changeRequest = ConfigurationChangeRequest(
+        ChangeRequestId(0)
       , ChangeRequestInfo(
             changeRequestName
           , changeRequestDesc
@@ -166,9 +185,9 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
       , Map()
       , Map(rule.id -> RuleChanges(change, Seq()))
     )
-    
+    saveAndLogChangeRequest(changeRequest, actor, reason)
   }
-  
+
   def createChangeRequestFromNodeGroup(
       changeRequestName: String
     , changeRequestDesc: String
@@ -177,7 +196,7 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
     , diff             : ChangeRequestNodeGroupDiff
     , actor            : EventActor
     , reason           : Option[String]
-  ) : ConfigurationChangeRequest = {
+  ) : Box[ChangeRequest] = {
 
     val change = NodeGroupChange(
                      initialState = originalNodeGroup
@@ -185,8 +204,8 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
                    , Seq()
                  )
     logger.debug(change)
-    ConfigurationChangeRequest(
-        ChangeRequestId(getNextId)
+   val changeRequest = ConfigurationChangeRequest(
+        ChangeRequestId(0)
       , ChangeRequestInfo(
             changeRequestName
           , changeRequestDesc
@@ -195,6 +214,7 @@ class ChangeRequestServiceImpl extends ChangeRequestService with Loggable {
       , Map(nodeGroup.id -> NodeGroupChanges(change,Seq()))
       , Map()
     )
+    saveAndLogChangeRequest(changeRequest, actor, reason)
   }
 
 

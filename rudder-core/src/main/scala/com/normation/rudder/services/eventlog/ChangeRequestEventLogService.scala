@@ -66,7 +66,7 @@ trait ChangeRequestEventLogService {
 
 class ChangeRequestEventLogServiceImpl(
    eventLogRepository : EventLogRepository
- ) extends ChangeRequestEventLogService {
+ ) extends ChangeRequestEventLogService with Loggable{
   import scala.collection.mutable.{Map => MutMap, Buffer}
 
   private[this] val repo = MutMap[ChangeRequestId, Buffer[ChangeRequestEventLog]]()
@@ -77,15 +77,10 @@ class ChangeRequestEventLogServiceImpl(
   }
 
   def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[ChangeRequestEventLog]] = {
-    val query =   QueryParameter("cast (xpath('//changeRequest/id/text()', content) as text[]) = '{?}'",Some(id.value.toString))
-    eventLogRepository.getEventLogByCriteria(Some(query), None, None)
-        Full(Seq())
+    eventLogRepository.getEventLogByChangeRequest(id).map(_.collect{case c:ChangeRequestEventLog => c})
   }
 
-  /* changed to lastOption as the order is reversed */
   def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]] = {
-    val query =   QueryParameter("cast (xpath('//changeRequest/id/text()', content) as text[]) = '{?}'",Some(id.value.toString))
-    eventLogRepository.getEventLogByCriteria(Some(query), Some(1), Some("executionDate DESC"))
-    Full(None)
+    eventLogRepository.getEventLogByChangeRequest(id,Some(1),Some("creationDate desc")).map(_.collect{case c:ChangeRequestEventLog => c}.headOption)
   }
 }

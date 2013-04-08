@@ -497,26 +497,21 @@ class EventLogFactoryImpl(
       , severity = severity)
     }
     val xml = <changeRequest>
-                <id>
-                  {diff.changeRequest.id}
-                </id>
-                <name>
-                  {diff.changeRequest.info.name}
-                </name>
-                <description>
-                  {diff.changeRequest.info.description}
+                <id>{diff.changeRequest.id}</id>
+                <name>{diff.changeRequest.info.name}</name>
+                <description>{diff.changeRequest.info.description}
                 </description>
               </changeRequest>
 
     diff match {
       case _:AddChangeRequestDiff      =>
-        val details = EventLog.withContent(xml % ("changeType" -> "add"))
+        val details = EventLog.withContent( scala.xml.Utility.trim(xml % ("changeType" -> "add")))
         AddChangeRequest(eventlogDetails(details))
       case _:DeleteChangeRequestDiff   =>
-        val details = EventLog.withContent(xml % ("changeType" -> "delete"))
+        val details = EventLog.withContent( scala.xml.Utility.trim(xml % ("changeType" -> "delete")))
         DeleteChangeRequest(eventlogDetails(details))
       case _:ModifyToChangeRequestDiff =>
-        val details = EventLog.withContent(xml % ("changeType" -> "modify"))
+        val details = EventLog.withContent( scala.xml.Utility.trim(xml % ("changeType" -> "modify")))
         ModifyChangeRequest(eventlogDetails(details))
     }
   }

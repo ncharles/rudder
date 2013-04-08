@@ -193,7 +193,6 @@ class ModificationValidationPopup(
   private[this] val workflowService          = RudderConfig.workflowService
   private[this] val dependencyService        = RudderConfig.dependencyAndDeletionService
   private[this] val workflowEnabled          = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
-
   private[this] val directiveRepository      = RudderConfig.woDirectiveRepository
   private[this] val uuidGen                  = RudderConfig.stringUuidGenerator
   private[this] val techniqueRepo            = RudderConfig.techniqueRepository
@@ -214,7 +213,7 @@ class ModificationValidationPopup(
       case false => ("Save", "")
     }
     val titleWorkflow = workflowEnabled match {
-      case true => 
+      case true =>
         <div>
           <h2 style="padding-left:42px;">Workflows are enabled in Rudder, your change has to be validated in a change request</h2>
         </div>
@@ -236,15 +235,15 @@ class ModificationValidationPopup(
         }
       } &
       "#titleWorkflow *" #> titleWorkflow &
-      "#changeRequestName" #> { 
+      "#changeRequestName" #> {
           if ((workflowEnabled)&(!isANewItem)) {
             changeRequestName.toForm
-          } else 
-            Full(NodeSeq.Empty) 
+          } else
+            Full(NodeSeq.Empty)
       } &
       "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, () => onSubmitStartWorkflow(), ("class" -> classForButton)) % ("id", "createDirectiveSaveButton") % ("tabindex","3")) andThen
        ".notifications *" #> updateAndDisplayNotifications()
-      
+
     )(html ++ Script(OnLoad(JsRaw("correctButtons();"))))
   }
 
@@ -416,7 +415,7 @@ class ModificationValidationPopup(
           val cr = item match {
             case Left((techniqueName, activeTechniqueId, oldRootSection, directive, optOriginal)) =>
                 val action = DirectiveDiffFromAction(techniqueName, directive, optOriginal)
-                action.map(
+                action.flatMap(
                   changeRequestService.createChangeRequestFromDirective(
                         changeRequestName.get
                       , crReasons.map( _.get ).getOrElse("")
@@ -431,7 +430,7 @@ class ModificationValidationPopup(
 
             case Right((nodeGroup, optOriginal)) =>
                 val action = groupDiffFromAction(nodeGroup, optOriginal)
-                action.map(
+                action.flatMap(
                 changeRequestService.createChangeRequestFromNodeGroup(
                     changeRequestName.get
                   , crReasons.map( _.get ).getOrElse("")
@@ -442,14 +441,12 @@ class ModificationValidationPopup(
                   , crReasons.map(_.get))
                 )
           }
-          cr.flatMap { cr =>
-            for {
-              saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map(_.get))
-              wfStarted <- workflowService.startWorkflow(saved.id, CurrentUser.getActor, crReasons.map(_.get))
+          for {
+            crId <- cr.map(_.id)
+            wf <- workflowService.startWorkflow(crId, CurrentUser.getActor, crReasons.map(_.get))
             } yield {
-              saved.id
+              crId
             }
-          }
         }
 
         savedChangeRequest match {

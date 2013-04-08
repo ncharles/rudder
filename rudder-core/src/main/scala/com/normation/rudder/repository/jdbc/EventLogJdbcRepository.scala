@@ -59,6 +59,9 @@ import com.normation.rudder.services.eventlog.EventLogFactory
 import com.normation.rudder.domain.eventlog._
 import com.normation.rudder.repository.QueryParameter
 import scala.collection.mutable.Buffer
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import scala.util.Try
+import scala.util.Success
 
 /**
  * The EventLog repository
@@ -147,15 +150,42 @@ class EventLogJdbcRepository(
     }
   }
 
+
+  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, optLimit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]= {
+    import scala.util.{Failure => Catch}
+    Try {
+      jdbcTemplate.query(
+        new PreparedStatementCreator() {
+           def createPreparedStatement(connection : Connection) : PreparedStatement = {
+             val order = orderBy.map(o => " order by " + o).getOrElse("")
+             val limit = optLimit.map( l => " limit " + l).getOrElse("")
+             val query= s"${SELECT_SQL} and cast (xpath('/entry/changeRequest/id/text()', data) as text[]) = ? ${order} ${limit}"
+             val ps = connection.prepareStatement(
+                 query, Array[String]());
+
+             ps.setArray(1, connection.createArrayOf("text", Seq(changeRequest.value.toString).toArray[AnyRef]) )
+             ps
+           }
+         }, EventLogReportsMapper)
+    } match {
+      case Success(x) => Full(x)
+      case Catch(error) => Failure(error.toString())
+    }
+  }
+
+
   def getEventLogByCriteria(criteria : Option[QueryParameter], optLimit:Option[Int] = None, orderBy:Option[String]) : Box[Seq[EventLog]] = {
     val array = Buffer[AnyRef]()
-
-    criteria.map(_.addToQuery(SELECT_SQL, array)).getOrElse(Full((SELECT_SQL,array))) match {
-      case Full((query,parameters)) =>
+    val res = criteria.map(_.addToQuery(SELECT_SQL, array))
+        logger.warn(res.toString())
+    res.getOrElse(Full((SELECT_SQL,array))) match {
+      case Full((query,parameters)) => /*val res = parameters.toArray[AnyRef].headOption
+       logger.info(array.toString)
+        logger.info(res.toString())*/
         val order = orderBy.map(o => " order by " + o).getOrElse("")
         val limit = optLimit.map( l => " limit " + l).getOrElse("")
-        val select = s"query ${order} ${limit}"
-        val list = jdbcTemplate.query(select,parameters.toArray, EventLogReportsMapper)
+        val select = s"${query} ${order} ${limit}"
+        val list = jdbcTemplate.query(select,parameters.toArray[AnyRef], EventLogReportsMapper)
         list.size match {
           case 0 => Empty
           case _ => Full(Seq[EventLog]() ++ list)
@@ -168,7 +198,6 @@ class EventLogJdbcRepository(
 }
 
 object EventLogReportsMapper extends RowMapper[EventLog] with Loggable {
-
   def mapRow(rs : ResultSet, rowNum: Int) : EventLog = {
     val eventLogDetails = EventLogDetails(
         id             = Some(rs.getInt("id"))
@@ -219,6 +248,7 @@ object EventLogReportsMapper extends RowMapper[EventLog] with Loggable {
         PolicyServerEventLogsFilter.eventList :::
         PromisesEventLogsFilter.eventList :::
         UserEventLogsFilter.eventList :::
+        ChangeRequestLogsFilter.eventList :::
         TechniqueEventLogsFilter.eventList
 
 

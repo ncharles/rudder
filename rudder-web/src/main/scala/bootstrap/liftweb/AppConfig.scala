@@ -321,18 +321,18 @@ object RudderConfig extends Loggable {
 
 
   val roChangeRequestRepository : RoChangeRequestRepository = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
-      case true =>
-        inMemoryChangeRequestRepository
       case false =>
+        inMemoryChangeRequestRepository
+      case true =>
         new RoChangeRequestJdbcRepository(
           jdbcTemplate
         , new ChangeRequestsMapper(changeRequestChangesUnserialisation))
     }
 
   val woChangeRequestRepository : WoChangeRequestRepository = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
-    case true =>
-      inMemoryChangeRequestRepository
     case false =>
+      inMemoryChangeRequestRepository
+    case true =>
       new WoChangeRequestJdbcRepository(
           jdbcTemplate
         , changeRequestChangesSerialisation
@@ -371,7 +371,12 @@ object RudderConfig extends Loggable {
           , inMemoryChangeRequestRepository
         )
   }
-  val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl
+  val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl (
+      roChangeRequestRepository
+    , woChangeRequestRepository
+    , changeRequestEventLogService
+    , uuidGen
+  )
 
 
   //////////////////////////////////////////////////////////////////////////////////////////

@@ -48,6 +48,13 @@ object ModifyChangeRequest extends EventLogFilter {
   override def apply(x : (EventLogType, EventLogDetails)) : ModifyChangeRequest = ModifyChangeRequest(x._2)
 }
 
+object ChangeRequestLogsFilter {
+  final val eventList : List[EventLogFilter] = List(
+      AddChangeRequest
+    , DeleteChangeRequest
+    , ModifyChangeRequest
+    )
+}
 
 /*
  * Event log on change request

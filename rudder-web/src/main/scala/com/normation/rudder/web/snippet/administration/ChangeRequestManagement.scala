@@ -95,7 +95,10 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
         }"""
 
 
-  def CRLine(cr: ChangeRequest)=
+  def CRLine(cr: ChangeRequest)= {
+
+    val last = changeRequestEventLogService.getLastLog(cr.id)
+    logger.warn(last)
     <tr>
       <td id="crId">
          {SHtml.a(() => S.redirectTo(s"/secure/utilities/changeRequest/${cr.id}"), Text(cr.id.value.toString))}
@@ -120,6 +123,8 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          }}
       </td>
    </tr>
+
+  }
   def dispatch = {
     case "filter" =>
       xml => ("#actualFilter *" #> statusFilter).apply(xml)

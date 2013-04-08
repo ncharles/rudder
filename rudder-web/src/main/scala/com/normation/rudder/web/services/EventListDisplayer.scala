@@ -321,6 +321,9 @@ class EventListDisplayer(
       case x:ImportTechniqueLibraryArchive => Text("Restoring Directive library archive")
       case x:ImportRulesArchive => Text("Restoring Rules archive")
       case x:ImportFullArchive => Text("Restoring full archive")
+      case _:AddChangeRequest  => Text("Create change request")
+      case _:DeleteChangeRequest => Text("Delete change request")
+      case _:ModifyChangeRequest => Text("Modify change request")
       case _:Rollback          => Text("Restore a previous state of configuration policy")
       case _ => Text("Unknow event type")
 
@@ -866,6 +869,17 @@ class EventListDisplayer(
           case e:EmptyBox => errorMessage(e)
         }
         xml }
+
+      case x:ChangeRequestEventLog =>
+        "*" #> { logDetailsService.getChangeRequestDetails(x.details) match {
+        case Full(eventLogs) =>
+               Text(eventLogs.toString())
+          case e:EmptyBox => logger.warn(e)
+          errorMessage(e)
+        }
+
+
+        }
 
       // other case: do not display details at all
       case _ => "*" #> ""
