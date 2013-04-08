@@ -446,6 +446,7 @@ object RudderConfig extends Loggable {
         Constants.XML_CURRENT_FILE_FORMAT.toString
       , nodeGroupSerialisation
       , directiveSerialisation
+      , ruleSerialisation
       , techniqueRepositoryImpl
       , rootSectionSerialisation
     )
@@ -481,6 +482,7 @@ object RudderConfig extends Loggable {
   private[this] lazy val changeRequestChangesUnserialisation = new ChangeRequestChangesUnserialisationImpl(
       nodeGroupUnserialisation
     , directiveUnserialisation
+    , ruleUnserialisation
     , techniqueRepository
     , sectionSpecParser
   )

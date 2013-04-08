@@ -80,6 +80,10 @@ import com.normation.rudder.domain.policies.ModifyToDirectiveDiff
 import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
 import com.normation.cfclerk.xmlwriters.SectionSpecWriter
 import com.normation.rudder.domain.workflows.ModifyToChangeRequestDiff
+import com.normation.rudder.domain.workflows.RuleChangeItem
+import com.normation.rudder.domain.policies.AddRuleDiff
+import com.normation.rudder.domain.policies.DeleteRuleDiff
+import com.normation.rudder.domain.policies.ModifyToRuleDiff
 
 
 class RuleSerialisationImpl(xmlVersion:String) extends RuleSerialisation {
@@ -231,6 +235,7 @@ class ChangeRequestChangesSerialisationImpl(
     xmlVersion         : String
   , nodeGroupSerializer: NodeGroupSerialisation
   , directiveSerializer: DirectiveSerialisation
+  , ruleSerializer     : RuleSerialisation
   , techniqueRepo      : TechniqueRepository
   , sectionSerializer  : SectionSpecWriter
 ) extends ChangeRequestChangesSerialisation with Loggable {
@@ -242,7 +247,7 @@ class ChangeRequestChangesSerialisationImpl(
         <date>{change.creationDate}</date>
         <reason>{change.reason.getOrElse("")}</reason>
         { change.diff match {
-          case  AddNodeGroupDiff(group) => <diff action="add">{nodeGroupSerializer.serialise(group)}</diff>
+          case AddNodeGroupDiff(group) => <diff action="add">{nodeGroupSerializer.serialise(group)}</diff>
           case DeleteNodeGroupDiff(group) => <diff action="delete">{nodeGroupSerializer.serialise(group)}</diff>
           case ModifyToNodeGroupDiff(group) => <diff action="modifyTo">{nodeGroupSerializer.serialise(group)}</diff>
           case _ => "should not be here"
@@ -279,6 +284,18 @@ class ChangeRequestChangesSerialisationImpl(
       </change>
     }
 
+    def serializeRuleChange(change : RuleChangeItem) : NodeSeq = {
+      <change>
+        <actor>{change.actor.name}</actor>
+        <date>{change.creationDate}</date>
+        <reason>{change.reason.getOrElse("")}</reason>
+        { change.diff match {
+          case AddRuleDiff(rule) => <diff action="add">{ruleSerializer.serialise(rule)}</diff>
+          case DeleteRuleDiff(rule) => <diff action="delete">{ruleSerializer.serialise(rule)}</diff>
+          case ModifyToRuleDiff(rule) => <diff action="modifyTo">{ruleSerializer.serialise(rule)}</diff>
+        } }
+      </change>
+    }
 
     changeRequest match {
 
@@ -297,14 +314,14 @@ class ChangeRequestChangesSerialisationImpl(
           </group>
           }
 
-    val directives = changeRequest.directives.map{ case (directiveId,directive) =>
-      <directive id={directiveId.value}>
+        val directives = changeRequest.directives.map{ case (directiveId,directive) =>
+          <directive id={directiveId.value}>
             <initialState>
               {directive.changes.initialState.map{
-                    case (techniqueName,directive,rootSection) =>
-                      directiveSerializer.serialise(techniqueName,rootSection,directive)
-                 }.getOrElse(NodeSeq.Empty)
-              }
+                        case (techniqueName,directive,rootSection) =>
+                          directiveSerializer.serialise(techniqueName,rootSection,directive)
+                     }.getOrElse(NodeSeq.Empty)
+                  }
             </initialState>
               <firstChange>
                 { serializeDirectiveChange(directive.changes.firstChange) }
@@ -313,8 +330,27 @@ class ChangeRequestChangesSerialisationImpl(
               {directive.changes.nextChanges.map(serializeDirectiveChange(_))}
             </nextChanges>
           </directive>
+          }
+
+        val rules = changeRequest.rules.map{ case (ruleId, rule) => 
+          <rule id={ruleId.value}>
+            <initialState>
+              {rule.changes.initialState.map{
+                case (initialRule) => 
+                  ruleSerializer.serialise(initialRule)
+                }.getOrElse(NodeSeq.Empty)
+              }
+            </initialState>
+            <firstChange>
+              { serializeRuleChange(rule.changes.firstChange) }
+            </firstChange>
+            <nextChanges>
+              { rule.changes.nextChanges.map(serializeRuleChange(_)) }
+            </nextChanges>
+          </rule>
         }
 
+        
     createTrimedElem(XML_TAG_CHANGE_REQUEST, xmlVersion)  (
       <groups>
         {groups}
@@ -323,19 +359,7 @@ class ChangeRequestChangesSerialisationImpl(
         {directives}
       </directives>
       <rules>
-      {/*    <rule id="id3">*
-            <initialState>
-              RuleSerialization*
-            </initialState>
-            <firstChange>
-              RuleSerialization+
-            </firstChange>
-            <nextChanges>
-              <change>*
-                RuleSerialization
-              </change>
-            </nextChanges>
-          </rule>*/}
+        {rules}
       </rules>
       )
 

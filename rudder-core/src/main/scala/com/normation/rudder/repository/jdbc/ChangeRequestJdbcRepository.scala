@@ -250,7 +250,7 @@ class ChangeRequestsMapper(
 
     // unserialize the XML.
     // If it fails, throw an exception (I'm in a jdbc context, within a Try, that would catch it)
-    val (directivesMaps, nodesMaps) = changeRequestChangesUnserialisation.unserialise(XML.load(rs.getSQLXML("content").getBinaryStream() )) match {
+    val (directivesMaps, nodesMaps, ruleMaps) = changeRequestChangesUnserialisation.unserialise(XML.load(rs.getSQLXML("content").getBinaryStream() )) match {
       case Full(maps) => maps
       case e:Failure =>
         logger.error(s"Error when trying to get the content of the change request ${rs.getInt("id")} : ${e.messageChain}")
@@ -269,7 +269,7 @@ class ChangeRequestsMapper(
         )
       , directivesMaps
       , nodesMaps
-      , Map()
+      , ruleMaps
     )
   }
   

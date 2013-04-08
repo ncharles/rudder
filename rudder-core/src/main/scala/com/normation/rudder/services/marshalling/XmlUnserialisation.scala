@@ -53,6 +53,8 @@ import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.workflows.NodeGroupChange
 import com.normation.rudder.domain.workflows.DirectiveChanges
 import com.normation.rudder.domain.workflows.NodeGroupChanges
+import com.normation.rudder.domain.policies.RuleId
+import com.normation.rudder.domain.workflows.RuleChanges
 
 
 trait DeploymentStatusUnserialisation {
@@ -321,5 +323,5 @@ trait ChangeRequestChangesUnserialisation {
         </rules>
       </changeRequest>
    */
-  def unserialise(xml:XNode): Box[(Map[DirectiveId,DirectiveChanges],Map[NodeGroupId,NodeGroupChanges]/*,Map[RuleId,RuleChange]*/)]
+  def unserialise(xml:XNode): Box[(Map[DirectiveId,DirectiveChanges],Map[NodeGroupId,NodeGroupChanges],Map[RuleId,RuleChanges])]
 }
