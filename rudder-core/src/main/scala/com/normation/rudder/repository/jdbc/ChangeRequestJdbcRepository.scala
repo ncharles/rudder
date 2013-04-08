@@ -66,9 +66,9 @@ class RoChangeRequestJdbcRepository(
     jdbcTemplate         : JdbcTemplate
   , changeRequestsMapper : ChangeRequestsMapper
 ) extends RoChangeRequestRepository with Loggable {
-   
+
   val SELECT_SQL = "SELECT id, name, description, creationTime, content FROM ChangeRequest"
-    
+
   def getAll() : Box[Seq[ChangeRequest]] = {
     Try {
       jdbcTemplate.query(SELECT_SQL, Array[AnyRef](), changeRequestsMapper).toSeq
@@ -77,7 +77,7 @@ class RoChangeRequestJdbcRepository(
       case Catch(error) => Failure(error.toString())
     }
   }
-  
+
   def get(changeRequestId:ChangeRequestId) : Box[Option[ChangeRequest]] = {
     Try {
       jdbcTemplate.query(
@@ -91,9 +91,9 @@ class RoChangeRequestJdbcRepository(
         case _ => Failure(s"Too many change request have the same id ${changeRequestId.value}")
       }
       case Catch(error) => Failure(error.toString())
-    }  
+    }
   }
-  
+
   def getByIds(changeRequestId:Seq[ChangeRequestId]) : Box[Seq[ChangeRequest]] = {
     val parameters = new MapSqlParameterSource();
     parameters.addValue("ids", changeRequestId.map(x => x.value))
@@ -106,7 +106,7 @@ class RoChangeRequestJdbcRepository(
     } match {
       case Success(x) => Full(x)
       case Catch(error) => Failure(error.toString())
-    }  
+    }
   }
 
   def getByDirective(id : DirectiveId) : Box[Seq[ChangeRequest]] = {
@@ -118,11 +118,11 @@ class RoChangeRequestJdbcRepository(
       case Catch(error) => Failure(error.toString())
     }
   }
-  
+
   def getByNodeGroup(id : NodeGroupId) : Box[Seq[ChangeRequest]] = ???
-  
+
   def getByRule(id : RuleId) : Box[Seq[ChangeRequest]] = ???
-  
+
 }
 
 class WoChangeRequestJdbcRepository(
@@ -132,9 +132,9 @@ class WoChangeRequestJdbcRepository(
 ) extends WoChangeRequestRepository with Loggable {
 
   val INSERT_SQL = "insert into ChangeRequest (name, description, creationTime, content) values (?, ?, ?, ?)"
- 
+
   val UPDATE_SQL = "update ChangeRequest set name = ?, description = ?, content = ? where id = ?"
- 
+
   /**
    * Save a new change request in the back-end.
    * The id is ignored, and a new one will be attributed
@@ -162,6 +162,7 @@ class WoChangeRequestJdbcRepository(
            }
          },
          keyHolder)
+         logger.info(keyHolder.getKey().intValue.toString)
          roRepo.get(ChangeRequestId(keyHolder.getKey().intValue))
     } match {
       case Success(x) => x match {
@@ -169,17 +170,17 @@ class WoChangeRequestJdbcRepository(
               logger.debug(s"Created change Request with id ${entry.id.value}")
               Full(entry)
         case Full(None) => Failure("Couldn't find newly created entry when saving Change Request")
-        case e : Failure => 
+        case e : Failure =>
               logger.error(s"Error when creating change request: ${e.msg}")
               e
-        case Empty => 
+        case Empty =>
               logger.error(s"Error when creating a change request: no reason given")
               Empty
       }
       case Catch(error) => Failure(error.toString())
     }
   }
-  
+
   /**
    * Delete a change request.
    * (whatever the read/write mode is).
@@ -188,7 +189,7 @@ class WoChangeRequestJdbcRepository(
     // we should update it rather, isn't it ?
     ???
   }
-  
+
   /**
    * Update a change request. The change request must exists.
    */
@@ -196,7 +197,7 @@ class WoChangeRequestJdbcRepository(
     // I will need a transaction if I need to change the status http://static.springsource.org/spring/docs/3.0.x/spring-framework-reference/html/transaction.html#transaction-programmatic
     Try {
       roRepo.get(changeRequest.id) match {
-        case Full(None) => 
+        case Full(None) =>
           logger.warn(s"Cannot update non-existant Change Request with id ${changeRequest.id.value}")
           Failure(s"Cannot update non-existant Change Request with id ${changeRequest.id.value}")
         case eb : EmptyBox => eb
@@ -207,13 +208,13 @@ class WoChangeRequestJdbcRepository(
                  def createPreparedStatement(connection : Connection) : PreparedStatement = {
                    val sqlXml = connection.createSQLXML()
                    sqlXml.setString(crSerialiser.serialise(changeRequest).toString)
-      
+
                    val ps = connection.prepareStatement(
                        UPDATE_SQL, Seq[String]("id").toArray[String]);
-      
+
                    ps.setString(1, changeRequest.info.name)
                    ps.setString(2, changeRequest.info.description)
-                   ps.setSQLXML(3, sqlXml) 
+                   ps.setSQLXML(3, sqlXml)
                    ps.setInt(4, new java.lang.Integer(changeRequest.id.value))
                    ps
                  }
@@ -224,17 +225,17 @@ class WoChangeRequestJdbcRepository(
     } match {
         case Success(x) => x match {
             case Full(Some(entry)) => Full(entry)
-            case Full(None) => 
+            case Full(None) =>
               logger.error(s"Couldn't find the updated entry when updating Change Request ${changeRequest.id.value}")
               Failure("Couldn't find the updated entry when saving Change Request")
-            case e : Failure => 
+            case e : Failure =>
               logger.error(s"Error when updating change request ${changeRequest.id.value}: ${e.msg}")
               e
-            case Empty => 
+            case Empty =>
               logger.error(s"Error when updating change request ${changeRequest.id.value}: no reason given")
               Empty
           }
-        case Catch(error) => 
+        case Catch(error) =>
           logger.error(s"Error when creating a Change Request : ${error.toString}")
           Failure(error.toString())
     }
@@ -255,12 +256,12 @@ class ChangeRequestsMapper(
       case e:Failure =>
         logger.error(s"Error when trying to get the content of the change request ${rs.getInt("id")} : ${e.messageChain}")
         throw new Exception(s"Error when trying to get the content of the change request ${rs.getInt("id")} : ${e.messageChain}")
-      case Empty => 
+      case Empty =>
         logger.error(s"Error when trying to get the content of the change request ${rs.getInt("id")} : no details attached")
         throw new Exception(s"Error when trying to get the content of the change request ${rs.getInt("id")}")
     }
-    
-    
+
+
     ConfigurationChangeRequest(
         ChangeRequestId(rs.getInt("id"))
       , ChangeRequestInfo(
@@ -272,5 +273,5 @@ class ChangeRequestsMapper(
       , ruleMaps
     )
   }
-  
+
 }

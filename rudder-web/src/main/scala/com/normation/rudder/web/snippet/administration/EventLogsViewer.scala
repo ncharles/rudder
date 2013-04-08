@@ -41,6 +41,7 @@ import net.liftweb.common._
 import net.liftweb.http.js.JsCmds.Script
 import net.liftweb.http.DispatchSnippet
 import bootstrap.liftweb.RudderConfig
+import com.normation.rudder.repository.QueryParameter
 
 class EventLogsViewer extends DispatchSnippet with Loggable {
   private[this] val repos     = RudderConfig.eventLogRepository

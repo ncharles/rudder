@@ -32,6 +32,7 @@ import com.normation.inventory.domain.NodeId
 import com.normation.eventlog.EventLogDetails
 import scala.xml._
 import com.normation.eventlog.ModificationId
+import com.normation.eventlog.EventLogDetails
 
 trait EventLogFactory {
 
@@ -147,6 +148,16 @@ trait EventLogFactory {
     , severity           : Int = 100
     , reason             : Option[String]
   ) : DeleteTechnique
+
+  def getChangeRequestFromDiff(
+      id                 : Option[Int] = None
+    , modificationId     : Option[ModificationId] = None
+    , principal          : EventActor
+    , diff               : ChangeRequestDiff
+    , creationDate       : DateTime = DateTime.now()
+    , severity           : Int = 100
+    , reason             : Option[String]
+  ) : ChangeRequestEventLog
 
 }
 
@@ -464,6 +475,47 @@ class EventLogFactoryImpl(
       , reason = reason
       , severity = severity))
   }
+
+  override def getChangeRequestFromDiff(
+      id                 : Option[Int] = None
+    , modificationId     : Option[ModificationId] = None
+    , principal          : EventActor
+    , diff               : ChangeRequestDiff
+    , creationDate       : DateTime = DateTime.now()
+    , severity           : Int = 100
+    , reason             : Option[String]
+  ) = {
+
+    def eventlogDetails(xml:Elem):EventLogDetails = {
+      EventLogDetails(
+        id = id
+      , modificationId = modificationId
+      , principal = principal
+      , details = xml
+      , creationDate = creationDate
+      , reason = reason
+      , severity = severity)
+    }
+    val xml = <changeRequest>
+                <id>{diff.changeRequest.id}</id>
+                <name>{diff.changeRequest.info.name}</name>
+                <description>{diff.changeRequest.info.description}
+                </description>
+              </changeRequest>
+
+    diff match {
+      case _:AddChangeRequestDiff      =>
+        val details = EventLog.withContent( scala.xml.Utility.trim(xml % ("changeType" -> "add")))
+        AddChangeRequest(eventlogDetails(details))
+      case _:DeleteChangeRequestDiff   =>
+        val details = EventLog.withContent( scala.xml.Utility.trim(xml % ("changeType" -> "delete")))
+        DeleteChangeRequest(eventlogDetails(details))
+      case _:ModifyToChangeRequestDiff =>
+        val details = EventLog.withContent( scala.xml.Utility.trim(xml % ("changeType" -> "modify")))
+        ModifyChangeRequest(eventlogDetails(details))
+    }
+  }
+
 }
 
 

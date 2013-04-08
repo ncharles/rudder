@@ -318,17 +318,17 @@ object RudderConfig extends Loggable {
   val woWorkflowRepository : WoWorkflowRepository = new WoWorkflowJdbcRepository(jdbcTemplate, roWorkflowRepository)
 
   val inMemoryChangeRequestRepository : InMemoryChangeRequestRepository = new InMemoryChangeRequestRepository
- 
-    
+
+
   val roChangeRequestRepository : RoChangeRequestRepository = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
       case false =>
         inMemoryChangeRequestRepository
-      case true =>  
+      case true =>
         new RoChangeRequestJdbcRepository(
           jdbcTemplate
         , new ChangeRequestsMapper(changeRequestChangesUnserialisation))
     }
-  
+
   val woChangeRequestRepository : WoChangeRequestRepository = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
     case false =>
       inMemoryChangeRequestRepository
@@ -339,10 +339,10 @@ object RudderConfig extends Loggable {
         , roChangeRequestRepository
         )
     }
-  
-  val changeRequestEventLogService : ChangeRequestEventLogService = new InMemoryChangeRequestEventLogService
-  
- 
+
+  val changeRequestEventLogService : ChangeRequestEventLogService = new ChangeRequestEventLogServiceImpl(eventLogRepository)
+
+
   val workflowEventLogService =    new InMemoryWorkflowProcessEventLogService
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
   val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
@@ -371,7 +371,12 @@ object RudderConfig extends Loggable {
           , inMemoryChangeRequestRepository
         )
   }
-  val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl
+  val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl (
+      roChangeRequestRepository
+    , woChangeRequestRepository
+    , changeRequestEventLogService
+    , uuidGen
+  )
 
 
   //////////////////////////////////////////////////////////////////////////////////////////
@@ -441,7 +446,7 @@ object RudderConfig extends Loggable {
     new NodeGroupSerialisationImpl(Constants.XML_CURRENT_FILE_FORMAT.toString)
   private[this] lazy val deploymentStatusSerialisation : DeploymentStatusSerialisation =
     new DeploymentStatusSerialisationImpl(Constants.XML_CURRENT_FILE_FORMAT.toString)
-  private[this] lazy val changeRequestChangesSerialisation : ChangeRequestChangesSerialisation = 
+  private[this] lazy val changeRequestChangesSerialisation : ChangeRequestChangesSerialisation =
     new ChangeRequestChangesSerialisationImpl(
         Constants.XML_CURRENT_FILE_FORMAT.toString
       , nodeGroupSerialisation

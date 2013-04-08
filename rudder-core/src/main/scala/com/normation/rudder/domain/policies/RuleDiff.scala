@@ -48,7 +48,7 @@ sealed trait ChangeRequestRuleDiff {
   def rule     : Rule
 }
 
-final case class AddRuleDiff(rule:Rule) extends RuleDiff with HashcodeCaching with ChangeRequestRuleDiff 
+final case class AddRuleDiff(rule:Rule) extends RuleDiff with HashcodeCaching with ChangeRequestRuleDiff
 
 final case class DeleteRuleDiff(rule:Rule) extends RuleDiff with HashcodeCaching with ChangeRequestRuleDiff
 

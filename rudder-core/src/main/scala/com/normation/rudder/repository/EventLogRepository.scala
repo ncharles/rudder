@@ -43,6 +43,30 @@ import com.normation.rudder.domain.nodes.DeleteNodeGroupDiff
 import com.normation.rudder.domain.nodes.ModifyNodeGroupDiff
 import com.normation.rudder.domain.nodes.AddNodeGroupDiff
 import com.normation.eventlog.ModificationId
+import scala.collection.mutable.Buffer
+import com.normation.rudder.domain.eventlog.ChangeRequestDiff
+import com.normation.rudder.domain.workflows.ChangeRequestId
+
+case class QueryParameter(
+    query:String
+  , value:Option[AnyRef] = None
+) {
+  def addToQuery(baseQuery:String,parameters:Buffer[AnyRef]) : Box[(String,Buffer[AnyRef])] = {
+    val newQuery = s"${baseQuery} and ${query}"
+    if (query.contains("?")) {
+      value match {
+        case Some(value) =>  val res  = parameters += value
+          Full(newQuery,res)
+        case None => Failure(s"There is no parameters but the query ${query} needs one")
+      }
+    }
+    else {
+      Full(newQuery,parameters)
+    }
+
+  }
+
+}
 
 trait EventLogRepository {
   def eventLogFactory : EventLogFactory
@@ -178,6 +202,17 @@ trait EventLogRepository {
     )
   }
 
+  def saveChangeRequest(modId: ModificationId, principal: EventActor, diff: ChangeRequestDiff, reason:Option[String]) = {
+    saveEventLog(
+        modId
+      , eventLogFactory.getChangeRequestFromDiff(
+         principal =  principal
+        , diff = diff
+        , reason = reason
+      )
+    )
+  }
+
   /**
    * Get an EventLog by its entry
    */
@@ -187,6 +222,7 @@ trait EventLogRepository {
    * Returns eventlog matching criteria
    * For the moment it only a string, it should be something else in the future
    */
-  def getEventLogByCriteria(criteria : Option[String], limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
+  def getEventLogByCriteria(criteria : Option[QueryParameter], limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
 
+  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
 }

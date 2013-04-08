@@ -41,15 +41,12 @@ import com.normation.rudder.repository.{ RoChangeRequestRepository, RoDraftChang
 import net.liftweb.common._
 import com.normation.rudder.services.eventlog.ChangeRequestEventLogService
 import com.normation.eventlog.EventActor
-import com.normation.rudder.domain.workflows.ChangeRequestEventLog
-import com.normation.rudder.domain.workflows.ChangeRequestEventLog
 import org.joda.time.DateTime
-import com.normation.rudder.domain.workflows.AddChangeRequestDiff
-import com.normation.rudder.domain.workflows.DeleteChangeRequestDiff
-import com.normation.rudder.domain.workflows.ModifyToChangeRequestDiff
 import com.normation.rudder.domain.policies.DirectiveId
 import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.policies.RuleId
+import com.normation.eventlog.ModificationId
+import com.normation.rudder.domain.eventlog._
 import com.normation.utils.StringUuidGenerator
 
 class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepository with WoDraftChangeRequestRepository {
@@ -89,12 +86,12 @@ class InMemoryDraftChangeRequestRepository extends RoDraftChangeRequestRepositor
 class InMemoryChangeRequestRepository
  extends RoChangeRequestRepository with WoChangeRequestRepository with Loggable {
 
-  imMemoryRepo => 
+  imMemoryRepo =>
 
   private[this] val repo = MutMap[ChangeRequestId, ChangeRequest]()
-  
+
   private[this] var id = 0;
-  
+
   private[this] def getNextId : Int = {
     imMemoryRepo.synchronized {
       id = id + 1
@@ -114,7 +111,7 @@ class InMemoryChangeRequestRepository
   }
 
   def createChangeRequest(changeRequest: ChangeRequest,actor: EventActor,reason: Option[String]): Box[ChangeRequest] = {
-    val crId = ChangeRequestId(getNextId) 
+    val crId = ChangeRequestId(getNextId)
     repo.get(crId) match {
       case Some(x) => Failure(s"Change request with ID ${crId} is already created")
       case None =>
@@ -130,7 +127,7 @@ class InMemoryChangeRequestRepository
         case None => Failure(s"Could not delete non existing CR with id ${changeRequestId.value}")
         case Some(request) =>
           repo -= changeRequestId
-          Full(request) 
+          Full(request)
       }
   }
 
@@ -143,14 +140,14 @@ class InMemoryChangeRequestRepository
       }
 
   }
-  
+
   def getByIds(changeRequestId:Seq[ChangeRequestId]) : Box[Seq[ChangeRequest]] =  ???
-  
+
   def getByDirective(id : DirectiveId) : Box[Seq[ChangeRequest]] = ???
-  
+
   def getByNodeGroup(id : NodeGroupId) : Box[Seq[ChangeRequest]] = ???
-  
+
   def getByRule(id : RuleId) : Box[Seq[ChangeRequest]] = ???
-  
+
 
 }

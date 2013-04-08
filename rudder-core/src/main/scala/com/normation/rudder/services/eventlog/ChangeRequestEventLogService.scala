@@ -35,8 +35,13 @@
 package com.normation.rudder.services.eventlog
 
 import scala.collection.mutable.{ Buffer, Map => MutMap }
-import com.normation.rudder.domain.workflows.{ ChangeRequestEventLog, ChangeRequestId }
+import com.normation.rudder.domain.workflows.ChangeRequestId
 import net.liftweb.common._
+import com.normation.rudder.repository.EventLogRepository
+import com.normation.rudder.repository.QueryParameter
+import com.normation.rudder.domain.eventlog.ChangeRequestEventLog
+import com.normation.rudder.domain.eventlog.ChangeRequestDiff
+import com.normation.eventlog._
 
 
 /**
@@ -46,7 +51,7 @@ import net.liftweb.common._
 trait ChangeRequestEventLogService {
 
   //we certainly won't keep that one in the end
-  def saveChangeRequestLog(crId: ChangeRequestId, log:ChangeRequestEventLog) : Box[ChangeRequestEventLog]
+  def saveChangeRequestLog(modId: ModificationId, principal: EventActor, diff: ChangeRequestDiff, reason:Option[String]) : Box[EventLog]
 
   def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[ChangeRequestEventLog]]
 
@@ -59,26 +64,23 @@ trait ChangeRequestEventLogService {
   def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]]
 }
 
-class InMemoryChangeRequestEventLogService extends ChangeRequestEventLogService {
+class ChangeRequestEventLogServiceImpl(
+   eventLogRepository : EventLogRepository
+ ) extends ChangeRequestEventLogService with Loggable{
   import scala.collection.mutable.{Map => MutMap, Buffer}
 
   private[this] val repo = MutMap[ChangeRequestId, Buffer[ChangeRequestEventLog]]()
 
 
-  def saveChangeRequestLog(crId: ChangeRequestId, log:ChangeRequestEventLog) : Box[ChangeRequestEventLog] = {
-    val buf = repo.getOrElse(crId, Buffer[ChangeRequestEventLog]())
-    buf += log
-    repo += (crId -> buf)
-
-    Full(log)
+  def saveChangeRequestLog(modId: ModificationId, principal: EventActor, diff: ChangeRequestDiff, reason:Option[String]): Box[EventLog] = {
+    eventLogRepository.saveChangeRequest(modId, principal, diff, reason)
   }
 
   def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[ChangeRequestEventLog]] = {
-    Full(repo.getOrElse(id, Seq()))
+    eventLogRepository.getEventLogByChangeRequest(id).map(_.collect{case c:ChangeRequestEventLog => c})
   }
 
-  /* changed to lastOption as the order is reversed */
   def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]] = {
-    Full(repo.getOrElse(id, Seq()).lastOption)
+    eventLogRepository.getEventLogByChangeRequest(id,Some(1),Some("creationDate desc")).map(_.collect{case c:ChangeRequestEventLog => c}.headOption)
   }
 }

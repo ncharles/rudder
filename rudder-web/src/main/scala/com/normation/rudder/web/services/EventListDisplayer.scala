@@ -321,6 +321,9 @@ class EventListDisplayer(
       case x:ImportTechniqueLibraryArchive => Text("Restoring Directive library archive")
       case x:ImportRulesArchive => Text("Restoring Rules archive")
       case x:ImportFullArchive => Text("Restoring full archive")
+      case _:AddChangeRequest  => Text("Create change request")
+      case _:DeleteChangeRequest => Text("Delete change request")
+      case _:ModifyChangeRequest => Text("Modify change request")
       case _:Rollback          => Text("Restore a previous state of configuration policy")
       case _ => Text("Unknow event type")
 
@@ -361,15 +364,21 @@ class EventListDisplayer(
         SHtml.ajaxButton(
           "Confirm"
         , () => {
-            val select = event.id.map(action.selectRollbackedEventsRequest)
-            repos.getEventLogByCriteria(select) match {
-              case Full(events) =>
-                val rollbackedEvents = events.filter(_.canRollBack)
-                action.action(event,commiter,rollbackedEvents,event)
-                S.redirectTo("eventLogs")
-              case eb => S.error("Problem while performing a rollback")
-              logger.error("Problem while performing a rollback : ",eb)
-              cancel
+            event.id match {
+              case Some(id) => val select = action.selectRollbackedEventsRequest(id)
+                repos.getEventLogByCriteria(Some(select)) match {
+                  case Full(events) =>
+                    val rollbackedEvents = events.filter(_.canRollBack)
+                    action.action(event,commiter,rollbackedEvents,event)
+                    S.redirectTo("eventLogs")
+                  case eb => S.error("Problem while performing a rollback")
+                  logger.error("Problem while performing a rollback : ",eb)
+                  cancel
+              }
+              case None => val failure = "Problem while performing a rollback, could not find event id"
+                S.error(failure)
+                logger.error(failure)
+                cancel
             }
           }
         )
@@ -861,6 +870,17 @@ class EventListDisplayer(
         }
         xml }
 
+      case x:ChangeRequestEventLog =>
+        "*" #> { logDetailsService.getChangeRequestDetails(x.details) match {
+        case Full(eventLogs) =>
+               Text(eventLogs.toString())
+          case e:EmptyBox => logger.warn(e)
+          errorMessage(e)
+        }
+
+
+        }
+
       // other case: do not display details at all
       case _ => "*" #> ""
 
@@ -1347,7 +1367,7 @@ trait RollBackAction {
   def name   : String
   def op     : String
   def action : (EventLog,PersonIdent,Seq[EventLog],EventLog) => Box[GitCommitId]
-  def selectRollbackedEventsRequest(id:Int): String =" id %s %d and modificationid IS NOT NULL".format(op,id)
+  def selectRollbackedEventsRequest(id:Int): QueryParameter = QueryParameter(s" id ${op} ? and modificationid IS NOT NULL",Some(id.toString))
 }
 
 case object RollbackTo extends RollBackAction{
