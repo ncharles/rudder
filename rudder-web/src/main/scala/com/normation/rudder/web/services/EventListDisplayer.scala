@@ -65,6 +65,10 @@ import org.joda.time.DateTime
 import net.liftweb.util.ToJsCmd
 import com.normation.rudder.services.eventlog.RollbackInfo
 import com.normation.rudder.services.eventlog.RollbackedEvent
+import com.normation.rudder.domain.workflows.ChangeRequestId
+import scala.util.Try
+import scala.util.Success
+import scala.util.{Failure => Catch}
 
 /**
  * Used to display the event list, in the pending modification (AsyncDeployment),
@@ -285,46 +289,61 @@ class EventListDisplayer(
         Text("Technique %s".format(name)) ++ actionName
     }
 
+    def changeRequestDesc(x:EventLog, actionName: NodeSeq) = {
+    val name = (x.details \ "changeRequest" \ "name").text
+    val idNode = (x.details \ "changeRequest" \ "id").text.trim
+    val xml = Try(idNode.toInt) match {
+      case Success(id) =>   Text("ChangeRequest ") ++ {
+          if (actionName==Text(" deleted")) Text(name)
+          else <a href={changeRequestLink(ChangeRequestId(id))} onclick="noBubble(event);">{name}</a>
+        }
+      case Catch(e) =>
+        logger.error(s"could not translate ${idNode} to a correct chage request identifier: ${e.getMessage()}")
+        Text(name)
+      }
+    xml ++ actionName
+    }
+
     event match {
-      case x:ActivateRedButton => Text("Stop Rudder agents on all nodes")
-      case x:ReleaseRedButton => Text("Start again Rudder agents on all nodes")
-      case x:AcceptNodeEventLog => nodeDesc(x, Text(" accepted"))
-      case x:RefuseNodeEventLog => nodeDesc(x, Text(" refused"))
-      case x:DeleteNodeEventLog => nodeDesc(x, Text(" deleted"))
-      case x:LoginEventLog => Text("User '%s' login".format(x.principal.name))
-      case x:LogoutEventLog => Text("User '%s' logout".format(x.principal.name))
-      case x:BadCredentialsEventLog => Text("User '%s' failed to login: bad credentials".format(x.principal.name))
-      case x:AutomaticStartDeployement => Text("Automatically deploy Directive on nodes")
-      case x:ManualStartDeployement => Text("Manually deploy Directive on nodes")
-      case x:ApplicationStarted => Text("Rudder starts")
-      case x:ModifyRule => crDesc(x,Text(" modified"))
-      case x:DeleteRule => crDesc(x,Text(" deleted"))
-      case x:AddRule    => crDesc(x,Text(" added"))
-      case x:ModifyDirective => piDesc(x,Text(" modified"))
-      case x:DeleteDirective => piDesc(x,Text(" deleted"))
-      case x:AddDirective    => piDesc(x,Text(" added"))
-      case x:ModifyNodeGroup => groupDesc(x,Text(" modified"))
-      case x:DeleteNodeGroup => groupDesc(x,Text(" deleted"))
-      case x:AddNodeGroup    => groupDesc(x,Text(" added"))
-      case x:ClearCacheEventLog => Text("Clear caches of all nodes")
-      case x:UpdatePolicyServer => Text("Change Policy Server authorized network")
-      case x:ReloadTechniqueLibrary => Text("Technique library updated")
-      case x:ModifyTechnique => techniqueDesc(x, Text(" modified"))
-      case x:DeleteTechnique => techniqueDesc(x, Text(" deleted"))
-      case x:SuccessfulDeployment => Text("Successful deployment")
-      case x:FailedDeployment => Text("Failed deployment")
-      case x:ExportGroupsArchive => Text("New groups archive")
+      case x:ActivateRedButton             => Text("Stop Rudder agents on all nodes")
+      case x:ReleaseRedButton              => Text("Start again Rudder agents on all nodes")
+      case x:AcceptNodeEventLog            => nodeDesc(x, Text(" accepted"))
+      case x:RefuseNodeEventLog            => nodeDesc(x, Text(" refused"))
+      case x:DeleteNodeEventLog            => nodeDesc(x, Text(" deleted"))
+      case x:LoginEventLog                 => Text("User '%s' login".format(x.principal.name))
+      case x:LogoutEventLog                => Text("User '%s' logout".format(x.principal.name))
+      case x:BadCredentialsEventLog        => Text("User '%s' failed to login: bad credentials".format(x.principal.name))
+      case x:AutomaticStartDeployement     => Text("Automatically deploy Directive on nodes")
+      case x:ManualStartDeployement        => Text("Manually deploy Directive on nodes")
+      case x:ApplicationStarted            => Text("Rudder starts")
+      case x:ModifyRule                    => crDesc(x,Text(" modified"))
+      case x:DeleteRule                    => crDesc(x,Text(" deleted"))
+      case x:AddRule                       => crDesc(x,Text(" added"))
+      case x:ModifyDirective               => piDesc(x,Text(" modified"))
+      case x:DeleteDirective               => piDesc(x,Text(" deleted"))
+      case x:AddDirective                  => piDesc(x,Text(" added"))
+      case x:ModifyNodeGroup               => groupDesc(x,Text(" modified"))
+      case x:DeleteNodeGroup               => groupDesc(x,Text(" deleted"))
+      case x:AddNodeGroup                  => groupDesc(x,Text(" added"))
+      case x:ClearCacheEventLog            => Text("Clear caches of all nodes")
+      case x:UpdatePolicyServer            => Text("Change Policy Server authorized network")
+      case x:ReloadTechniqueLibrary        => Text("Technique library updated")
+      case x:ModifyTechnique               => techniqueDesc(x, Text(" modified"))
+      case x:DeleteTechnique               => techniqueDesc(x, Text(" deleted"))
+      case x:SuccessfulDeployment          => Text("Successful deployment")
+      case x:FailedDeployment              => Text("Failed deployment")
+      case x:ExportGroupsArchive           => Text("New groups archive")
       case x:ExportTechniqueLibraryArchive => Text("New Directive library archive")
-      case x:ExportRulesArchive => Text("New Rules archives")
-      case x:ExportFullArchive => Text("New full archive")
-      case x:ImportGroupsArchive => Text("Restoring group archive")
+      case x:ExportRulesArchive            => Text("New Rules archives")
+      case x:ExportFullArchive             => Text("New full archive")
+      case x:ImportGroupsArchive           => Text("Restoring group archive")
       case x:ImportTechniqueLibraryArchive => Text("Restoring Directive library archive")
-      case x:ImportRulesArchive => Text("Restoring Rules archive")
-      case x:ImportFullArchive => Text("Restoring full archive")
-      case _:AddChangeRequest  => Text("Create change request")
-      case _:DeleteChangeRequest => Text("Delete change request")
-      case _:ModifyChangeRequest => Text("Modify change request")
-      case _:Rollback          => Text("Restore a previous state of configuration policy")
+      case x:ImportRulesArchive            => Text("Restoring Rules archive")
+      case x:ImportFullArchive             => Text("Restoring full archive")
+      case _:AddChangeRequest              => changeRequestDesc(event,Text(" created"))
+      case _:DeleteChangeRequest           => changeRequestDesc(event,Text(" deleted"))
+      case _:ModifyChangeRequest           => changeRequestDesc(event,Text(" modified"))
+      case _:Rollback                      => Text("Restore a previous state of configuration policy")
       case _ => Text("Unknow event type")
 
     }
@@ -1367,7 +1386,7 @@ trait RollBackAction {
   def name   : String
   def op     : String
   def action : (EventLog,PersonIdent,Seq[EventLog],EventLog) => Box[GitCommitId]
-  def selectRollbackedEventsRequest(id:Int): QueryParameter = QueryParameter(s" id ${op} ? and modificationid IS NOT NULL",Some(id.toString))
+  def selectRollbackedEventsRequest(id:Int) = s" id ${op} ${id} and modificationid IS NOT NULL"
 }
 
 case object RollbackTo extends RollBackAction{

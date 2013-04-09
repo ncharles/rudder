@@ -47,27 +47,6 @@ import scala.collection.mutable.Buffer
 import com.normation.rudder.domain.eventlog.ChangeRequestDiff
 import com.normation.rudder.domain.workflows.ChangeRequestId
 
-case class QueryParameter(
-    query:String
-  , value:Option[AnyRef] = None
-) {
-  def addToQuery(baseQuery:String,parameters:Buffer[AnyRef]) : Box[(String,Buffer[AnyRef])] = {
-    val newQuery = s"${baseQuery} and ${query}"
-    if (query.contains("?")) {
-      value match {
-        case Some(value) =>  val res  = parameters += value
-          Full(newQuery,res)
-        case None => Failure(s"There is no parameters but the query ${query} needs one")
-      }
-    }
-    else {
-      Full(newQuery,parameters)
-    }
-
-  }
-
-}
-
 trait EventLogRepository {
   def eventLogFactory : EventLogFactory
 
@@ -222,7 +201,7 @@ trait EventLogRepository {
    * Returns eventlog matching criteria
    * For the moment it only a string, it should be something else in the future
    */
-  def getEventLogByCriteria(criteria : Option[QueryParameter], limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
+  def getEventLogByCriteria(criteria : Option[String], limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
 
   def getEventLogByChangeRequest(changeRequest : ChangeRequestId, limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
 }

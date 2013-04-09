@@ -57,11 +57,11 @@ import com.normation.rudder.domain.policies.RuleId
 import com.normation.inventory.domain.NodeId
 import com.normation.rudder.services.eventlog.EventLogFactory
 import com.normation.rudder.domain.eventlog._
-import com.normation.rudder.repository.QueryParameter
 import scala.collection.mutable.Buffer
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import scala.util.Try
 import scala.util.Success
+import scala.util.{Failure => Catch}
 
 /**
  * The EventLog repository
@@ -152,7 +152,7 @@ class EventLogJdbcRepository(
 
 
   def getEventLogByChangeRequest(changeRequest : ChangeRequestId, optLimit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]= {
-    import scala.util.{Failure => Catch}
+
     Try {
       jdbcTemplate.query(
         new PreparedStatementCreator() {
@@ -174,25 +174,18 @@ class EventLogJdbcRepository(
   }
 
 
-  def getEventLogByCriteria(criteria : Option[QueryParameter], optLimit:Option[Int] = None, orderBy:Option[String]) : Box[Seq[EventLog]] = {
-    val array = Buffer[AnyRef]()
-    val res = criteria.map(_.addToQuery(SELECT_SQL, array))
-        logger.warn(res.toString())
-    res.getOrElse(Full((SELECT_SQL,array))) match {
-      case Full((query,parameters)) => /*val res = parameters.toArray[AnyRef].headOption
-       logger.info(array.toString)
-        logger.info(res.toString())*/
-        val order = orderBy.map(o => " order by " + o).getOrElse("")
-        val limit = optLimit.map( l => " limit " + l).getOrElse("")
-        val select = s"${query} ${order} ${limit}"
-        val list = jdbcTemplate.query(select,parameters.toArray[AnyRef], EventLogReportsMapper)
-        list.size match {
-          case 0 => Empty
-          case _ => Full(Seq[EventLog]() ++ list)
-        }
-      case eb : EmptyBox => val failure = eb ?~! s"could not get Event log with criteria ${criteria.map(_.query).getOrElse("nothing")}"
-        logger.error(failure.msg)
-        failure
+  def getEventLogByCriteria(criteria : Option[String], optLimit:Option[Int] = None, orderBy:Option[String]) : Box[Seq[EventLog]] = {
+    val where = criteria.map(c => s"and ${c}").getOrElse("")
+    val order = orderBy.map(o => s" order by ${o}").getOrElse("")
+    val limit = optLimit.map(l => s" limit ${l}").getOrElse("")
+    val select = s"${SELECT_SQL} ${where} ${order} ${limit}"
+    Try {
+      Full(jdbcTemplate.query(select, EventLogReportsMapper).toSeq)
+    } match {
+      case Success(events) => events
+      case Catch(e) => val msg = s"could not find event log with request ${select} cause: ${e}"
+        logger.error(msg)
+        Failure(msg)
     }
   }
 }

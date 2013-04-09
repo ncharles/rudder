@@ -56,10 +56,10 @@ object ChangeRequestEditForm {
 }
 
 class ChangeRequestEditForm (
-    var info: ChangeRequestInfo
-  , workflowService : WorkflowService
-  , crId:ChangeRequestId
-  , SuccessCallback: ChangeRequestInfo => JsCmd
+    var info        : ChangeRequestInfo
+  , step            : Box[String]
+  , crId            : ChangeRequestId
+  , SuccessCallback : ChangeRequestInfo => JsCmd
 ) extends DispatchSnippet with Loggable {
 
   import ChangeRequestEditForm._
@@ -86,7 +86,7 @@ class ChangeRequestEditForm (
       ClearClearable &
       "#CRName *" #> changeRequestName.toForm_! &
       "#CRId *"   #> crId.value &
-      "#CRStatusDetails *"   #>  workflowService.findStep(crId).map(x => Text(x.value)).openOr(<div class="error">Cannot find the status of this change request</div>) &
+      "#CRStatusDetails *"   #>  step.map(Text(_)).openOr(<div class="error">Cannot find the status of this change request</div>) &
       "#CRDescription *" #> changeRequestDescription.toForm_! &
       "#CRSave *" #> SHtml.ajaxSubmit("Update", () =>  submit)
     ) (form) ++ Script(JsRaw("correctButtons();"))

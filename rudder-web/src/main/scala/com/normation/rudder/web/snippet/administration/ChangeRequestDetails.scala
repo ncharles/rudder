@@ -90,15 +90,13 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   private[this] val rodirective = RudderConfig.roDirectiveRepository
   private[this] val uuidGen = RudderConfig.stringUuidGenerator
   private[this] val userPropertyService      = RudderConfig.userPropertyService
-  private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
-  private[this] val woChangeRequestRepository = RudderConfig.woChangeRequestRepository
-  private[this] val roChangeRequestRepository = RudderConfig.roChangeRequestRepository
   private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
+  private[this] val changeRequestService  = RudderConfig.changeRequestService
   private[this] val workflowService = RudderConfig.workflowService
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[Int] = {S.param("crId").map(x=>x.toInt) }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {
-    case Full(id) => roChangeRequestRepository.get(ChangeRequestId(id)) match {
+    case Full(id) => changeRequestService.get(ChangeRequestId(id)) match {
       case Full(Some(cr)) => Full(cr)
       case Full(None) => Failure(s"There is no Cr with id :${id}")
       case eb:EmptyBox =>       val fail = eb ?~ "no id selected"
@@ -130,7 +128,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
           case Full(cr) =>
             new ChangeRequestEditForm(
                 cr.info
-              , workflowService
+              , step.map(_.value)
               , cr.id
               , changeDetailsCallback(cr) _
             ).display
@@ -179,16 +177,15 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   }
 
   private[this] def changeDetailsCallback (cr:ChangeRequest)(statusUpdate:ChangeRequestInfo) =  {
-    val newCR = ChangeRequest.updateInfo(cr, statusUpdate)
-    changeRequest = Full(newCR)
-    woChangeRequestRepository.updateChangeRequest(newCR, CurrentUser.getActor, None)
-    SetHtml("changeRequestHeader", displayHeader(newCR)) &
-    SetHtml("changeRequestChanges", new ChangeRequestChangesForm(newCR).dispatch("changes")(NodeSeq.Empty))
+    val newCR = changeRequestService.updateChangeRequestInfo(cr, statusUpdate, CurrentUser.getActor, None)
+    changeRequest = newCR
+    SetHtml("changeRequestHeader", displayHeader(newCR.openOr(cr))) &
+    SetHtml("changeRequestChanges", new ChangeRequestChangesForm(newCR.openOr(cr)).dispatch("changes")(NodeSeq.Empty))
   }
 
   def displayHeader(cr:ChangeRequest) = {
     //last action on the change Request (name/description changed):
-    val (action,date) = changeRequestEventLogService.getLastLog(cr.id) match {
+    val (action,date) = changeRequestService.getLastLog(cr.id) match {
       case eb:EmptyBox => ("Error when retrieving the last action",None)
       case Full(None)  => ("Error, no action were recorded for that change request",None) //should not happen here !
       case Full(Some(e:EventLog)) =>

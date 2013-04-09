@@ -38,7 +38,6 @@ package com.normation.rudder.services.eventlog
 import com.normation.rudder.domain.eventlog.InventoryEventLog
 import com.normation.rudder.repository.EventLogRepository
 import net.liftweb.common._
-import com.normation.rudder.repository.QueryParameter
 
 class InventoryEventLogServiceImpl(
     repository : EventLogRepository
@@ -50,7 +49,7 @@ class InventoryEventLogServiceImpl(
    * @return
    */
   def getInventoryEventLogs() : Box[Seq[InventoryEventLog]] = {
-    repository.getEventLogByCriteria(Some(QueryParameter(" eventType in ('AcceptNode', 'RefuseNode', 'DeleteNode')"))) match {
+    repository.getEventLogByCriteria(Some(" eventType in ('AcceptNode', 'RefuseNode', 'DeleteNode')")) match {
       case Full(seq) =>
         val result = scala.collection.mutable.Buffer[InventoryEventLog]()
         for (log <- seq) {
