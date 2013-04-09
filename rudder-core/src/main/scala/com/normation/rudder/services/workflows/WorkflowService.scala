@@ -57,6 +57,7 @@ import com.normation.rudder.repository.WoWorkflowRepository
 import com.normation.rudder.repository.jdbc.WoChangeRequestJdbcRepository
 import com.normation.rudder.repository.RoWorkflowRepository
 import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
+import com.normation.rudder.repository.WoRuleRepository
 
 /**
  * That service allows to glue Rudder with the
@@ -106,6 +107,7 @@ class CommitAndDeployChangeRequest(
   , roChangeRequestRepo : RoChangeRequestRepository
   , roDirectiveRepo     : RoDirectiveRepository
   , woDirectiveRepo     : WoDirectiveRepository
+  , woRuleRepository    : WoRuleRepository
   , asyncDeploymentAgent: AsyncDeploymentAgent
   , dependencyService   : DependencyAndDeletionService
 ) extends Loggable {
@@ -158,6 +160,22 @@ class CommitAndDeployChangeRequest(
       Full(NodeGroupId(id))
     }
 
+    def doRuleChange(change:RuleChanges, modId: ModificationId) : Box[RuleId] = {
+      for {
+        change <- change.changes.change
+        done   <- change.diff match {
+                    case DeleteRuleDiff(r) =>
+                      woRuleRepository.delete(r.id, modId, change.actor, change.reason).map( _ => r.id)
+                    case AddRuleDiff(r) =>
+                      woRuleRepository.create(r, modId, change.actor, change.reason).map( _ => r.id)
+                    case ModifyToRuleDiff(r) =>
+                      woRuleRepository.update(r, modId, change.actor, change.reason).map( _ => r.id)
+                  }
+      } yield {
+        done
+      }
+    }
+
     val modId = ModificationId(uuidGen.newUuid)
 
     /*
@@ -171,6 +189,9 @@ class CommitAndDeployChangeRequest(
                     }
       groups     <- sequence(cr.nodeGroups.values.toSeq) { nodeGroupChange =>
                       doNodeGroupChange(nodeGroupChange, modId)
+                    }
+      rules      <- sequence(cr.rules.values.toSeq) { rule =>
+                      doRuleChange(rule, modId)
                     }
     } yield {
       asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
@@ -189,15 +210,15 @@ class NoWorkflowServiceImpl(
 ) extends WorkflowService with Loggable {
 
   val noWorfkflow = WorkflowNodeId("No Workflow")
-  
+
   val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] = Map()
 
   val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] = Map()
-  
+
   def findStep(changeRequestId: ChangeRequestId) : Box[WorkflowNodeId] = Failure("No state when no workflow")
 
   val stepsValue :List[WorkflowNodeId] = List()
-  
+
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     logger.info("Automatically saving change")
     for {
@@ -209,7 +230,7 @@ class NoWorkflowServiceImpl(
       noWorfkflow
     }
   }
-  
+
   // should we keep this one or the previous ??
   def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     logger.info("Automatically saving change")
@@ -222,13 +243,13 @@ class NoWorkflowServiceImpl(
       result
     }
   }
-  
+
   def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    // This should never happen, we can't reject in this workflow 
+    // This should never happen, we can't reject in this workflow
     logger.error(s"Change request with ID ${changeRequestId.value} was rejected")
     Failure("Cannot reject a modification when there is no workflow")
   }
-  
+
   def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     logger.error("Invalid use of no workflow : It is impossible to change state when there is no workflow")
     Failure("It is impossible to change state when there is no workflow")
@@ -260,7 +281,7 @@ class NoWorkflowServiceImpl(
   def getDeployment : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
   def getDeployed   : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
   def getCancelled  : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
-  
+
 }
 
 class WorkflowServiceImpl(
@@ -353,7 +374,7 @@ class WorkflowServiceImpl(
     } yield {
       state
     }
-    
+
   }
 
   private[this] def onFailureWorkflow(changeRequestId: ChangeRequestId, from: WorkflowNode, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {

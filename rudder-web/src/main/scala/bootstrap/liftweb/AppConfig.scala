@@ -345,29 +345,24 @@ object RudderConfig extends Loggable {
 
   val workflowEventLogService =    new InMemoryWorkflowProcessEventLogService
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
-  val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
-    case true => new WorkflowServiceImpl(
-            workflowEventLogService
-          , new CommitAndDeployChangeRequest(
+  val commitAndDeployChangeRequest = new CommitAndDeployChangeRequest(
                 uuidGen
               , roChangeRequestRepository
               , roDirectiveRepository
               , woDirectiveRepository
+              , woRuleRepository
               , asyncDeploymentAgent
               , dependencyAndDeletionService
             )
+  val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
+    case true => new WorkflowServiceImpl(
+            workflowEventLogService
+          , commitAndDeployChangeRequest
           , roWorkflowRepository
           , woWorkflowRepository
         )
     case false => new NoWorkflowServiceImpl(
-          new CommitAndDeployChangeRequest(
-                uuidGen
-              , roChangeRequestRepository
-              , roDirectiveRepository
-              , woDirectiveRepository
-              , asyncDeploymentAgent
-              , dependencyAndDeletionService
-            )
+            commitAndDeployChangeRequest
           , inMemoryChangeRequestRepository
         )
   }
