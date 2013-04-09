@@ -38,7 +38,6 @@ import scala.collection.mutable.{ Buffer, Map => MutMap }
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import net.liftweb.common._
 import com.normation.rudder.repository.EventLogRepository
-import com.normation.rudder.repository.QueryParameter
 import com.normation.rudder.domain.eventlog.ChangeRequestEventLog
 import com.normation.rudder.domain.eventlog.ChangeRequestDiff
 import com.normation.eventlog._
