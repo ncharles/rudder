@@ -304,7 +304,9 @@ class ChangeRequestChangesForm(
 
     def directiveTargetDetails(directives: Set[DirectiveId]) = {
       <ul>
-      {directives.map(directive => <li>{directiveLink(directive)}</li>)}
+      {directives.map{directive =>
+        val directiveName = roDirectiveRepo.getDirective(directive).map(_.name).openOr("Unknown Directive")
+        <li>{SHtml.a(() => S.redirectTo(directiveLink(directive)),Text(directiveName))}</li>}}
       </ul>
     }
     ( "#ruleID" #> rule.id.value.toUpperCase &
@@ -331,7 +333,9 @@ class ChangeRequestChangesForm(
 
     def directiveTargetDetails(directives: Set[DirectiveId]) = {
       <ul>
-      {directives.map(directive => <li>{directiveLink(directive)}</li>)}
+      {directives.map{directive =>
+        val directiveName = roDirectiveRepo.getDirective(directive).map(_.name).openOr("Unknown Directive")
+        <li>{SHtml.a(() => S.redirectTo(directiveLink(directive)),Text(directiveName))}</li>}}
       </ul>
     }
 
