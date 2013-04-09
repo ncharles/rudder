@@ -156,7 +156,7 @@ class ChangeRequestServiceImpl(
     , reason           : Option[String]
   ) : Box[ChangeRequest] = {
     val newCr = ChangeRequest.updateInfo(oldChangeRequest, newInfo)
-    saveAndLogChangeRequest(ModifyToChangeRequestDiff(newCr), actor, reason)
+    saveAndLogChangeRequest(ModifyToChangeRequestDiff(newCr,oldChangeRequest), actor, reason)
   }
 
   def createChangeRequestFromDirective(

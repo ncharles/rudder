@@ -93,6 +93,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
   private[this] val changeRequestService  = RudderConfig.changeRequestService
   private[this] val workflowService = RudderConfig.workflowService
+  private[this] val eventlogDetailsService = RudderConfig.eventLogDetailsService
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[Int] = {S.param("crId").map(x=>x.toInt) }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {
@@ -201,8 +202,10 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     val (step,stepDate) = workFlowEventLogService.getLastLog(cr.id) match {
       case eb:EmptyBox => ("Error when retrieving the last action",None)
       case Full(None)  => ("Error when retrieving the last action",None) //should not happen here !
-      case Full(Some(StepWorkflowProcessEventLog(actor,date,reason,from,to))) =>
-        (s"Sent from ${from} to ${to} on ${DateFormaterService.getFormatedDate(date)} by ${actor.name}",Some(date))
+      case Full(Some(event)) =>
+        val changeStep = eventlogDetailsService.getWorkflotStepChange(event.details).map(step => s"Sent from ${step.from} to ${step.to}").getOrElse("Step changed")
+
+        (s"${changeStep} on ${DateFormaterService.getFormatedDate(event.creationDate)} by ${event.principal.name}",Some(event.creationDate))
     }
 
     // Compare both to find the oldest

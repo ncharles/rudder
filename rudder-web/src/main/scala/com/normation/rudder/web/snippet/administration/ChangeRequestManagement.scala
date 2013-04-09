@@ -61,6 +61,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   private[this] val roCrRepo = RudderConfig.roChangeRequestRepository
   private[this] val workflowService = RudderConfig.workflowService
   private[this] val changeRequestEventLogService = RudderConfig.changeRequestEventLogService
+  private[this] val workflowLoggerService = RudderConfig.workflowEventLogService
   private[this] val changeRequestTableId = "ChangeRequestId"
 
   private[this] val initFilter : Box[String] = S.param("filter").map(_.replace("_", " "))
@@ -117,9 +118,15 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
          }}
       </td>
       <td id="crDate">
-         {changeRequestEventLogService.getLastLog(cr.id) match {
-           case eb :EmptyBox => "Error while fetching last action Date"
-           case Full(seq) => seq.map(event => DateFormaterService.getFormatedDate(event.creationDate)).getOrElse("Error while fetching last action Date")
+         {(changeRequestEventLogService.getLastLog(cr.id),workflowLoggerService.getLastLog(cr.id)) match {
+           case (Full(Some(crLog)),Full(Some(wfLog))) =>
+             if (crLog.creationDate.isAfter(wfLog.creationDate))
+               DateFormaterService.getFormatedDate(crLog.creationDate)
+             else
+               DateFormaterService.getFormatedDate(wfLog.creationDate)
+           case (Full(Some(crLog)),_) => DateFormaterService.getFormatedDate(crLog.creationDate)
+           case (_,Full(Some(wfLog))) => DateFormaterService.getFormatedDate(wfLog.creationDate)
+           case (_,_) => "Error while fetching last action Date"
          }}
       </td>
    </tr>

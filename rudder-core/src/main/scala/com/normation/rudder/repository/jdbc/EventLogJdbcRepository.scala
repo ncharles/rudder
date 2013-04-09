@@ -151,15 +151,14 @@ class EventLogJdbcRepository(
   }
 
 
-  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, optLimit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]= {
-
+  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, xpath:String, optLimit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]= {
     Try {
       jdbcTemplate.query(
         new PreparedStatementCreator() {
            def createPreparedStatement(connection : Connection) : PreparedStatement = {
              val order = orderBy.map(o => " order by " + o).getOrElse("")
              val limit = optLimit.map( l => " limit " + l).getOrElse("")
-             val query= s"${SELECT_SQL} and cast (xpath('/entry/changeRequest/id/text()', data) as text[]) = ? ${order} ${limit}"
+             val query= s"${SELECT_SQL} and cast (xpath('${xpath}', data) as text[]) = ? ${order} ${limit}"
              val ps = connection.prepareStatement(
                  query, Array[String]());
 
@@ -232,6 +231,7 @@ object EventLogReportsMapper extends RowMapper[EventLog] with Loggable {
   }
 
   private[this] val logFilters =
+        WorkflowStepChanged ::
         AssetsEventLogsFilter.eventList :::
         RuleEventLogsFilter.eventList :::
         GenericEventLogsFilter.eventList :::

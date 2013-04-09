@@ -5,6 +5,7 @@ import org.joda.time.DateTime
 import com.normation.utils._
 import com.normation.eventlog._
 import com.normation.rudder.domain.workflows.ChangeRequest
+import com.normation.rudder.domain.policies.SimpleDiff
 
 
 sealed trait ChangeRequestEventLog extends EventLog { override final val eventLogCategory = ChangeRequestLogCategory }
@@ -61,6 +62,8 @@ object ChangeRequestLogsFilter {
  */
 sealed trait ChangeRequestDiff {
   def changeRequest : ChangeRequest
+  def diffName : Option[SimpleDiff[String]] = None
+  def diffDescription : Option[SimpleDiff[String]] = None
 }
 
 case class AddChangeRequestDiff(
@@ -71,8 +74,25 @@ case class DeleteChangeRequestDiff(
     changeRequest: ChangeRequest
 ) extends ChangeRequestDiff
 
+object ModifyToChangeRequestDiff {
+  def apply(newCr : ChangeRequest, oldCr : ChangeRequest) : ModifyToChangeRequestDiff = {
+    val modName =
+      if (newCr.info.name == oldCr.info.name)
+        None
+      else
+        Some(SimpleDiff(oldCr.info.name,newCr.info.name))
+    val modDesc =
+      if (newCr.info.description == oldCr.info.description)
+        None
+      else
+        Some(SimpleDiff(oldCr.info.description,newCr.info.description))
+    ModifyToChangeRequestDiff(newCr,modName,modDesc)
+  }
+}
 case class ModifyToChangeRequestDiff(
-    changeRequest: ChangeRequest
+    changeRequest : ChangeRequest
+  , override val diffName        : Option[SimpleDiff[String]]
+  , override val diffDescription : Option[SimpleDiff[String]]
 ) extends ChangeRequestDiff
 
 

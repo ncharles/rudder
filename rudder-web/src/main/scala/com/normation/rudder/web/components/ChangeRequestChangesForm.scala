@@ -61,6 +61,7 @@ import com.normation.rudder.domain.eventlog.AddChangeRequest
 import com.normation.rudder.domain.eventlog.ModifyChangeRequest
 import com.normation.rudder.domain.eventlog.DeleteChangeRequest
 import com.normation.rudder.domain.eventlog.ChangeRequestEventLog
+import com.normation.rudder.domain.eventlog.WorkflowStepChanged
 
 
 object ChangeRequestChangesForm {
@@ -80,7 +81,8 @@ class ChangeRequestChangesForm(
   private[this] val techniqueRepo = RudderConfig.techniqueRepository
   private[this] val roGroupRepo = RudderConfig.roNodeGroupRepository
   private[this] val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
-  private[this] val workFlowEventLogService =  RudderConfig.workflowEventLogService
+  private[this] val workFlowEventLogService = RudderConfig.workflowEventLogService
+  private[this] val eventLogDetailsService =  RudderConfig.eventLogDetailsService
   private[this] val diffService =  RudderConfig.diffService
 
   def dispatch = {
@@ -358,18 +360,17 @@ class ChangeRequestChangesForm(
   def displayChangeRequestEvent(crEvent:ChangeRequestEventLog) = {
     val action = Text(crEvent match {
            case AddChangeRequest(_) => "Change request created"
-           case ModifyChangeRequest(_) => "Change request details changed"
+           case ModifyChangeRequest(_) => "Change request details modified"
            case DeleteChangeRequest(_) => "Change request deleted"
     })
     displayEvent(action,crEvent.principal,crEvent.creationDate)
   }
 
-  def displayWorkflowEvent(wfEvent: WorkflowProcessEventLog)=
-    wfEvent match {
-      case StepWorkflowProcessEventLog(actor, date, reason, from, to) =>
-        val action = Text(s"Change workflow step from ${from} to ${to}")
-        displayEvent(action,actor,date)
-    }
+  def displayWorkflowEvent(wfEvent: WorkflowStepChanged)= {
+    val step = eventLogDetailsService.getWorkflotStepChange(wfEvent.details)
+    val action = step.map(step => Text(s"Change workflow step from ${step.from} to ${step.to}")).getOrElse(Text("Step changed"))
+    displayEvent(action,wfEvent.principal,wfEvent.creationDate)
+   }
 
   def displayDirectiveChange(directiveChange: DirectiveChange) = {
     val action = directiveChange.firstChange.diff match {

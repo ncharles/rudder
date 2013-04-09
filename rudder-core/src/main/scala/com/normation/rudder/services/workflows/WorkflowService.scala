@@ -53,10 +53,10 @@ import com.normation.rudder.services.policies.DependencyAndDeletionService
 import com.normation.utils.Control._
 import com.normation.utils.StringUuidGenerator
 import net.liftweb.common._
-import com.normation.rudder.repository.WoWorkflowRepository
-import com.normation.rudder.repository.jdbc.WoChangeRequestJdbcRepository
-import com.normation.rudder.repository.RoWorkflowRepository
+import com.normation.rudder.repository._
 import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
+import com.normation.rudder.services.eventlog.WorkflowEventLogService
+
 
 /**
  * That service allows to glue Rudder with the
@@ -189,15 +189,15 @@ class NoWorkflowServiceImpl(
 ) extends WorkflowService with Loggable {
 
   val noWorfkflow = WorkflowNodeId("No Workflow")
-  
+
   val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] = Map()
 
   val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] = Map()
-  
+
   def findStep(changeRequestId: ChangeRequestId) : Box[WorkflowNodeId] = Failure("No state when no workflow")
 
   val stepsValue :List[WorkflowNodeId] = List()
-  
+
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     logger.info("Automatically saving change")
     for {
@@ -209,7 +209,7 @@ class NoWorkflowServiceImpl(
       noWorfkflow
     }
   }
-  
+
   // should we keep this one or the previous ??
   def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     logger.info("Automatically saving change")
@@ -222,13 +222,13 @@ class NoWorkflowServiceImpl(
       result
     }
   }
-  
+
   def onFailureWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    // This should never happen, we can't reject in this workflow 
+    // This should never happen, we can't reject in this workflow
     logger.error(s"Change request with ID ${changeRequestId.value} was rejected")
     Failure("Cannot reject a modification when there is no workflow")
   }
-  
+
   def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
     logger.error("Invalid use of no workflow : It is impossible to change state when there is no workflow")
     Failure("It is impossible to change state when there is no workflow")
@@ -260,11 +260,11 @@ class NoWorkflowServiceImpl(
   def getDeployment : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
   def getDeployed   : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
   def getCancelled  : Box[Seq[ChangeRequestId]] = Failure("No state when no workflow")
-  
+
 }
 
 class WorkflowServiceImpl(
-    log            : WorkflowProcessEventLogService
+    workflowLogger : WorkflowEventLogService
   , commit         : CommitAndDeployChangeRequest
   , roWorkflowRepo : RoWorkflowRepository
   , woWorkflowRepo : WoWorkflowRepository
@@ -319,7 +319,8 @@ class WorkflowServiceImpl(
   ) : Box[WorkflowNodeId] = {
     (for {
       state <- woWorkflowRepo.updateState(changeRequestId,from.id, to.id)
-      log   <- log.saveEventLog(StepWorkflowProcessEventLog(actor, DateTime.now, reason, from, to),changeRequestId)
+      workflowStep = WorkflowStepChange(changeRequestId,from.id,to.id)
+      log   <- workflowLogger.saveEventLog(workflowStep,actor,reason)
     } yield {
       state
     }) match {
@@ -332,39 +333,30 @@ class WorkflowServiceImpl(
   }
 
   private[this] def toFailure(from: WorkflowNode, changeRequestId: ChangeRequestId, actor: EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
-    for {
-      failed  <- onFailureWorkflow(changeRequestId, from, actor, reason)
-      failure <- woWorkflowRepo.updateState(changeRequestId, from.id, Cancelled.id)
-    } yield {
-      failure
-    }
+    changeStep(from, Cancelled,changeRequestId,actor,reason)
   }
 
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
-    logger.info("start workflow")
+    logger.debug("start workflow")
     woWorkflowRepo.createWorkflow(changeRequestId, Validation.id)
   }
 
   private[this]  def onSuccessWorkflow(from: WorkflowNode, changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
-    logger.info("update")
+    logger.debug("update")
     for {
       save  <- commit.save(changeRequestId, actor, reason)
-      state <- woWorkflowRepo.updateState(changeRequestId, from.id, Deployed.id)
+      state <- changeStep(from,Deployed,changeRequestId,actor,reason)
     } yield {
       state
     }
-    
-  }
 
-  private[this] def onFailureWorkflow(changeRequestId: ChangeRequestId, from: WorkflowNode, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
-    woWorkflowRepo.updateState(changeRequestId, from.id, Cancelled.id)
   }
 
   //allowed workflow steps
 
 
   private[this] def stepValidationToDeployment(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
-    changeStep(Validation, Deployment, changeRequestId, actor, reason)
+    changeStep(Validation, Deployment,changeRequestId, actor, reason)
   }
 
 
@@ -390,34 +382,4 @@ class WorkflowServiceImpl(
   def getDeployment : Box[Seq[ChangeRequestId]] = roWorkflowRepo.getAllByState(Deployment.id)
   def getDeployed   : Box[Seq[ChangeRequestId]] = roWorkflowRepo.getAllByState(Deployed.id)
   def getCancelled  : Box[Seq[ChangeRequestId]] = roWorkflowRepo.getAllByState(Cancelled.id)
-}
-
-
-trait WorkflowProcessEventLogService {
-
-  def saveEventLog(log:StepWorkflowProcessEventLog, crId:ChangeRequestId) : Box[WorkflowProcessEventLog]
-
-  def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[WorkflowProcessEventLog]]
-
-  def getLastLog(id:ChangeRequestId) : Box[Option[WorkflowProcessEventLog]]
-}
-
-class InMemoryWorkflowProcessEventLogService extends WorkflowProcessEventLogService with Loggable {
-  import scala.collection.mutable.{Map => MutMap, Buffer}
-  private[this] val repo = MutMap[ChangeRequestId, Buffer[WorkflowProcessEventLog]]()
-  def saveEventLog(log:StepWorkflowProcessEventLog, crId:ChangeRequestId) : Box[WorkflowProcessEventLog] = {
-    val buf = repo.getOrElse(crId, Buffer[WorkflowProcessEventLog]())
-    buf += log
-    repo += (crId -> buf)
-
-    Full(log)
-  }
-
-  def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[WorkflowProcessEventLog]] = {
-    Full(repo.getOrElse(id, Seq()))
-  }
-
-  def getLastLog(id:ChangeRequestId) : Box[Option[WorkflowProcessEventLog]] = {
-        Full(repo.getOrElse(id, Seq()).lastOption)
-  }
 }

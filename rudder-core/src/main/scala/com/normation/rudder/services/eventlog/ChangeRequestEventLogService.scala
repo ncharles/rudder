@@ -76,10 +76,10 @@ class ChangeRequestEventLogServiceImpl(
   }
 
   def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[ChangeRequestEventLog]] = {
-    eventLogRepository.getEventLogByChangeRequest(id).map(_.collect{case c:ChangeRequestEventLog => c})
+    eventLogRepository.getEventLogByChangeRequest(id,"/entry/changeRequest/id/text()").map(_.collect{case c:ChangeRequestEventLog => c})
   }
 
   def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]] = {
-    eventLogRepository.getEventLogByChangeRequest(id,Some(1),Some("creationDate desc")).map(_.collect{case c:ChangeRequestEventLog => c}.headOption)
+    eventLogRepository.getEventLogByChangeRequest(id,"/entry/changeRequest/id/text()",Some(1),Some("creationDate desc")).map(_.collect{case c:ChangeRequestEventLog => c}.headOption)
   }
 }

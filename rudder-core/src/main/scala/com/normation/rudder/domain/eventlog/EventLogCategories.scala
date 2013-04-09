@@ -47,7 +47,7 @@ final case object NodeGroupLogCategory extends EventLogCategory
 final case object AssetLogCategory extends EventLogCategory
 final case object RedButtonLogCategory extends EventLogCategory
 final case object ChangeRequestLogCategory extends EventLogCategory
-
+final case object WorkflowLogCategory extends EventLogCategory
 final case object PolicyServerLogCategory extends EventLogCategory
 final case object ImportExportItemsLogCategory extends EventLogCategory
 
@@ -191,6 +191,9 @@ final case object ImportFullArchiveEventType extends RollbackEventLogType {
 final case object RollbackEventType extends RollbackEventLogType {
   def serialize = "Rollback"
 }
+final case object WorkflowStepChangedEventType extends NoRollbackEventLogType {
+  def serialize = "WorkflowStepChanged"
+}
 
 
 /**
@@ -273,6 +276,7 @@ object EventTypeFactory {
 
     , AddChangeRequestEventType
     , ModifyChangeRequestEventType
+    , WorkflowStepChangedEventType
   )
 
   def apply(s:String) : EventLogType = {

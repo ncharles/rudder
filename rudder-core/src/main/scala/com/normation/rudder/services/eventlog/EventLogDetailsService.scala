@@ -68,6 +68,9 @@ import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
 import com.normation.rudder.domain.workflows.ConfigurationChangeRequest
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import com.normation.rudder.domain.workflows.ChangeRequestInfo
+import com.normation.rudder.domain.workflows.WorkflowStepChange
+import com.normation.rudder.domain.workflows.WorkflowNodeId
+import com.normation.rudder.domain.workflows.WorkflowStepChange
 
 /**
  * A service that helps mapping event log details to there structured data model.
@@ -135,6 +138,9 @@ trait EventLogDetailsService {
   def getRollbackDetails(xml:NodeSeq) : Box[RollbackInfo]
 
   def getChangeRequestDetails(xml:NodeSeq) : Box[ChangeRequestDiff]
+
+  def getWorkflotStepChange(xml:NodeSeq) : Box[WorkflowStepChange]
+
 }
 
 
@@ -722,13 +728,30 @@ class EventLogDetailsServiceImpl(
       crId          <- (changeRequest \ "id").headOption.map(id => ChangeRequestId(id.text.toInt)) ?~! s"change request does not have any Id: ${changeRequest}"
       name          <- (changeRequest \ "name").headOption.map(_.text) ?~! s"change request does not have any name: ${changeRequest}"
       description   <- (changeRequest \ "description").headOption.map(_.text) ?~! s"change request does not have any description: ${changeRequest}"
+      diffName      <- getFromToString((changeRequest \ "diffName").headOption)
+      diffDesc      <- getFromToString((changeRequest \ "diffDescription").headOption)
       } yield {
         val changeRequest = ConfigurationChangeRequest(crId,ChangeRequestInfo(name,description),Map(),Map(),Map())
         kind match {
           case "add" => AddChangeRequestDiff(changeRequest)
           case "delete" => DeleteChangeRequestDiff(changeRequest)
-          case "modify" => ModifyToChangeRequestDiff(changeRequest)
+          case "modify" => ModifyToChangeRequestDiff(changeRequest,diffName,diffDesc)
         }
+      }
+
+  }
+
+
+
+  def getWorkflotStepChange(xml:NodeSeq) : Box[WorkflowStepChange] = {
+    for {
+      entry         <- getEntryContent(xml)
+      workflowStep  <- (entry \ "workflowStep").headOption ?~! s"Entry type is not a 'changeRequest': ${entry}"
+      crId          <- (workflowStep \ "changeRequestId").headOption.map(id => ChangeRequestId(id.text.toInt)) ?~! s"Workflow event does not target any change request: ${workflowStep}"
+      from          <- (workflowStep \ "from").headOption.map(from => WorkflowNodeId(from.text)) ?~! s"Workflow event does not have any from step: ${workflowStep}"
+      to            <- (workflowStep \ "to").headOption.map(to => WorkflowNodeId(to.text)) ?~! s"workflow step does not have any to step: ${workflowStep}"
+      } yield {
+        WorkflowStepChange(crId,from,to)
       }
 
   }

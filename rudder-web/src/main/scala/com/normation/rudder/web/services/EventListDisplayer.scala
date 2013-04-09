@@ -69,6 +69,8 @@ import com.normation.rudder.domain.workflows.ChangeRequestId
 import scala.util.Try
 import scala.util.Success
 import scala.util.{Failure => Catch}
+import com.normation.rudder.domain.eventlog.WorkflowStepChanged
+import com.normation.rudder.domain.workflows.WorkflowStepChange
 
 /**
  * Used to display the event list, in the pending modification (AsyncDeployment),
@@ -290,18 +292,33 @@ class EventListDisplayer(
     }
 
     def changeRequestDesc(x:EventLog, actionName: NodeSeq) = {
-    val name = (x.details \ "changeRequest" \ "name").text
-    val idNode = (x.details \ "changeRequest" \ "id").text.trim
-    val xml = Try(idNode.toInt) match {
-      case Success(id) =>   Text("ChangeRequest ") ++ {
-          if (actionName==Text(" deleted")) Text(name)
-          else <a href={changeRequestLink(ChangeRequestId(id))} onclick="noBubble(event);">{name}</a>
+      val name = (x.details \ "changeRequest" \ "name").text
+      val idNode = (x.details \ "changeRequest" \ "id").text.trim
+      val xml = Try(idNode.toInt) match {
+        case Success(id) =>
+          if (actionName==Text(" deleted"))
+            Text(name)
+          else
+            <a href={changeRequestLink(ChangeRequestId(id))} onclick="noBubble(event);">{name}</a>
+
+        case Catch(e) =>
+          logger.error(s"could not translate ${idNode} to a correct chage request identifier: ${e.getMessage()}")
+          Text(name)
         }
-      case Catch(e) =>
-        logger.error(s"could not translate ${idNode} to a correct chage request identifier: ${e.getMessage()}")
-        Text(name)
+      Text("Change request ") ++ xml ++ actionName
+    }
+
+    def workflowStepDesc(x:EventLog) = {
+      logDetailsService.getWorkflotStepChange(x.details)  match {
+        case Full(WorkflowStepChange(crId,from,to)) =>
+          Text("Change request #") ++
+          <a href={changeRequestLink(crId)} onclick="noBubble(event);">{crId}</a> ++
+          Text(s" sent from ${from} to ${to}")
+
+        case eb:EmptyBox => val fail = eb ?~! "could not display workflow step event log"
+          logger.error(fail.msg)
+          Text("Workflow step changed")
       }
-    xml ++ actionName
     }
 
     event match {
@@ -344,6 +361,7 @@ class EventListDisplayer(
       case _:DeleteChangeRequest           => changeRequestDesc(event,Text(" deleted"))
       case _:ModifyChangeRequest           => changeRequestDesc(event,Text(" modified"))
       case _:Rollback                      => Text("Restore a previous state of configuration policy")
+      case x:WorkflowStepChanged           => workflowStepDesc(x)
       case _ => Text("Unknow event type")
 
     }
@@ -891,8 +909,22 @@ class EventListDisplayer(
 
       case x:ChangeRequestEventLog =>
         "*" #> { logDetailsService.getChangeRequestDetails(x.details) match {
-        case Full(eventLogs) =>
-               Text(eventLogs.toString())
+        case Full(diff) =>
+            val (name,desc) = x.id match {
+              case None => (Text(diff.changeRequest.info.name),Text(diff.changeRequest.info.description))
+              case Some(id) =>
+                val modName = displaySimpleDiff(diff.diffName, s"name${id}", diff.changeRequest.info.name)
+                val modDesc = displaySimpleDiff(diff.diffDescription, s"description${id}", diff.changeRequest.info.description)
+                (modName,modDesc)
+            }
+            <div class="evloglmargin">
+              <h4>Change request details:</h4>
+              <ul class="evlogviewpad">
+                <li><b>Id: </b>{diff.changeRequest.id}</li>
+                <li><b>Name: </b>{name}</li>
+                <li><b>Description: </b>{desc}</li>
+              </ul>
+            </div>
           case e:EmptyBox => logger.warn(e)
           errorMessage(e)
         }
@@ -906,7 +938,29 @@ class EventListDisplayer(
     })(event.details)++Script(JsRaw("correctButtons();"))
   }
 
-
+  private[this] def displaySimpleDiff[T] (
+      diff    : Option[SimpleDiff[T]]
+    , name    : String
+    , default : String
+  ) = diff.map(value => displayFormDiff(value, name)).getOrElse(Text(default))
+  private[this] def displayFormDiff[T](diff: SimpleDiff[T], name:String)(implicit fun: T => String = (t:T) => t.toString) = {
+    <pre style="width:200px;" id={s"before${name}"}
+    class="nodisplay">{fun(diff.oldValue)}</pre>
+    <pre style="width:200px;" id={s"after${name}"}
+    class="nodisplay">{fun(diff.newValue)}</pre>
+    <pre id={s"result${name}"} ></pre>  ++
+    Script(
+      OnLoad(
+        JsRaw(
+          s"""
+            var before = "before${name}";
+            var after  = "after${name}";
+            var result = "result${name}";
+            makeDiff(before,after,result);"""
+        )
+      )
+    )
+  }
   private[this] def displaydirectiveInnerFormDiff(diff: SimpleDiff[SectionVal], eventId: Option[Int]): NodeSeq = {
       eventId match {
         case None => NodeSeq.Empty

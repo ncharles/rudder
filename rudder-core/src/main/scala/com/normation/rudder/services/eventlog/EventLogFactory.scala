@@ -33,6 +33,7 @@ import com.normation.eventlog.EventLogDetails
 import scala.xml._
 import com.normation.eventlog.ModificationId
 import com.normation.eventlog.EventLogDetails
+import com.normation.rudder.domain.workflows.WorkflowStepChange
 
 trait EventLogFactory {
 
@@ -158,6 +159,16 @@ trait EventLogFactory {
     , severity           : Int = 100
     , reason             : Option[String]
   ) : ChangeRequestEventLog
+
+  def getWorkFlowEventFromStepChange(
+      id                 : Option[Int] = None
+    , modificationId     : Option[ModificationId] = None
+    , principal          : EventActor
+    , step               : WorkflowStepChange
+    , creationDate       : DateTime = DateTime.now()
+    , severity           : Int = 100
+    , reason             : Option[String]
+  ) : WorkflowStepChanged
 
 }
 
@@ -496,11 +507,13 @@ class EventLogFactoryImpl(
       , reason = reason
       , severity = severity)
     }
+    val diffName = diff.diffName.map(x => SimpleDiff.stringToXml(<diffName/>, x )).getOrElse(NodeSeq.Empty)
+    val diffDesc = diff.diffDescription.map(x => SimpleDiff.stringToXml(<diffDescription/>, x )).getOrElse(NodeSeq.Empty)
     val xml = <changeRequest>
                 <id>{diff.changeRequest.id}</id>
                 <name>{diff.changeRequest.info.name}</name>
-                <description>{diff.changeRequest.info.description}
-                </description>
+                <description>{diff.changeRequest.info.description}</description>
+                {(diffName ++ diffDesc)}
               </changeRequest>
 
     diff match {
@@ -510,10 +523,38 @@ class EventLogFactoryImpl(
       case _:DeleteChangeRequestDiff   =>
         val details = EventLog.withContent( scala.xml.Utility.trim(xml % ("changeType" -> "delete")))
         DeleteChangeRequest(eventlogDetails(details))
-      case _:ModifyToChangeRequestDiff =>
-        val details = EventLog.withContent( scala.xml.Utility.trim(xml % ("changeType" -> "modify")))
+      case mod:ModifyToChangeRequestDiff =>
+        val details = EventLog.withContent((xml))
         ModifyChangeRequest(eventlogDetails(details))
     }
+  }
+
+  def getWorkFlowEventFromStepChange(
+      id                 : Option[Int] = None
+    , modificationId     : Option[ModificationId] = None
+    , principal          : EventActor
+    , step               : WorkflowStepChange
+    , creationDate       : DateTime = DateTime.now()
+    , severity           : Int = 100
+    , reason             : Option[String]
+  ) = {
+    val xml =
+      <workflowStep>
+        <changeRequestId>{step.id}</changeRequestId>
+        <from>{step.from}</from>
+        <to>{step.to}</to>
+      </workflowStep>
+    val details = EventLog.withContent( scala.xml.Utility.trim(xml))
+    val data = EventLogDetails(
+        id = id
+      , modificationId = modificationId
+      , principal = principal
+      , details = details
+      , creationDate = creationDate
+      , reason = reason
+      , severity = severity
+      )
+    WorkflowStepChanged(data)
   }
 
 }

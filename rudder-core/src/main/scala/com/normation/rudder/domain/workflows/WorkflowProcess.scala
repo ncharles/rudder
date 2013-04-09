@@ -34,10 +34,11 @@
 
 package com.normation.rudder.domain.workflows
 
-import scala.collection.mutable.Buffer
 import net.liftweb.common._
-import com.normation.eventlog.EventActor
 import org.joda.time.DateTime
+import com.normation.rudder.domain.eventlog._
+import com.normation.eventlog._
+import com.normation.utils.HashcodeCaching
 
 case class WorkflowNodeId(value:String){
   override def toString = value
@@ -50,16 +51,13 @@ case class WorkflowNodeId(value:String){
  * information between Rudder and the Workflow engine
  */
 trait WorkflowNode {
-  def id      : WorkflowNodeId
+  def id       : WorkflowNodeId
 }
 
-sealed trait WorkflowProcessEventLog
+case class WorkflowStepChange(
+    id    : ChangeRequestId
+  , from  : WorkflowNodeId
+  , to    : WorkflowNodeId
+)
 
 
-case class StepWorkflowProcessEventLog(
-    actor : EventActor
-  , date  : DateTime
-  , reason: Option[String]
-  , from  : WorkflowNode
-  , to    : WorkflowNode
-) extends WorkflowProcessEventLog

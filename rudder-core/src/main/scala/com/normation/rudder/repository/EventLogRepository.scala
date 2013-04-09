@@ -46,6 +46,7 @@ import com.normation.eventlog.ModificationId
 import scala.collection.mutable.Buffer
 import com.normation.rudder.domain.eventlog.ChangeRequestDiff
 import com.normation.rudder.domain.workflows.ChangeRequestId
+import com.normation.rudder.domain.workflows.WorkflowStepChange
 
 trait EventLogRepository {
   def eventLogFactory : EventLogFactory
@@ -185,8 +186,19 @@ trait EventLogRepository {
     saveEventLog(
         modId
       , eventLogFactory.getChangeRequestFromDiff(
-         principal =  principal
+          principal =  principal
         , diff = diff
+        , reason = reason
+      )
+    )
+  }
+
+  def saveWorkflowStep(modId: ModificationId, principal: EventActor, step: WorkflowStepChange, reason:Option[String]) = {
+    saveEventLog(
+        modId
+      , eventLogFactory.getWorkFlowEventFromStepChange(
+          principal =  principal
+        , step = step
         , reason = reason
       )
     )
@@ -203,5 +215,5 @@ trait EventLogRepository {
    */
   def getEventLogByCriteria(criteria : Option[String], limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
 
-  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
+  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, xpath:String, limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
 }

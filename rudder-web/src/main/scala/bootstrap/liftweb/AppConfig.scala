@@ -118,12 +118,11 @@ import com.normation.rudder.services.workflows.ChangeRequestServiceImpl
 import com.normation.rudder.services.workflows.WorkflowServiceImpl
 import com.normation.rudder.services.workflows.NoWorkflowServiceImpl
 import com.normation.rudder.services.modification.DiffServiceImpl
-import com.normation.rudder.services.workflows.WorkflowProcessEventLogService
 import com.normation.rudder.services.workflows.CommitAndDeployChangeRequest
-import com.normation.rudder.services.workflows.InMemoryWorkflowProcessEventLogService
 import com.normation.cfclerk.xmlwriters.SectionSpecWriter
 import com.normation.cfclerk.xmlwriters.SectionSpecWriterImpl
 import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
+import com.normation.rudder.services.eventlog.WorkflowEventLogService
 
 /**
  * Define a resource for configuration.
@@ -343,33 +342,29 @@ object RudderConfig extends Loggable {
   val changeRequestEventLogService : ChangeRequestEventLogService = new ChangeRequestEventLogServiceImpl(eventLogRepository)
 
 
-  val workflowEventLogService =    new InMemoryWorkflowProcessEventLogService
+  val workflowEventLogService =    new WorkflowEventLogServiceImpl(eventLogRepository,uuidGen)
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
+  val commitAndDeployService = new CommitAndDeployChangeRequest(
+                         uuidGen
+                      , roChangeRequestRepository
+                      , roDirectiveRepository
+                      , woDirectiveRepository
+                      , asyncDeploymentAgent
+                      , dependencyAndDeletionService
+                     )
   val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
-    case true => new WorkflowServiceImpl(
-            workflowEventLogService
-          , new CommitAndDeployChangeRequest(
-                uuidGen
-              , roChangeRequestRepository
-              , roDirectiveRepository
-              , woDirectiveRepository
-              , asyncDeploymentAgent
-              , dependencyAndDeletionService
-            )
-          , roWorkflowRepository
-          , woWorkflowRepository
-        )
-    case false => new NoWorkflowServiceImpl(
-          new CommitAndDeployChangeRequest(
-                uuidGen
-              , roChangeRequestRepository
-              , roDirectiveRepository
-              , woDirectiveRepository
-              , asyncDeploymentAgent
-              , dependencyAndDeletionService
-            )
-          , inMemoryChangeRequestRepository
-        )
+    case true =>
+      new WorkflowServiceImpl(
+          workflowEventLogService
+        , commitAndDeployService
+        , roWorkflowRepository
+        , woWorkflowRepository
+      )
+    case false =>
+      new NoWorkflowServiceImpl(
+          commitAndDeployService
+        , inMemoryChangeRequestRepository
+      )
   }
   val changeRequestService: ChangeRequestService = new ChangeRequestServiceImpl (
       roChangeRequestRepository
