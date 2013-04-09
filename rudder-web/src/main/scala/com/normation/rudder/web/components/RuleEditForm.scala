@@ -110,20 +110,6 @@ object RuleEditForm {
       chooseTemplate("component", "details", xml)
     }) openOr Nil
 
-  private def popupRemoveForm =
-    (for {
-      xml <- Templates("templates-hidden" :: "components" :: "ComponentRuleEditForm" :: Nil)
-    } yield {
-      chooseTemplate("component", "popupRemoveForm", xml)
-    }) openOr Nil
-
-  private def popupDisactivateForm =
-    (for {
-      xml <- Templates("templates-hidden" :: "components" :: "ComponentRuleEditForm" :: Nil)
-    } yield {
-      chooseTemplate("component", "popupDisactivateForm", xml)
-    }) openOr Nil
-
   val htmlId_groupTree = "groupTree"
   val htmlId_activeTechniquesTree = "userPiTree"
 }
@@ -157,12 +143,8 @@ class RuleEditForm(
   private[this] val htmlId_EditZone = "editRuleZone"
 
   private[this] val roRuleRepository     = RudderConfig.roRuleRepository
-//  private[this] val woRuleRepository     = RudderConfig.woRuleRepository
-//  private[this] val targetInfoService    = RudderConfig.ruleTargetService
   private[this] val directiveRepository  = RudderConfig.roDirectiveRepository
   private[this] val techniqueRepository  = RudderConfig.techniqueRepository
-//  private[this] val uuidGen              = RudderConfig.stringUuidGenerator
-//  private[this] val asyncDeploymentAgent = RudderConfig.asyncDeploymentAgent
   private[this] val reportingService     = RudderConfig.reportingService
   private[this] val nodeInfoService      = RudderConfig.nodeInfoService
   private[this] val nodeGroupRepository  = RudderConfig.roNodeGroupRepository
@@ -171,7 +153,6 @@ class RuleEditForm(
 
   private[this] val workflowEnabled      = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
 
-//  private[this] var crCurrentStatusIsActivated = rule.isEnabledStatus
   private[this] var selectedTargets = rule.targets
   private[this] var selectedDirectiveIds = rule.directiveIds
 
@@ -221,32 +202,6 @@ class RuleEditForm(
       )
     )
   }
-
-//  private[this] def showRemovePopupForm() : NodeSeq = {
-//   (
-//       "#removeActionDialog *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
-//       "#dialogRemoveButton" #> { removeButton % ("id", "removeButton") } &
-//       ".reasonsFieldsetPopup" #> { crReasonsRemovePopup.map { f =>
-//         "#explanationMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
-//         "#reasonsField" #> f.toForm_!
-//       } } &
-//       "#errorDisplay *" #> { updateAndDisplayNotifications(formTrackerRemovePopup) }
-//   )(popupRemoveForm)
-//  }
-//
-//  private[this] def showDisactivatePopupForm() : NodeSeq = {
-//   (
-//      "#desactivateActionDialog *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
-//      "#dialogDisactivateButton" #> { disactivateButton % ("id", "disactivateButton") } &
-//      "#dialogDeactivateTitle" #> { if(crCurrentStatusIsActivated) "Disable" else "Enable" } &
-//      "#dialogDisactivateLabel" #> { if(crCurrentStatusIsActivated) "disable" else "enable" } &
-//      ".reasonsFieldsetPopup" #> { crReasonsDisactivatePopup.map { f =>
-//         "#explanationMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
-//         "#reasonsField" #> f.toForm_!
-//      } } &
-//      "#errorDisplay *" #> { updateAndDisplayNotifications(formTrackerDisactivatePopup) }
-//   )(popupDisactivateForm)
-//  }
 
   private[this] def  showRuleDetails() : NodeSeq = {
     val updatedrule = roRuleRepository.get(rule.id)
@@ -412,76 +367,6 @@ class RuleEditForm(
     JsRaw("""scrollToElement("notifications");""")
   }
 
-//  private[this] def onFailureRemovePopup() : JsCmd = {
-//    updateRemoveFormClientSide() &
-//    onFailureCallback()
-//  }
-//
-//  private[this] def onFailureDisablePopup() : JsCmd = {
-//    onFailureCallback() &
-//    updateDisableFormClientSide()
-//  }
-
-  ///////////// Remove /////////////
-
-//  private[this] def removeButton : Elem = {
-//    def removeCr() : JsCmd = {
-//      if(formTrackerRemovePopup.hasErrors) {
-//        onFailureRemovePopup
-//      } else {
-//        JsRaw("$.modal.close();") &
-//        { val modId = ModificationId(uuidGen.newUuid)
-//          woRuleRepository.delete(rule.id, modId, CurrentUser.getActor,
-//                        crReasonsRemovePopup.map( _.is)) match {
-//            case Full(x) =>
-//            // There is a delete diff, deploy
-//            asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
-//              onSuccessCallback() &
-//              SetHtml("editRuleZone",
-//                <div id="editRuleZone">Rule successfully deleted</div>
-//              ) &
-//              SetHtml(htmlId_rule,
-//                <div id={htmlId_rule}>Rule successfully deleted</div>
-//              ) &
-//              //show success popup
-//              successPopup
-//            case Empty => //arg.
-//              formTrackerRemovePopup.addFormError(
-//                  error("An error occurred while deleting the Rule"))
-//              onFailure()
-//            case Failure(m,_,_) =>
-//              formTrackerRemovePopup.addFormError(
-//                  error("An error occurred while saving the Rule: " + m))
-//              onFailure()
-//          }
-//        }
-//      }
-//    }
-//
-//    SHtml.ajaxSubmit("Delete", removeCr _ )
-//  }
-
-
-  ///////////// Activation / disactivation /////////////
-
-
-//  private[this] def disactivateButton : Elem = {
-//    def switchActivation(status:Boolean)() : JsCmd = {
-//      if(formTrackerDisactivatePopup.hasErrors) {
-//        onFailureDisablePopup
-//      } else {
-//        crCurrentStatusIsActivated = status
-//        JsRaw("$.modal.close();") &
-//        saveAndDeployRule(rule.copy(isEnabledStatus = status), crReasonsDisactivatePopup.map(_.is))
-//      }
-//    }
-//
-//    if(crCurrentStatusIsActivated) {
-//      SHtml.ajaxSubmit("Disable", switchActivation(false) _ )
-//    } else {
-//      SHtml.ajaxSubmit("Enable", switchActivation(true) _ )
-//    }
-//  }
 
   /*
    * Create the ajax save button
@@ -539,86 +424,7 @@ class RuleEditForm(
 
   private[this] val formTracker = new FormTracker(List(crName, crShortDescription, crLongDescription))
 
-//  private[this] val crReasons = {
-//    import com.normation.rudder.web.services.ReasonBehavior._
-//    userPropertyService.reasonsFieldBehavior match {
-//      case Disabled => None
-//      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
-//      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
-//    }
-//  }
-//
-//  private[this] val crReasonsDisactivatePopup = {
-//    import com.normation.rudder.web.services.ReasonBehavior._
-//    userPropertyService.reasonsFieldBehavior match {
-//      case Disabled => None
-//      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
-//      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
-//    }
-//  }
-//
-//  private[this] val crReasonsRemovePopup = {
-//    import com.normation.rudder.web.services.ReasonBehavior._
-//    userPropertyService.reasonsFieldBehavior match {
-//      case Disabled => None
-//      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
-//      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
-//    }
-//  }
-//
-//  def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
-//    new WBTextAreaField("Message", "") {
-//      override def setFilter = notNull _ :: trim _ :: Nil
-//      override def inputField = super.inputField  %
-//        ("style" -> "height:8em;")
-//      override def subContainerClassName = containerClass
-//      override def validations() = {
-//        if(mandatory){
-//          valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
-//        } else {
-//          Nil
-//        }
-//      }
-//    }
-//  }
-
-//  private[this] def addCurrentNodeGroup(group : NodeGroup): Unit = {
-//    selectedTargets = selectedTargets + GroupTarget(group.id)
-//  }
-
-
-//  private[this] val formTrackerRemovePopup = {
-//    new FormTracker(crReasonsRemovePopup.toList)
-//  }
-//
-//  private[this] val formTrackerDisactivatePopup = {
-//    new FormTracker(crReasonsDisactivatePopup.toList)
-//  }
-
-//  private[this] def activateButtonOnChange() : JsCmd = {
-//    JsRaw("""activateButtonOnFormChange("%s", "%s");  """.format(htmlId_rule,htmlId_save) )
-//  }
-
-//  private[this] def updateRemoveFormClientSide() : JsCmd = {
-//    val jsDisplayRemoveDiv = JsRaw("""$("#removeActionDialog").removeClass('nodisplay')""")
-//    Replace("removeActionDialog", this.showRemovePopupForm()) &
-//    jsDisplayRemoveDiv &
-//    initJs
-//  }
-//
-//  private[this] def updateDisableFormClientSide() : JsCmd = {
-//    val jsDisplayDisableDiv = JsRaw("""$("#desactivateActionDialog").removeClass('nodisplay')""")
-//    Replace("desactivateActionDialog", this.showDisactivatePopupForm()) &
-//    jsDisplayDisableDiv &
-//    initJs
-//  }
-
-//  def initJs : JsCmd = {
-//    JsRaw("correctButtons();")
-//  }
-
   private[this] def error(msg:String) = <span class="error">{msg}</span>
-
 
   private[this] def onSubmit() : JsCmd = {
     if(formTracker.hasErrors) {
@@ -686,26 +492,6 @@ class RuleEditForm(
         successPopup & RedirectTo(s"""/secure/utilities/changeRequest/${changeRequest.value}""")
     }
   }
-
-//  private[this] def saveAndDeployRule(rule:Rule, reason: Option[String]) : JsCmd = {
-//    val modId = ModificationId(uuidGen.newUuid)
-//    woRuleRepository.update(rule, modId, CurrentUser.getActor, reason) match {
-//      case Full(optDiff) =>
-//        optDiff match {
-//          case Some(_) => // There is a modification diff, launch a deployment.
-//            asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
-//          case None => // No change, don't launch a deployment
-//        }
-//        this.rule = rule
-//        onSuccess
-//      case Empty => //arg.
-//        formTracker.addFormError(error("An error occurred while saving the Rule"))
-//        onFailure
-//      case f:Failure =>
-//        formTracker.addFormError(error(f.messageChain))
-//        onFailure
-//      }
-//  }
 
   private[this] def updateAndDisplayNotifications : NodeSeq = {
 
