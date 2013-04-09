@@ -55,7 +55,7 @@ trait DiffService {
 
   def diffNodeGroup(reference:NodeGroup, newItem:NodeGroup) : NodeGroupDiff
 
-  def diffRule(reference:Rule, newItem:Rule) : RuleDiff
+  def diffRule(reference:Rule, newItem:Rule) : ModifyRuleDiff
 
 }
 
@@ -98,6 +98,28 @@ class DiffServiceImpl (
 
   def diffNodeGroup(reference:NodeGroup, newItem:NodeGroup) : NodeGroupDiff = ???
 
-  def diffRule(reference:Rule, newItem:Rule) : RuleDiff = ???
+  def diffRule(reference:Rule, newItem:Rule) : ModifyRuleDiff = {
+    val diffName = if (reference.name == newItem.name) None else Some(SimpleDiff(reference.name,newItem.name))
+    val diffShortDescription = if (reference.shortDescription == newItem.shortDescription) None else Some(SimpleDiff(reference.shortDescription,newItem.shortDescription))
+    val diffLongDescription = if (reference.longDescription == newItem.longDescription) None else Some(SimpleDiff(reference.longDescription,newItem.longDescription))
+    val diffSystem = if (reference.isSystem == newItem.isSystem) None else Some(SimpleDiff(reference.isSystem,newItem.isSystem))
+    val diffEnable = if (reference.isEnabled == newItem.isEnabled) None else Some(SimpleDiff(reference.isEnabled,newItem.isEnabled))
+    val diffTarget = if (reference.targets == newItem.targets) None else Some(SimpleDiff(reference.targets,newItem.targets))
+    val diffDirectives = if (reference.directiveIds == newItem.directiveIds) None else Some(SimpleDiff(reference.directiveIds,newItem.directiveIds))
+
+    ModifyRuleDiff(
+        reference.id
+      , reference.name
+      , diffName
+      , None
+      , diffTarget
+      , diffDirectives
+      , diffShortDescription
+      , diffLongDescription
+      , None
+      , diffEnable
+      , diffSystem
+    )
+  }
 
 }

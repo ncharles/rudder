@@ -62,6 +62,9 @@ import com.normation.rudder.domain.eventlog.ModifyChangeRequest
 import com.normation.rudder.domain.eventlog.DeleteChangeRequest
 import com.normation.rudder.domain.eventlog.ChangeRequestEventLog
 import com.normation.rudder.domain.eventlog.WorkflowStepChanged
+import com.normation.rudder.domain.nodes.AddNodeGroupDiff
+import com.normation.rudder.domain.nodes.DeleteNodeGroupDiff
+import com.normation.rudder.domain.nodes.ModifyNodeGroupDiff
 
 
 object ChangeRequestChangesForm {
@@ -80,6 +83,7 @@ class ChangeRequestChangesForm(
   private[this] val roDirectiveRepo = RudderConfig.roDirectiveRepository
   private[this] val techniqueRepo = RudderConfig.techniqueRepository
   private[this] val roGroupRepo = RudderConfig.roNodeGroupRepository
+  private[this] val roRuleRepo = RudderConfig.roRuleRepository
   private[this] val changeRequestEventLogService =  RudderConfig.changeRequestEventLogService
   private[this] val workFlowEventLogService = RudderConfig.workflowEventLogService
   private[this] val eventLogDetailsService =  RudderConfig.eventLogDetailsService
@@ -92,7 +96,7 @@ class ChangeRequestChangesForm(
           case cr: ConfigurationChangeRequest =>
             ( "#changeTree ul *" #>  treeNode(cr).toXml &
               "#history *" #> displayHistory (cr.directives.values.map(_.changes).toList) &
-              "#diff *" #> diff(cr.directives.values.map(_.changes).toList)
+              "#diff *" #> diff(cr.directives.values.map(_.changes).toList,cr.nodeGroups.values.map(_.changes).toList,cr.rules.values.map(_.changes).toList)
             ) (form) ++
             Script(JsRaw(s"""buildChangesTree("#changeTree","${S.contextPath}");
                              $$( "#changeDisplay" ).tabs();""") )
@@ -129,13 +133,26 @@ class ChangeRequestChangesForm(
     override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "directives"}))
   }
 
-  val rulesChild = new JsTreeNode{
-    val changes = Nil
+  def ruleChild(ruleId:RuleId) = new JsTreeNode{
+
+    val group= roRuleRepo.get(ruleId)
+    val changes = changeRequest.rules(ruleId).changes
+    val groupeName = changes.initialState.map(_.name).getOrElse(changes.firstChange.diff.rule.name)
     val body = SHtml.a(
-        () => SetHtml("history",displayHistory(changes) )
+        () => SetHtml("history",displayHistory(Nil,Nil,List(changes)))
+      , <span>{groupeName}</span>
+    )
+
+    val children = Nil
+  }
+
+  val rulesChild = new JsTreeNode{
+    val changes = changeRequest.rules.values.map(_.changes).toList
+    val body = SHtml.a(
+        () => SetHtml("history",displayHistory(Nil,Nil,changes) )
       , <span>Rules</span>
     )
-    val children = Nil
+    val children = changeRequest.rules.keys.map(ruleChild(_)).toList
     override val attrs = List(( "rel" -> { "changeType" } ),("id" -> { "rules"}))
   }
 
@@ -149,7 +166,7 @@ class ChangeRequestChangesForm(
            case modTo : ModifyToNodeGroupDiff => modTo.group.name
     } )
     val body = SHtml.a(
-        () => SetHtml("history",displayHistory(List()))
+        () => SetHtml("history",displayHistory(Nil,List(changes)))
       , <span>{groupeName}</span>
     )
 
@@ -159,7 +176,7 @@ class ChangeRequestChangesForm(
   val groupsChild = new JsTreeNode{
     val changes =  changeRequest.nodeGroups.values.map(_.changes).toList
     val body = SHtml.a(
-        () => SetHtml("history",displayHistory(Nil) )
+        () => SetHtml("history",displayHistory(Nil,changes) )
       , <span>Groups</span>
     )
     val children = Nil
@@ -167,7 +184,11 @@ class ChangeRequestChangesForm(
   }
 
   val body = SHtml.a(
-     () => SetHtml("history",displayHistory (changeRequest.directives.values.map(_.changes).toList) )
+     () => SetHtml("history",displayHistory (
+           changeRequest.directives.values.map(_.changes).toList
+         , changeRequest.nodeGroups.values.map(_.changes).toList
+         , changeRequest.rules.values.map(_.changes).toList
+         ))
    , <span>Changes</span>
   )
 
@@ -177,13 +198,20 @@ class ChangeRequestChangesForm(
 
 }
 
-  def displayHistory (directives : List[DirectiveChange])= {
+  def displayHistory (
+      directives : List[DirectiveChange] = Nil
+    , groups     : List[NodeGroupChange] = Nil
+    , rules      : List[RuleChange]      = Nil
+  ) = {
     val crLogs = changeRequestEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq())
     val wfLogs = workFlowEventLogService.getChangeRequestHistory(changeRequest.id).getOrElse(Seq())
     val lines =
       wfLogs.flatMap(displayWorkflowEvent(_)) ++
       crLogs.flatMap(displayChangeRequestEvent(_)) ++
-      directives.flatMap(displayDirectiveChange(_))
+      directives.flatMap(displayDirectiveChange(_)) ++
+      groups.flatMap(displayNodeGroupChange(_)) ++
+      rules.flatMap(displayRuleChange(_))
+
 
     val initDatatable = JsRaw(s"""
         $$('#changeHistory').dataTable( {
@@ -209,7 +237,7 @@ class ChangeRequestChangesForm(
 
     ( "#crBody" #> lines).apply(CRTable) ++
     Script(
-      SetHtml("diff",diff(directives) ) &
+      SetHtml("diff",diff(directives,groups,rules) ) &
       initDatatable
     )
   }
@@ -235,22 +263,88 @@ class ChangeRequestChangesForm(
       <ul class="evlogviewpad">
         <li><b>ID:&nbsp;</b><value id="directiveID"/></li>
         <li><b>Name:&nbsp;</b><value id="directiveName"/></li>
-        <li><b>Description:&nbsp;</b><value id="shortDescription"/></li>
+        <li><b>Short description:&nbsp;</b><value id="shortDescription"/></li>
         <li><b>Technique name:&nbsp;</b><value id="techniqueName"/></li>
         <li><b>Technique version:&nbsp;</b><value id="techniqueVersion"/></li>
         <li><b>Priority:&nbsp;</b><value id="priority"/></li>
         <li><b>Enabled:&nbsp;</b><value id="isEnabled"/></li>
         <li><b>System:&nbsp;</b><value id="isSystem"/></li>
-        <li><b>Details:&nbsp;</b><value id="longDescription"/></li>
+        <li><b>Long description:&nbsp;</b><value id="longDescription"/></li>
         <li><b>Parameters:&nbsp;</b><value id="parameters"/></li>
+      </ul>
+    </div>
+
+  private[this] val RuleXML =
+    <div>
+      <h4>Rule overview:</h4>
+      <ul class="evlogviewpad">
+        <li><b>ID:&nbsp;</b><value id="ruleID"/></li>
+        <li><b>Name:&nbsp;</b><value id="ruleName"/></li>
+        <li><b>Short description:&nbsp;</b><value id="shortDescription"/></li>
+        <li><b>Target:&nbsp;</b><value id="target"/></li>
+        <li><b>Directives:&nbsp;</b><value id="policy"/></li>
+        <li><b>Enabled:&nbsp;</b><value id="isEnabled"/></li>
+        <li><b>System:&nbsp;</b><value id="isSystem"/></li>
+        <li><b>Long description:&nbsp;</b><value id="longDescription"/></li>
       </ul>
     </div>
 
   private[this] def displaySimpleDiff[T] (
       diff    : Option[SimpleDiff[T]]
     , name    : String
-    , default : String
-  ) = diff.map(value => displaydirectiveInnerFormDiff(value, name)).getOrElse(Text(default))
+    , default : NodeSeq
+  ) = diff.map(value => displayFormDiff(value, name)).getOrElse(default)
+
+  private[this] def displayRule(rule:Rule) = {
+    def groupTargetDetails(groups: Set[RuleTarget]) = {
+      <ul>
+      {groups.map(group => <li>{group.target}</li>)}
+      </ul>
+    }
+
+    def directiveTargetDetails(directives: Set[DirectiveId]) = {
+      <ul>
+      {directives.map(directive => <li>{directiveLink(directive)}</li>)}
+      </ul>
+    }
+    ( "#ruleID" #> rule.id.value.toUpperCase &
+      "#ruleName" #> rule.name &
+      "#target" #> groupTargetDetails(rule.targets) &
+      "#policy" #> directiveTargetDetails(rule.directiveIds) &
+      "#isEnabled" #> rule.isEnabled &
+      "#isSystem" #> rule.isSystem &
+      "#shortDescription" #> rule.shortDescription &
+      "#longDescription" #> rule.longDescription
+    ) (RuleXML)
+  }
+
+
+  private[this] def displayRuleDiff (
+      diff : ModifyRuleDiff
+    , rule : Rule
+  ) = {
+    def groupTargetDetails(groups: Set[RuleTarget]) = {
+      <ul>
+      {groups.map(group => <li>{group.target}</li>)}
+      </ul>
+    }
+
+    def directiveTargetDetails(directives: Set[DirectiveId]) = {
+      <ul>
+      {directives.map(directive => <li>{directiveLink(directive)}</li>)}
+      </ul>
+    }
+
+
+    ( "#ruleID" #> rule.id.value.toUpperCase &
+      "#ruleName" #> displaySimpleDiff(diff.modName, "name", Text(rule.name)) &
+      "#target" #> diff.modTarget.map(displayFormDiff(_, "target")(t => t.map(_.target).mkString("\n"))).getOrElse(groupTargetDetails(rule.targets)) &
+      "#policy" #> diff.modDirectiveIds.map(displayFormDiff(_, "directive")(t => t.map(_.value).mkString("\n"))).getOrElse(directiveTargetDetails(rule.directiveIds)) &
+      "#isEnabled"        #> displaySimpleDiff(diff.modIsActivatedStatus, "active", Text(rule.isEnabled.toString)) &
+      "#shortDescription" #> displaySimpleDiff(diff.modShortDescription, "short", Text(rule.shortDescription)) &
+      "#longDescription"  #> displaySimpleDiff(diff.modLongDescription, "long", Text(rule.longDescription))
+    ) (RuleXML)
+  }
 
   private[this] def displayDirective(directive:Directive, techniqueName:TechniqueName) = {
     val techniqueId = TechniqueId(techniqueName,directive.techniqueVersion)
@@ -287,22 +381,22 @@ class ChangeRequestChangesForm(
     ( "#directiveID"      #> directive.id.value.toUpperCase &
       "#techniqueName"    #> techniqueName.value &
       "#isSystem"         #> directive.isSystem &
-      "#directiveName"    #> displaySimpleDiff(diff.modName, "name", directive.name) &
-      "#techniqueVersion" #> displaySimpleDiff(diff.modTechniqueVersion, "techniqueVersion", directive.techniqueVersion.toString) &
-      "#priority"         #> displaySimpleDiff(diff.modPriority, "priority", directive.priority.toString) &
-      "#isEnabled"        #> displaySimpleDiff(diff.modIsActivated, "active", directive.isEnabled.toString) &
-      "#shortDescription" #> displaySimpleDiff(diff.modShortDescription, "short", directive.shortDescription) &
-      "#longDescription"  #> displaySimpleDiff(diff.modLongDescription, "long", directive.longDescription) &
+      "#directiveName"    #> displaySimpleDiff(diff.modName, "name", Text(directive.name)) &
+      "#techniqueVersion" #> displaySimpleDiff(diff.modTechniqueVersion, "techniqueVersion", Text(directive.techniqueVersion.toString)) &
+      "#priority"         #> displaySimpleDiff(diff.modPriority, "priority", Text(directive.priority.toString)) &
+      "#isEnabled"        #> displaySimpleDiff(diff.modIsActivated, "active", Text(directive.isEnabled.toString)) &
+      "#shortDescription" #> displaySimpleDiff(diff.modShortDescription, "short", Text(directive.shortDescription)) &
+      "#longDescription"  #> displaySimpleDiff(diff.modLongDescription, "long", Text(directive.longDescription)) &
       "#parameters"       #> {
         implicit val fun = (section:SectionVal) => xmlPretty.format(SectionVal.toXml(section))
         val parameters = <pre>{fun(SectionVal.directiveValToSectionVal(rootSection,directive.parameters))}</pre>
-        diff.modParameters.map(displaydirectiveInnerFormDiff(_,"parameters")).getOrElse(parameters)
+        diff.modParameters.map(displayFormDiff(_,"parameters")).getOrElse(parameters)
       }
     ) (DirectiveXML)
   }
 
-  def diff(cr : List[DirectiveChange]) = <ul> {
-      cr.flatMap(directiveChange =>
+  def diff(directives : List[DirectiveChange],groups : List[NodeGroupChange], rules : List[RuleChange]) = <ul> {
+      directives.flatMap(directiveChange =>
         <li>{
           directiveChange.change.map(_.diff match {
             case e @(_:AddDirectiveDiff|_:DeleteDirectiveDiff) =>
@@ -322,10 +416,35 @@ class ChangeRequestChangesForm(
               }
           } ).getOrElse(<div>Error</div>)
         }</li>
-      )
+
+      ) ++
+      groups.map(a => <li>a group change></li>)++
+      rules.flatMap(ruleChange =>
+        <li>{
+          ruleChange.change.map{change =>  logger.warn(change.diff)
+              change.diff match {
+
+            case ModifyToRuleDiff(rule) =>
+              ruleChange.initialState match {
+                case Some(initialRule) =>
+                  val diff = diffService.diffRule(initialRule, rule)
+                  logger.info(diff)
+                  displayRuleDiff(diff, rule)
+                case None =>
+                  val msg = s"Could not display diff for ${rule.name} (${rule.id.value.toUpperCase})"
+                  logger.error(msg)
+                  <div>msg</div>
+              }
+           case diff =>
+              val rule = diff.rule
+              displayRule(rule)
+          } }.getOrElse(<div>Error</div>)
+        }</li>
+          )
+
   }</ul>
 
-  private[this] def displaydirectiveInnerFormDiff[T](diff: SimpleDiff[T], name:String)(implicit fun: T => String = (t:T) => t.toString) = {
+  private[this] def displayFormDiff[T](diff: SimpleDiff[T], name:String)(implicit fun: T => String = (t:T) => t.toString) = {
     <pre style="width:200px;" id={s"before${name}"}
     class="nodisplay">{fun(diff.oldValue)}</pre>
     <pre style="width:200px;" id={s"after${name}"}
@@ -371,6 +490,25 @@ class ChangeRequestChangesForm(
     val action = step.map(step => Text(s"Change workflow step from ${step.from} to ${step.to}")).getOrElse(Text("Step changed"))
     displayEvent(action,wfEvent.principal,wfEvent.creationDate)
    }
+
+  def displayRuleChange(ruleChange: RuleChange) = {
+    val action = ruleChange.firstChange.diff match {
+           case AddRuleDiff(rule) => Text(s"Create rule ${rule.name}")
+           case DeleteRuleDiff(rule) => <span>Delete rule {<a href={ruleLink(rule.id)} onclick="noBubble(event);">{rule.name}</a>}</span>
+           case ModifyToRuleDiff(rule) => <span>Modify rule {<a href={ruleLink(rule.id)} onclick="noBubble(event);">{rule.name}</a>}</span>
+         }
+   displayEvent(action,ruleChange.firstChange.actor,ruleChange.firstChange.creationDate)
+  }
+
+  def displayNodeGroupChange(groupChange: NodeGroupChange) = {
+    val action = groupChange.firstChange.diff match {
+           case AddNodeGroupDiff(group) => Text(s"Create group ${group.name}")
+           case DeleteNodeGroupDiff(group) => <span>Delete group {<a href={groupLink(group.id)} onclick="noBubble(event);">{group.name}</a>}</span>
+           case ModifyToNodeGroupDiff(group) => <span>Modify group {<a href={groupLink(group.id)} onclick="noBubble(event);">{group.name}</a>}</span>
+         }
+   displayEvent(action,groupChange.firstChange.actor,groupChange.firstChange.creationDate)
+  }
+
 
   def displayDirectiveChange(directiveChange: DirectiveChange) = {
     val action = directiveChange.firstChange.diff match {
