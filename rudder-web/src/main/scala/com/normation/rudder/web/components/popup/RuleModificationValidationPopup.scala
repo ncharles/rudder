@@ -242,7 +242,7 @@ class RuleModificationValidationPopup(
         val savedChangeRequest = {
           for {
             diff   <- ruleDiffFromAction()
-            cr     = changeRequestService.createChangeRequestFromRule(
+            cr     <- changeRequestService.createChangeRequestFromRule(
                          changeRequestName.get
                        , crReasons.map( _.get ).getOrElse("")
                        , rule
@@ -251,10 +251,10 @@ class RuleModificationValidationPopup(
                        , CurrentUser.getActor
                        , crReasons.map( _.get ) 
                        )
-            saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map(_.get))
-            wfStarted <- workflowService.startWorkflow(saved.id, CurrentUser.getActor, crReasons.map(_.get))
+            //saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map(_.get))
+            wfStarted <- workflowService.startWorkflow(cr.id, CurrentUser.getActor, crReasons.map(_.get))
           } yield {
-            saved.id
+            cr.id
           }
         }
         savedChangeRequest match {
