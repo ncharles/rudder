@@ -61,6 +61,13 @@ import com.normation.rudder.domain.eventlog.AddChangeRequestDiff
 import net.liftweb.common.Full
 import net.liftweb.common.EmptyBox
 import net.liftweb.common.Box
+import com.normation.rudder.domain.eventlog.ChangeRequestDiff
+import com.normation.rudder.domain.eventlog.AddChangeRequestDiff
+import com.normation.rudder.domain.eventlog.ModifyToChangeRequestDiff
+import com.normation.rudder.domain.eventlog.DeleteChangeRequestDiff
+import com.normation.rudder.domain.eventlog.AddChangeRequestDiff
+import com.normation.rudder.domain.eventlog.ModifyToChangeRequestDiff
+import com.normation.rudder.domain.eventlog.ChangeRequestEventLog
 
 
 
@@ -102,6 +109,16 @@ trait ChangeRequestService {
     , reason           : Option[String]
   ) : Box[ChangeRequest]
 
+  def updateChangeRequestInfo(
+      oldChangeRequest : ChangeRequest
+    , newInfo          : ChangeRequestInfo
+    , actor            : EventActor
+    , reason           : Option[String]
+  ) : Box[ChangeRequest]
+
+  def get(id:ChangeRequestId) : Box[Option[ChangeRequest]]
+
+  def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]]
 }
 
 
@@ -112,17 +129,34 @@ class ChangeRequestServiceImpl(
   , uuidGen                      : StringUuidGenerator
 ) extends ChangeRequestService with Loggable {
 
-  private[this] def saveAndLogChangeRequest(changeRequest:ChangeRequest,actor:EventActor,reason:Option[String]) = {
-    woChangeRequestRepository.createChangeRequest(changeRequest, actor, reason) match {
-      case Full(changeRequest) =>
-        val modId = ModificationId(uuidGen.newUuid)
-        val diff = AddChangeRequestDiff(changeRequest)
-        changeRequestEventLogService.saveChangeRequestLog(modId, actor, diff, reason) match {
-          case Full(event) => Full(changeRequest)
-          case eb:EmptyBox => eb ?~! s"could not save event log for change request ${changeRequest.id} creation"
-        }
-      case eb:EmptyBox => eb ?~! s"could not save change request ${changeRequest.info.name}"
+  private[this] def saveAndLogChangeRequest(diff:ChangeRequestDiff,actor:EventActor,reason:Option[String]) = {
+    val changeRequest = diff.changeRequest
+    val save = diff match {
+      case add:AddChangeRequestDiff         => woChangeRequestRepository.createChangeRequest(diff.changeRequest, actor, reason)
+      case modify:ModifyToChangeRequestDiff => woChangeRequestRepository.updateChangeRequest(changeRequest, actor, reason)
+      case delete:DeleteChangeRequestDiff   => woChangeRequestRepository.deleteChangeRequest(changeRequest.id, actor, reason)
     }
+
+    for {
+    saved  <- save ?~! s"could not save change request ${changeRequest.info.name}"
+    modId  =  ModificationId(uuidGen.newUuid)
+    logged <- changeRequestEventLogService.saveChangeRequestLog(modId, actor, diff, reason) ?~!
+                s"could not save event log for change request ${changeRequest.id} creation"
+    } yield { saved }
+  }
+
+  def get(id:ChangeRequestId) : Box[Option[ChangeRequest]] = roChangeRequestRepository.get(id)
+
+  def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]] = changeRequestEventLogService.getLastLog(id)
+
+  def updateChangeRequestInfo(
+      oldChangeRequest : ChangeRequest
+    , newInfo          : ChangeRequestInfo
+    , actor            : EventActor
+    , reason           : Option[String]
+  ) : Box[ChangeRequest] = {
+    val newCr = ChangeRequest.updateInfo(oldChangeRequest, newInfo)
+    saveAndLogChangeRequest(ModifyToChangeRequestDiff(newCr), actor, reason)
   }
 
   def createChangeRequestFromDirective(
@@ -157,7 +191,7 @@ class ChangeRequestServiceImpl(
       , Map()
       , Map()
     )
-    saveAndLogChangeRequest(changeRequest, actor, reason)
+    saveAndLogChangeRequest(AddChangeRequestDiff(changeRequest), actor, reason)
   }
 
   def createChangeRequestFromRule(
@@ -185,7 +219,7 @@ class ChangeRequestServiceImpl(
       , Map()
       , Map(rule.id -> RuleChanges(change, Seq()))
     )
-    saveAndLogChangeRequest(changeRequest, actor, reason)
+    saveAndLogChangeRequest(AddChangeRequestDiff(changeRequest), actor, reason)
   }
 
   def createChangeRequestFromNodeGroup(
@@ -214,7 +248,7 @@ class ChangeRequestServiceImpl(
       , Map(nodeGroup.id -> NodeGroupChanges(change,Seq()))
       , Map()
     )
-    saveAndLogChangeRequest(changeRequest, actor, reason)
+    saveAndLogChangeRequest(AddChangeRequestDiff(changeRequest), actor, reason)
   }
 
 
