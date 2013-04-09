@@ -69,6 +69,8 @@ import com.normation.plugins.SpringExtendableSnippet
 import com.normation.eventlog.ModificationId
 import com.normation.utils.StringUuidGenerator
 import bootstrap.liftweb.RudderConfig
+import com.normation.rudder.domain.workflows.ChangeRequest
+import com.normation.rudder.domain.workflows.ChangeRequestId
 
 
 object Groups {
@@ -198,7 +200,7 @@ class Groups extends StatefulSnippet with SpringExtendableSnippet[Groups] with L
     panel match {
       case NoPanel => NodeSeq.Empty
       case GroupForm(group) =>
-        val form = new NodeGroupForm(htmlId_item, Some(group), onSuccessCallback())
+        val form = new NodeGroupForm(htmlId_item, group, { (g: Either[NodeGroup,ChangeRequestId]) => refreshTree(htmlTreeNodeId(g.left.get.id.value)) } )
         nodeGroupForm.set(Full(form))
         form.dispatch("showForm")(NodeSeq.Empty);
 
