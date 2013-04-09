@@ -85,9 +85,10 @@ object RuleModificationValidationPopup extends Loggable {
     , "create"  -> "Create a Rule"
   )
 }
+
 class RuleModificationValidationPopup(
     rule              : Rule
-  , initialState      : Option[Rule]    
+  , initialState      : Option[Rule]
   , action            : String //one among: save, delete, enable, disable or create
   , onSuccessCallBack : (Either[Rule,ChangeRequestId]) => JsCmd = { x => Noop }
   , onFailureCallback : JsCmd = { Noop }
@@ -105,15 +106,16 @@ class RuleModificationValidationPopup(
   def dispatch = {
     case "popupContent" => { _ => popupContent }
   }
-  
+
   def popupContent() : NodeSeq = {
     val (buttonName, classForButton) = workflowEnabled match {
       case true =>
           ("Submit for Validation", "wideButton")
       case false => ("Save", "")
     }
+
     val titleWorkflow = workflowEnabled match {
-      case true => 
+      case true =>
         <div>
           <h2 style="padding-left:42px;">Workflows are enabled in Rudder, your change has to be validated in a change request</h2>
         </div>
@@ -133,24 +135,24 @@ class RuleModificationValidationPopup(
         }
       } &
       "#titleWorkflow *" #> titleWorkflow &
-      "#changeRequestName" #> { 
+      "#changeRequestName" #> {
           if (workflowEnabled) {
             changeRequestName.toForm
-          } else 
-            Full(NodeSeq.Empty) 
+          } else
+            Full(NodeSeq.Empty)
       } &
       "#saveStartWorkflow" #> (SHtml.ajaxSubmit(buttonName, () => onSubmit(), ("class" -> classForButton)) % ("id", "createDirectiveSaveButton") % ("tabindex","3")) andThen
        ".notifications *" #> updateAndDisplayNotifications()
-      
+
     )(html ++ Script(OnLoad(JsRaw("correctButtons();"))))
-  }  
-  
+  }
+
   private[this] def showError(field:RudderBaseField) : NodeSeq = {
     if(field.hasErrors) {
       <ul>{field.errors.map { e => <li>{e}</li> }}</ul>
     } else { NodeSeq.Empty }
   }
-  
+
   ///////////// fields for category settings ///////////////////
 
   private[this] val crReasons = {
@@ -177,7 +179,7 @@ class RuleModificationValidationPopup(
       }
     }
   }
-  
+
   private[this] val defaultRequestName = s"Update Rule ${rule.name}"
 
   private[this] val changeRequestName = new WBTextField("Title", defaultRequestName) {
@@ -190,34 +192,28 @@ class RuleModificationValidationPopup(
 
   // The formtracker needs to check everything only if there is workflow
   private[this] val formTracker = {
-    if (workflowEnabled) {
-        new FormTracker(
-                crReasons.toList
-            ::: changeRequestName
-             :: Nil
-        )
-
-    } else {
-      new FormTracker(
-               crReasons.toList
-      )
+    val fields = crReasons.toList ::: {
+      if (workflowEnabled) changeRequestName :: Nil
+      else Nil
     }
+
+    new FormTracker(fields)
   }
-  
+
   private[this] def error(msg:String) = <span class="error">{msg}</span>
 
 
   private[this] def closePopup() : JsCmd = {
     JsRaw("""$.modal.close();""")
   }
-  
+
   /**
    * Update the form when something happened
    */
   private[this] def updateFormClientSide() : JsCmd = {
     SetHtml(htmlId_popupContainer, popupContent())
   }
-  
+
   private[this] def ruleDiffFromAction(): Box[ChangeRequestRuleDiff] = {
     initialState match {
       case None =>
@@ -233,8 +229,8 @@ class RuleModificationValidationPopup(
         }
     }
   }
-  
-  private[this] def onSubmit() : JsCmd = {
+
+  def onSubmit() : JsCmd = {
     if(formTracker.hasErrors) {
       onFailure
     } else {
@@ -249,9 +245,8 @@ class RuleModificationValidationPopup(
                        , initialState
                        , diff
                        , CurrentUser.getActor
-                       , crReasons.map( _.get ) 
+                       , crReasons.map( _.get )
                        )
-            //saved     <- woChangeRequestRepo.createChangeRequest(cr, CurrentUser.getActor, crReasons.map(_.get))
             wfStarted <- workflowService.startWorkflow(cr.id, CurrentUser.getActor, crReasons.map(_.get))
           } yield {
             cr.id
@@ -279,7 +274,7 @@ class RuleModificationValidationPopup(
     formTracker.addFormError(error("The form contains some errors, please correct them"))
     updateFormClientSide()
   }
-  
+
   private[this] def updateAndDisplayNotifications() : NodeSeq = {
     val notifications = formTracker.formErrors
     formTracker.cleanErrors

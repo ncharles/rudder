@@ -226,10 +226,6 @@ class DirectiveEditForm(
     JsRaw("""scrollToElement("notifications");""")
   }
 
-  def createPopup(name:String,height:Int,width:Int) :JsCmd = {
-    JsRaw("""createPopup("%s",%s,%s);""".format(name,height,width))
-  }
-
   def initJs : JsCmd = {
     JsRaw("correctButtons();")
   }
@@ -362,7 +358,7 @@ class DirectiveEditForm(
       }
 
       //display confirmation pop-up that also manage workflows
-      
+
     }
   }
 
@@ -391,7 +387,7 @@ class DirectiveEditForm(
     val optOriginal = { if(isADirectiveCreation) None else if(oldDirective.isEmpty) Some(directive) else oldDirective }
     // Find old root section if there is an initial State
     val rootSection = optOriginal.flatMap(old => techniqueRepo.get(TechniqueId(activeTechnique.techniqueName,old.techniqueVersion)).map(_.rootSection)).getOrElse(technique.rootSection)
-    
+
     val popup = {
       // if it's not a creation and we have workflow, then we redirect to the CR
       if (!isADirectiveCreation) {
@@ -419,16 +415,16 @@ class DirectiveEditForm(
             Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
           , action
           , isADirectiveCreation
-          , onCreateSuccessCallBack = onSuccessCallback 
+          , onCreateSuccessCallBack = onSuccessCallback
           , onCreateFailureCallBack = onFailure
           , parentFormTracker = Some(formTracker)
-        )        
+        )
       }
-    } 
-      
+    }
+
 
     SetHtml("confirmUpdateActionDialog", popup.popupContent) &
-    createPopup("confirmUpdateActionDialog",400,800)
+    JsRaw("""createPopup("confirmUpdateActionDialog",400,800)""")
   }
 
   private[this] def updateAndDisplayNotifications() : NodeSeq = {

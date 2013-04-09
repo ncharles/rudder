@@ -46,9 +46,6 @@ import com.normation.rudder.domain.eventlog.RudderEventActor
 import com.normation.rudder.domain.nodes.NodeGroupId
 import com.normation.rudder.domain.policies._
 import com.normation.rudder.domain.workflows._
-import com.normation.rudder.repository.RoChangeRequestRepository
-import com.normation.rudder.repository.RoDirectiveRepository
-import com.normation.rudder.repository.WoDirectiveRepository
 import com.normation.rudder.services.policies.DependencyAndDeletionService
 import com.normation.utils.Control._
 import com.normation.utils.StringUuidGenerator
@@ -56,7 +53,6 @@ import net.liftweb.common._
 import com.normation.rudder.repository._
 import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
 import com.normation.rudder.services.eventlog.WorkflowEventLogService
-
 
 /**
  * That service allows to glue Rudder with the
@@ -106,6 +102,7 @@ class CommitAndDeployChangeRequest(
   , roChangeRequestRepo : RoChangeRequestRepository
   , roDirectiveRepo     : RoDirectiveRepository
   , woDirectiveRepo     : WoDirectiveRepository
+  , woRuleRepository    : WoRuleRepository
   , asyncDeploymentAgent: AsyncDeploymentAgent
   , dependencyService   : DependencyAndDeletionService
 ) extends Loggable {
@@ -158,6 +155,22 @@ class CommitAndDeployChangeRequest(
       Full(NodeGroupId(id))
     }
 
+    def doRuleChange(change:RuleChanges, modId: ModificationId) : Box[RuleId] = {
+      for {
+        change <- change.changes.change
+        done   <- change.diff match {
+                    case DeleteRuleDiff(r) =>
+                      woRuleRepository.delete(r.id, modId, change.actor, change.reason).map( _ => r.id)
+                    case AddRuleDiff(r) =>
+                      woRuleRepository.create(r, modId, change.actor, change.reason).map( _ => r.id)
+                    case ModifyToRuleDiff(r) =>
+                      woRuleRepository.update(r, modId, change.actor, change.reason).map( _ => r.id)
+                  }
+      } yield {
+        done
+      }
+    }
+
     val modId = ModificationId(uuidGen.newUuid)
 
     /*
@@ -171,6 +184,9 @@ class CommitAndDeployChangeRequest(
                     }
       groups     <- sequence(cr.nodeGroups.values.toSeq) { nodeGroupChange =>
                       doNodeGroupChange(nodeGroupChange, modId)
+                    }
+      rules      <- sequence(cr.rules.values.toSeq) { rule =>
+                      doRuleChange(rule, modId)
                     }
     } yield {
       asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
