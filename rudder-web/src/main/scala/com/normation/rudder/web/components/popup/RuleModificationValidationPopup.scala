@@ -198,7 +198,7 @@ class RuleModificationValidationPopup(
   def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
     new WBTextAreaField("Message", "") {
       override def setFilter = notNull _ :: trim _ :: Nil
-      override def inputField = super.inputField  %  ("style" -> "height:8em;")
+      override def inputField = super.inputField  %  ("style" -> "height:8em;") % ("tabindex" -> "2")
       //override def subContainerClassName = containerClass
       override def validations() = {
         if(mandatory){
@@ -273,7 +273,6 @@ class RuleModificationValidationPopup(
     } else {
        //based on the choice of the user, create or update a Change request
         val savedChangeRequest = {
-          logger.info("starting workflow")
           for {
             diff   <- ruleDiffFromAction()
             cr     <- changeRequestService.createChangeRequestFromRule(
@@ -290,7 +289,6 @@ class RuleModificationValidationPopup(
             cr.id
           }
         }
-        logger.info("yeah, JS !")
         savedChangeRequest match {
           case Full(cr) =>
             if (workflowEnabled)

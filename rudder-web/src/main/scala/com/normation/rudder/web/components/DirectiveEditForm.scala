@@ -113,6 +113,7 @@ class DirectiveEditForm(
   , onSuccessCallback : (Either[Directive,ChangeRequestId]) => JsCmd = { (Directive) => Noop }
   , onFailureCallback : () => JsCmd = { () => Noop }
   , isADirectiveCreation : Boolean = false
+  , onRemoveSuccessCallBack : () => JsCmd = { () => Noop }
 ) extends DispatchSnippet with Loggable {
 
   import DirectiveEditForm._
@@ -409,16 +410,25 @@ class DirectiveEditForm(
               Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
             , action
             , isADirectiveCreation
-            , cr => JsRaw("$.modal.close();") & onSuccessCallback(Right(cr))
+            , cr => onSuccessCallback(Right(cr))
             , xml => JsRaw("$.modal.close();") & onFailure
             , parentFormTracker = Some(formTracker)
           )
         } else {
+          val callback = { 
+            if (action == "delete") {
+                val nSeq = <div id={ htmlId_policyConf }>Directive successfully deleted</div>
+                cr : ChangeRequestId => JsRaw("$.modal.close();") &onRemoveSuccessCallBack() & SetHtml(htmlId_policyConf, nSeq) &
+                successPopup(NodeSeq.Empty)
+              } else {
+                cr : ChangeRequestId  => JsRaw("$.modal.close();") & successPopup(NodeSeq.Empty) & onSuccessCallback(Left(newDirective))
+              }
+            }
           new ModificationValidationPopup(
               Left(technique.id.name,activeTechnique.id, rootSection, newDirective, optOriginal)
             , action
             , isADirectiveCreation
-            , cr => JsRaw("$.modal.close();") & successPopup(NodeSeq.Empty) & onSuccessCallback(Left(newDirective))
+            , callback
             , xml => JsRaw("$.modal.close();") & onFailure
             , parentFormTracker = Some(formTracker)
           )

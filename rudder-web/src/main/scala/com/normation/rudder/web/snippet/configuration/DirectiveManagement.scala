@@ -433,6 +433,7 @@ class DirectiveManagement extends DispatchSnippet with Loggable {
       , oldDirective
       , onSuccessCallback = directiveEditFormSuccessCallBack
       , isADirectiveCreation = isADirectiveCreation
+      , onRemoveSuccessCallBack = onRemoveSuccessCallBack
     )
 
     currentDirectiveSettingForm.set(Full(dirEditForm))

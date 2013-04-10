@@ -295,7 +295,7 @@ class ModificationValidationPopup(
   def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
     new WBTextAreaField("Message", "") {
       override def setFilter = notNull _ :: trim _ :: Nil
-      override def inputField = super.inputField  %  ("style" -> "height:8em;")
+      override def inputField = super.inputField  %  ("style" -> "height:8em;") % ("tabindex" -> "2")
       //override def subContainerClassName = containerClass
       override def validations() = {
         if(mandatory){

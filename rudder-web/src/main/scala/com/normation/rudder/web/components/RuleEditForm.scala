@@ -478,7 +478,7 @@ class RuleEditForm(
           newRule
         , optOriginal
         , action
-        , cr => JsRaw("$.modal.close();") & workflowCallBack(cr)
+        , cr => workflowCallBack(action)(cr)
         , JsRaw("$.modal.close();") & onFailure
         , parentFormTracker = Some(formTracker)
       )
@@ -491,13 +491,22 @@ class RuleEditForm(
     }
   }
 
-  private[this] def workflowCallBack(returns : Either[Rule,ChangeRequestId]) : JsCmd = {
-    returns match {
-      case Left(rule) => // ok, we've received a rule, do as before
-        this.rule = rule
-        onSuccess
-      case Right(changeRequest) => // oh, we have a change request, go to it
-        successPopup & RedirectTo(s"""/secure/utilities/changeRequest/${changeRequest.value}""")
+  private[this] def workflowCallBack(action:String)(returns : Either[Rule,ChangeRequestId]) : JsCmd = {
+    if ((!workflowEnabled) & (action == "delete")) {
+      JsRaw("$.modal.close();") & onSuccessCallback() & SetHtml("editRuleZone",
+          <div id="editRuleZone">Rule successfully deleted</div>
+      ) &
+      SetHtml(htmlId_rule, 
+          <div id={htmlId_rule}>Rule successfully deleted</div>
+      )
+    } else {
+      returns match {
+        case Left(rule) => // ok, we've received a rule, do as before
+          this.rule = rule
+          JsRaw("$.modal.close();") &  onSuccess
+        case Right(changeRequest) => // oh, we have a change request, go to it
+          RedirectTo(s"""/secure/utilities/changeRequest/${changeRequest.value}""")
+      }
     }
   }
 
