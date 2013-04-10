@@ -69,8 +69,6 @@ import com.normation.eventlog.ModificationId
 import com.normation.utils.StringUuidGenerator
 import com.normation.rudder.web.services.CategoryHierarchyDisplayer
 import bootstrap.liftweb.RudderConfig
-import com.normation.rudder.web.components.popup.ModificationValidationPopup
-import com.normation.rudder.domain.workflows.ChangeRequestId
 
 object NodeGroupForm {
 
@@ -94,19 +92,19 @@ object NodeGroupForm {
       chooseTemplate("component", "staticBody", xml)
     }) openOr Nil
 
-//  private def popupRemoveForm =
-//    (for {
-//      xml <- Templates("templates-hidden" :: "components" :: "NodeGroupForm" :: Nil)
-//    } yield {
-//      chooseTemplate("component", "popupRemoveForm", xml)
-//    }) openOr Nil
-//
-//  private def popupDependentUpdateForm =
-//    (for {
-//      xml <- Templates("templates-hidden" :: "components" :: "NodeGroupForm" :: Nil)
-//    } yield {
-//      chooseTemplate("component", "popupDependentUpdateForm", xml)
-//    }) openOr Nil
+  private def popupRemoveForm =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "NodeGroupForm" :: Nil)
+    } yield {
+      chooseTemplate("component", "popupRemoveForm", xml)
+    }) openOr Nil
+
+  private def popupDependentUpdateForm =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "NodeGroupForm" :: Nil)
+    } yield {
+      chooseTemplate("component", "popupDependentUpdateForm", xml)
+    }) openOr Nil
 
   private def body =
     (for {
@@ -136,15 +134,17 @@ object NodeGroupForm {
  *
  */
 class NodeGroupForm(
-    htmlIdCategory    : String
-  , nodeGroup         : NodeGroup
-  , onSuccessCallback : (Either[NodeGroup, ChangeRequestId]) => JsCmd = { (NodeGroup) => Noop }
-  , onFailureCallback : () => JsCmd = { () => Noop }
+  htmlIdCategory : String,
+  nodeGroup : Option[NodeGroup],
+  onSuccessCallback : (String) => JsCmd = { (String) => Noop },
+  onFailureCallback : () => JsCmd = { () => Noop }
 ) extends DispatchSnippet with SpringExtendableSnippet[NodeGroupForm] with Loggable {
 
   // I use a copy and a var to really isolate what is happening in this compenent from
   // the argument, and I need to change the object when it is created (from None to Some(x))
   // Removed private[this] to let extension access it
+
+  var _nodeGroup = nodeGroup.map(x => x.copy())
 
   private[this] val roNodeGroupRepository      = RudderConfig.roNodeGroupRepository
   private[this] val woNodeGroupRepository      = RudderConfig.woNodeGroupRepository
@@ -154,7 +154,6 @@ class NodeGroupForm(
   private[this] val userPropertyService        = RudderConfig.userPropertyService
   private[this] val uuidGen                    = RudderConfig.stringUuidGenerator
   private[this] val categoryHierarchyDisplayer = RudderConfig.categoryHierarchyDisplayer
-  private[this] val workflowEnabled        = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
 
 
   //the current nodeGroupCategoryForm component
@@ -162,7 +161,7 @@ class NodeGroupForm(
 
 
 
-  var parentCategory : Box[NodeGroupCategory] = Empty
+  var parentCategory = Option.empty[Box[NodeGroupCategory]]
 
   var parentCategoryId = ""
 
@@ -172,8 +171,8 @@ class NodeGroupForm(
   // Import the search server component
   val searchNodeComponent = new LocalSnippet[SearchNodeComponent]
 
-  var query : Option[Query] = nodeGroup.query
-  var srvList : Box[Seq[NodeInfo]] = nodeInfoService.find(nodeGroup.serverList.toSeq)
+  var query : Option[Query] = _nodeGroup.flatMap(x => x.query)
+  var srvList : Box[Seq[NodeInfo]] = _nodeGroup.map( x => nodeInfoService.find(x.serverList.toSeq) ).getOrElse(None)
 
   private def setNodeGroupCategoryForm : Unit = {
     updateLocalParentCategory()
@@ -250,15 +249,13 @@ class NodeGroupForm(
                  <group:showGroup />
                </div>
              </fieldset>
-<!--
              <lift:authz role="group_edit">
                <group:reason />
              </lift:authz>
--->
              <div >
                <div class="margins" align="right" style="overflow:hidden;display:block;">
                  <div style="float:left" align="left">
-                 <lift:authz role="group_write"><group:clone/></lift:authz>
+                 <lift:authz role="group_write"><group:group/></lift:authz>
                  <lift:authz role="group_write"><group:delete/></lift:authz>
                </div>
                <div style="float:right" align="right">
@@ -269,16 +266,14 @@ class NodeGroupForm(
         </div>
       </div>
      </div>
-<!--
     <group:removeForm/>
--->
   </div>   </div>
  ++ Script(OnLoad(JsRaw("""$('#GroupTabs').tabs();
           $( "#GroupTabs" ).tabs('select', 0);"""))))
 
      bind("group", html,
       "name" -> piName.toForm_!,
-      "rudderID" -> <div><b class="threeCol">Rudder ID: </b>{nodeGroup.id.value.toUpperCase}</div>,
+      "rudderID" -> <div><b class="threeCol">Rudder ID: </b>{_nodeGroup.map( x => x.id.value.toUpperCase ).getOrElse("no ID")}</div>,
       "description" -> piDescription.toForm_!,
       "container" -> piContainer.toForm_!,
       "static" -> piStatic.toForm_!,
@@ -286,28 +281,33 @@ class NodeGroupForm(
                        case Full(req) => req.buildQuery
                        case eb:EmptyBox => <span class="error">Error when retrieving the request, please try again</span>
       }),
-//      "explanation" -> crReasons.map {
-//        f => <div>{userPropertyService.reasonsFieldExplanation}</div>
-//      },
-//      "reason" -> crReasons.map { f =>
-//        <div>
-//          <div style="margin-bottom:5px">
-//            {f.toForm_!}
-//          </div>
-//          <div class="note"><b>Indication: </b>{userPropertyService.reasonsFieldExplanation}</div>
-//        </div>
-//      },
-      "clone" -> { if (CurrentUser.checkRights(Write("group")))
+      "explanation" -> crReasons.map {
+        f => <div>{userPropertyService.reasonsFieldExplanation}</div>
+      },
+      "reason" -> crReasons.map { f =>
+        <div>
+          <div style="margin-bottom:5px">
+            {f.toForm_!}
+          </div>
+          <div class="note"><b>Indication: </b>{userPropertyService.reasonsFieldExplanation}</div>
+        </div>
+      },
+      "group" -> { if (CurrentUser.checkRights(Write("group")))
                 cloneButton()
               else NodeSeq.Empty
         },
-      "save" -> {
-                  if (CurrentUser.checkRights(Edit("group")))
-                    SHtml.ajaxSubmit("Save", onSubmit _)  %  ("id", saveButtonId) %("class", "ui-button ui-widget ui-state-default ui-corner-all")
-                   else NodeSeq.Empty
-                },
-      "delete" -> SHtml.ajaxSubmit("Delete", () => onSubmitDelete()),
-//      "removeForm" -> showRemovePopupForm,
+      "save" ->   {_nodeGroup match {
+            case Some(x) =>
+              if (CurrentUser.checkRights(Edit("group")))
+                SHtml.ajaxSubmit("Save", onSubmit _)  %  ("id", saveButtonId) %("class", "ui-button ui-widget ui-state-default ui-corner-all")
+              else NodeSeq.Empty
+            case None =>
+              if (CurrentUser.checkRights(Write("group")))
+                SHtml.ajaxSubmit("Save", onSubmit _) % ("id", saveButtonId)
+              else NodeSeq.Empty
+          }},
+      "delete" -> <button id="removeButton">Delete</button>,
+      "removeForm" -> showRemovePopupForm,
       "notifications" -> updateAndDisplayNotifications()
     )
    }
@@ -315,96 +315,102 @@ class NodeGroupForm(
 
   ///////////// fields for category settings ///////////////////
 
-  private[this] def cloneButton() : NodeSeq = SHtml.ajaxButton("Clone", () => showCloneGroupPopup()) % ("id", "groupCloneButtonId")
+  private[this] def cloneButton() : NodeSeq = {
+    _nodeGroup match {
+      case None => NodeSeq.Empty
+      case Some(x) => SHtml.ajaxButton("Clone", () => showCloneGroupPopup()) %
+        ("id", "groupCloneButtonId")
+    }
+  }
 
-//  private[this] def showRemovePopupForm() : NodeSeq = {
-//    nodeGroup match {
-//      case None => NodeSeq.Empty //we are creating a group, no need to show delete
-//      case Some(group) =>
-//        //pop-up: their content should be retrieve lazily
-//        val target = GroupTarget(group.id)
-//        val removePopupGridXml = dependencyService.targetDependencies(target).map( _.rules ) match {
-//          case e:EmptyBox => <div class="error">An error occurred while trying to find dependent item</div>
-//          case Full(rules) => {
-//            val cmp = new RuleGrid("remove_popup_grid", rules, None, false)
-//            cmp.rulesGrid(popup = true,linkCompliancePopup=false)
-//          }
-//        }
-//        (
-//          "#removeActionDialog *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
-//          ".reasonsFieldsetPopup" #> { crReasonsRemovePopup.map { f =>
-//            "#explanationMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
-//            "#reasonsField" #> f.toForm_!
-//          } } &
-//          "#errorDisplay *" #> { updateAndDisplayNotifications(formTrackerRemovePopup) } &
-//          "#removeItemDependencies" #> {removePopupGridXml} &
-//          "#removeButton" #> { removeButton(target) }
-//        )(popupRemoveForm) ++ {
-//          Script(JsRaw("""
-//            correctButtons();
-//            $('#removeButton').click(function() {
-//              createPopup("removeActionDialog",140,850);
-//              return false;
-//            });
-//        """))
-//      }
-//    }
-//  }
-//
-//  private[this] def showUpdatePopupForm( onConfirmCallback:  => JsCmd) : NodeSeq = {
-//    nodeGroup match {
-//      case None => NodeSeq.Empty //we are creating a group, no need to show delete
-//      case Some(group) =>
-//        //pop-up: their content should be retrieve lazily
-//        val target = GroupTarget(group.id)
-//        val updatePopupGridXml = dependencyService.targetDependencies(target).map( _.rules ) match {
-//          case e:EmptyBox => <div class="error">An error occurred while trying to find dependent item</div>
-//          case Full(rules) => {
-//            val cmp = new RuleGrid("dependent_popup_grid", rules, None, false)
-//            cmp.rulesGrid(popup = true,linkCompliancePopup=false)
-//          }
-//        }
-//        (
-//            "#dialogSaveButton" #> SHtml.ajaxButton("Save", () => JsRaw("$.modal.close();") & onConfirmCallback ) &
-//            "#updateItemDependencies" #> {updatePopupGridXml}
-//        )(popupDependentUpdateForm)
-//      }
-//  }
-//
-//  private[this] def removeButton(target:GroupTarget) : Elem = {
-//    def removeCr() : JsCmd = {
-//      if(formTrackerRemovePopup.hasErrors) {
-//        onFailureRemovePopup
-//      } else {
-//        JsRaw("$.modal.close();") &
-//        { val modId = ModificationId(uuidGen.newUuid)
-//          dependencyService.cascadeDeleteTarget(target, modId, CurrentUser.getActor, crReasonsRemovePopup.map(_.is)) match {
-//          case Full(x) =>
-//            // the node group was deleted, deploy
-//            asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
-//            onSuccessCallback("The deployment has been requested") &
-//            SetHtml(htmlIdCategory, NodeSeq.Empty ) &
-//            //show success popup
-//            successPopup &
-//            initJs
-//          case Empty => //arg.
-//            formTracker.addFormError(error("An error occurred while deleting the group (no more information)"))
-//            onFailure
-//          case f@Failure(m,_,_) =>
-//            val msg = "An error occurred while saving the group: "
-//            logger.debug( f ?~! "An error occurred while saving the group: " , f)
-//            formTracker.addFormError(error(msg + m))
-//            onFailure
-//        } }
-//      }
-//    }
-//
-//    SHtml.ajaxSubmit("Remove", removeCr _ )
-//  }
+  private[this] def showRemovePopupForm() : NodeSeq = {
+    _nodeGroup match {
+      case None => NodeSeq.Empty //we are creating a group, no need to show delete
+      case Some(group) =>
+        //pop-up: their content should be retrieve lazily
+        val target = GroupTarget(group.id)
+        val removePopupGridXml = dependencyService.targetDependencies(target).map( _.rules ) match {
+          case e:EmptyBox => <div class="error">An error occurred while trying to find dependent item</div>
+          case Full(rules) => {
+            val cmp = new RuleGrid("remove_popup_grid", rules, None, false)
+            cmp.rulesGrid(popup = true,linkCompliancePopup=false)
+          }
+        }
+        (
+          "#removeActionDialog *" #> { (n:NodeSeq) => SHtml.ajaxForm(n) } andThen
+          ".reasonsFieldsetPopup" #> { crReasonsRemovePopup.map { f =>
+            "#explanationMessage" #> <div>{userPropertyService.reasonsFieldExplanation}</div> &
+            "#reasonsField" #> f.toForm_!
+          } } &
+          "#errorDisplay *" #> { updateAndDisplayNotifications(formTrackerRemovePopup) } &
+          "#removeItemDependencies" #> {removePopupGridXml} &
+          "#removeButton" #> { removeButton(target) }
+        )(popupRemoveForm) ++ {
+          Script(JsRaw("""
+            correctButtons();
+            $('#removeButton').click(function() {
+              createPopup("removeActionDialog",140,850);
+              return false;
+            });
+        """))
+      }
+    }
+  }
+
+  private[this] def showUpdatePopupForm( onConfirmCallback:  => JsCmd) : NodeSeq = {
+    _nodeGroup match {
+      case None => NodeSeq.Empty //we are creating a group, no need to show delete
+      case Some(group) =>
+        //pop-up: their content should be retrieve lazily
+        val target = GroupTarget(group.id)
+        val updatePopupGridXml = dependencyService.targetDependencies(target).map( _.rules ) match {
+          case e:EmptyBox => <div class="error">An error occurred while trying to find dependent item</div>
+          case Full(rules) => {
+            val cmp = new RuleGrid("dependent_popup_grid", rules, None, false)
+            cmp.rulesGrid(popup = true,linkCompliancePopup=false)
+          }
+        }
+        (
+            "#dialogSaveButton" #> SHtml.ajaxButton("Save", () => JsRaw("$.modal.close();") & onConfirmCallback ) &
+            "#updateItemDependencies" #> {updatePopupGridXml}
+        )(popupDependentUpdateForm)
+      }
+  }
+
+  private[this] def removeButton(target:GroupTarget) : Elem = {
+    def removeCr() : JsCmd = {
+      if(formTrackerRemovePopup.hasErrors) {
+        onFailureRemovePopup
+      } else {
+        JsRaw("$.modal.close();") &
+        { val modId = ModificationId(uuidGen.newUuid)
+          dependencyService.cascadeDeleteTarget(target, modId, CurrentUser.getActor, crReasonsRemovePopup.map(_.is)) match {
+          case Full(x) =>
+            // the node group was deleted, deploy
+            asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
+            onSuccessCallback("The deployment has been requested") &
+            SetHtml(htmlIdCategory, NodeSeq.Empty ) &
+            //show success popup
+            successPopup &
+            initJs
+          case Empty => //arg.
+            formTracker.addFormError(error("An error occurred while deleting the group (no more information)"))
+            onFailure
+          case f@Failure(m,_,_) =>
+            val msg = "An error occurred while saving the group: "
+            logger.debug( f ?~! "An error occurred while saving the group: " , f)
+            formTracker.addFormError(error(msg + m))
+            onFailure
+        } }
+      }
+    }
+
+    SHtml.ajaxSubmit("Remove", removeCr _ )
+  }
 
   ///////////// fields for category settings ///////////////////
   private[this] val piName = {
-    new WBTextField("Group name", nodeGroup.name) {
+    new WBTextField("Group name", _nodeGroup.map( x => x.name).getOrElse("")) {
       override def setFilter = notNull _ :: trim _ :: Nil
       override def className = "rudderBaseFieldClassName"
       override def inputField = super.inputField %("onkeydown" , "return processKey(event , '%s')".format(saveButtonId))
@@ -413,43 +419,43 @@ class NodeGroupForm(
     }
   }
 
-//  private[this] val crReasons = {
-//    import com.normation.rudder.web.services.ReasonBehavior._
-//    userPropertyService.reasonsFieldBehavior match {
-//      case Disabled => None
-//      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
-//      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
-//    }
-//  }
-//
-//  private[this] val crReasonsRemovePopup = {
-//    import com.normation.rudder.web.services.ReasonBehavior._
-//    userPropertyService.reasonsFieldBehavior match {
-//      case Disabled => None
-//      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
-//      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
-//    }
-//  }
-//
-//  def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
-//    new WBTextAreaField("Reason message", "") {
-//      override def setFilter = notNull _ :: trim _ :: Nil
-//      override def inputField = super.inputField  %
-//        ("style" -> "height:8em;")
-//      override def subContainerClassName = containerClass
-//      override def labelClassName = "threeColReason"
-//      override def validations() = {
-//        if(mandatory){
-//          valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
-//        } else {
-//          Nil
-//        }
-//      }
-//    }
-//  }
+  private[this] val crReasons = {
+    import com.normation.rudder.web.services.ReasonBehavior._
+    userPropertyService.reasonsFieldBehavior match {
+      case Disabled => None
+      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
+      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
+    }
+  }
+
+  private[this] val crReasonsRemovePopup = {
+    import com.normation.rudder.web.services.ReasonBehavior._
+    userPropertyService.reasonsFieldBehavior match {
+      case Disabled => None
+      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
+      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
+    }
+  }
+
+  def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
+    new WBTextAreaField("Reason message", "") {
+      override def setFilter = notNull _ :: trim _ :: Nil
+      override def inputField = super.inputField  %
+        ("style" -> "height:8em;")
+      override def subContainerClassName = containerClass
+      override def labelClassName = "threeColReason"
+      override def validations() = {
+        if(mandatory){
+          valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
+        } else {
+          Nil
+        }
+      }
+    }
+  }
 
   private[this] val piDescription = {
-    new WBTextAreaField("Group description", nodeGroup.description) {
+    new WBTextAreaField("Group description", _nodeGroup.map( x => x.description).getOrElse("")) {
       override def setFilter = notNull _ :: trim _ :: Nil
       override def inputField = super.inputField  % ("style" -> "height:10em")
       override def validations =  Nil
@@ -461,8 +467,7 @@ class NodeGroupForm(
     new WBRadioField(
         "Group type",
         Seq("static", "dynamic"),
-        if(nodeGroup.isDynamic) "dynamic" else "static"
-    ) {
+        ((_nodeGroup.map( x => x.isDynamic).getOrElse(false)) ? "dynamic" | "static")) {
       override def setFilter = notNull _ :: trim _ :: Nil
     }
   }
@@ -473,12 +478,14 @@ class NodeGroupForm(
     override def className = "rudderBaseFieldSelectClassName"
   }
 
-  private[this] val formTracker = new FormTracker(List(piName, piDescription, piContainer, piStatic))
+  private[this] val formTracker = {
+    val fields = List(piName, piDescription, piContainer, piStatic) ++ crReasons.toList
+    new FormTracker(fields)
+  }
 
-
-//  private[this] val formTrackerRemovePopup = {
-//    new FormTracker(crReasonsRemovePopup.toList)
-//  }
+  private[this] val formTrackerRemovePopup = {
+    new FormTracker(crReasonsRemovePopup.toList)
+  }
 
   private[this] var notifications = List.empty[NodeSeq]
 
@@ -486,11 +493,11 @@ class NodeGroupForm(
     SetHtml(htmlIdCategory, showForm()) & initJs
   }
 
-//  private[this] def updateRemoveFormClientSide() : JsCmd = {
-//    Replace("removeActionDialog", showRemovePopupForm) &
-//    JsRaw("""$("#removeActionDialog").removeClass('nodisplay')""") &
-//    initJs
-//  }
+  private[this] def updateRemoveFormClientSide() : JsCmd = {
+    Replace("removeActionDialog", showRemovePopupForm) &
+    JsRaw("""$("#removeActionDialog").removeClass('nodisplay')""") &
+    initJs
+  }
 
   private[this] def error(msg:String) = <span class="error">{msg}</span>
 
@@ -509,11 +516,11 @@ class NodeGroupForm(
     updateFormClientSide() & JsRaw("""scrollToElement("errorNotification");""")
   }
 
-//  private[this] def onFailureRemovePopup : JsCmd = {
-//    formTracker.addFormError(error("The form contains some errors, please correct them."))
-//    updateRemoveFormClientSide() &
-//    onFailureCallback()
-//  }
+  private[this] def onFailureRemovePopup : JsCmd = {
+    formTracker.addFormError(error("The form contains some errors, please correct them."))
+    updateRemoveFormClientSide() &
+    onFailureCallback()
+  }
 
   private[this] def onSubmit() : JsCmd = {
     // Since we are doing the submit from the component, it ought to exist
@@ -535,97 +542,72 @@ class NodeGroupForm(
       val container = piContainer.is
       val isDynamic = piStatic.is match { case "dynamic" => true ; case _ => false }
 
-      val servers = srvList.getOrElse(Set()).map( _.id )
-
-      val newGroup = nodeGroup.copy(
-          name = name
-        , description = description
-        //, container = container
-        , isDynamic = isDynamic
-        , query = query
-        , serverList =  servers.toSet
-      )
-      displayConfirmationPopup("save", newGroup)
+      _nodeGroup match {
+        case None =>
+          // we are only creating new group now
+          srvList match {
+            case Full(list) =>
+              createGroup(name, description, query.get, isDynamic, list.map(x => x.id).toList, container)
+            case Empty =>
+              createGroup(name, description, query.get, isDynamic, Nil, container)
+            case Failure(m, _, _) =>
+              logger.error("Could not retrieve the server list from the search component: %s".format(m))
+              formTracker.addFormError(error("An error occurred while trying to fetch the server list of the group: " + m))
+              onFailure& onFailureCallback()
+          }
+        case Some(nodeGroup) =>
+          //  we are updating a nodeGroup
+          // we have to check if there are dependant rules
+          dependencyService.targetDependencies(GroupTarget(nodeGroup.id)).map(_.rules) match {
+            case e:EmptyBox => // something really bad happen
+              logger.error("Could not retrieve the dependency list from the search component : %s".format(e))
+              formTracker.addFormError(error("An error occurred while trying to fetch the dependency list of the group: " + e))
+              checkAndUpdateGroup(nodeGroup, name, description, query.get, isDynamic, srvList, container)
+            case Full(rules) if rules.size == 0 =>
+              // no dependencies
+              checkAndUpdateGroup(nodeGroup, name, description, query.get, isDynamic, srvList, container)
+            case Full(rules) =>
+              // dependencies
+              displayDependenciesPopup(nodeGroup, name, description, query.get, isDynamic, srvList, container)
+          }
+      }
     }
   }
 
-  private[this] def onSubmitDelete(): JsCmd = {
-    displayConfirmationPopup(
-        "delete"
-      , nodeGroup
-    )
-  }
-
-//  private[this] def checkAndUpdateGroup(
-//      nodeGroup  : NodeGroup
-//    , name       : String
-//    , description: String
-//    , query      : Query
-//    , isDynamic  : Boolean
-//    , srvList    : Box[Seq[NodeInfo]]
-//    , container  : String): JsCmd = {
-//      srvList match {
-//        case Full(list) =>
-//          updateGroup(nodeGroup, name, description, query, isDynamic, list.map(x => x.id).toList, container)
-//        case Empty =>
-//          updateGroup(nodeGroup, name, description, query, isDynamic, Nil, container)
-//        case Failure(m, _, _) =>
-//          logger.error("Could not retrieve the server list from the search component : %s".format(m))
-//          formTracker.addFormError(error("An error occurred while trying to fetch the server list of the group: " + m))
-//          onFailure& onFailureCallback()
-//      }
-//    }
-
-  /*
-   * Create the confirmation pop-up
-   */
-  private[this] def displayConfirmationPopup(
-      action  : String
-    , newGroup: NodeGroup
-  ) : JsCmd = {
-
-    val optOriginal = Some(nodeGroup)
-
-    val popup = {
-      if (workflowEnabled) {
-        new ModificationValidationPopup(
-            Right(newGroup, optOriginal)
-          , action
-          , false
-          , cr => JsRaw("$.modal.close();") & onSuccessCallback(Right(cr))
-          , xml => JsRaw("$.modal.close();") & onFailure
-          , parentFormTracker = Some(formTracker)
-        )
-      } else {
-        new ModificationValidationPopup(
-            Right(newGroup, optOriginal)
-          , action
-          , false
-          , cr => JsRaw("$.modal.close();") & successPopup & onSuccessCallback(Left(newGroup))
-          , xml => JsRaw("$.modal.close();") & onFailure
-          , parentFormTracker = Some(formTracker)
-        )
+  private[this] def checkAndUpdateGroup(
+      nodeGroup  : NodeGroup
+    , name       : String
+    , description: String
+    , query      : Query
+    , isDynamic  : Boolean
+    , srvList    : Box[Seq[NodeInfo]]
+    , container  : String): JsCmd = {
+      srvList match {
+        case Full(list) =>
+          updateGroup(nodeGroup, name, description, query, isDynamic, list.map(x => x.id).toList, container)
+        case Empty =>
+          updateGroup(nodeGroup, name, description, query, isDynamic, Nil, container)
+        case Failure(m, _, _) =>
+          logger.error("Could not retrieve the server list from the search component : %s".format(m))
+          formTracker.addFormError(error("An error occurred while trying to fetch the server list of the group: " + m))
+          onFailure& onFailureCallback()
       }
     }
 
 
-    SetHtml("confirmUpdateActionDialog", popup.popupContent) &
-    JsRaw("""createPopup("confirmUpdateActionDialog",400,800)""")
-  }
-
   // Fill the content of the popup with the list of dependant rules and wait for user confirmation
-//  private[this] def displayDependenciesPopup(
-//      nodeGroup  : NodeGroup
-//    , name       : String
-//    , description: String
-//    , query      : Query
-//    , isDynamic  : Boolean
-//    , srvList    : Box[Seq[NodeInfo]]
-//    , container  : String): JsCmd = {
-//    SetHtml("confirmUpdateActionDialog", showUpdatePopupForm(checkAndUpdateGroup(
-//        nodeGroup, name, description, query, isDynamic, srvList, container))) &
-//    createPopup("updateActionDialog",140,850)
-//  }
+  private[this] def displayDependenciesPopup(
+      nodeGroup  : NodeGroup
+    , name       : String
+    , description: String
+    , query      : Query
+    , isDynamic  : Boolean
+    , srvList    : Box[Seq[NodeInfo]]
+    , container  : String): JsCmd = {
+    SetHtml("confirmUpdateActionDialog", showUpdatePopupForm(checkAndUpdateGroup(
+        nodeGroup, name, description, query, isDynamic, srvList, container))) &
+    createPopup("updateActionDialog",140,850)
+  }
 
   def createPopup(name:String,height:Int,width:Int) :JsCmd = {
     JsRaw("""createPopup("%s",%s,%s);""".format(name,height,width))
@@ -633,12 +615,11 @@ class NodeGroupForm(
 
   private[this] def showCloneGroupPopup() : JsCmd = {
     val popupSnippet = new LocalSnippet[CreateCloneGroupPopup]
-            popupSnippet.set(Full(new CreateCloneGroupPopup(
-              Some(nodeGroup),
-              onSuccessCategory = displayACategory,
-              onSuccessGroup = showGroupSection
-              //, onSuccessCallback = { onSuccessCallback }
-            )))
+             popupSnippet.set(Full(new CreateCloneGroupPopup(
+            _nodeGroup,
+            onSuccessCategory = displayACategory,
+            onSuccessGroup = showGroupSection,
+            onSuccessCallback = { onSuccessCallback })))
     val nodeSeqPopup = popupSnippet.is match {
       case Failure(m, _, _) =>  <span class="error">Error: {m}</span>
       case Empty => <div>The component is not set</div>
@@ -665,12 +646,12 @@ class NodeGroupForm(
     panel match {
       case NoPanel => NodeSeq.Empty
       case GroupForm(group) =>
-        val form = new NodeGroupForm(htmlId_item, group, onSuccessCallback)
+        val form = new NodeGroupForm(htmlId_item, Some(group), onSuccessCallback)
         nodeGroupForm.set(Full(form))
         form.showForm()
 
       case CategoryForm(category) =>
-        val form = new NodeGroupCategoryForm(htmlId_item, category) //, onSuccessCallback)
+        val form = new NodeGroupCategoryForm(htmlId_item, category, onSuccessCallback)
         nodeGroupCategoryForm.set(Full(form))
         form.showForm()
     }
@@ -682,99 +663,99 @@ class NodeGroupForm(
     JsRaw("""this.window.location.hash = "#" + JSON.stringify({'groupId':'%s'})""".format(sg.id.value))
   }
 
-//  /**
-//   * Create a group from the given parameter
-//   * Do not deploy on create (nobody can already be using that group)
-//   * @param name
-//   * @param description
-//   * @param query
-//   * @param isDynamic
-//   * @param nodeList
-//   * @param container
-//   * @return
-//   */
-//  private def createGroup(name : String, description : String, query : Query, isDynamic : Boolean, nodeList : List[NodeId], container: String ) : JsCmd = {
-//    val createGroup = woNodeGroupRepository.createNodeGroup(
-//                          name
-//                        , description
-//                        , Some(query)
-//                        , isDynamic
-//                        , nodeList.toSet
-//                        , new NodeGroupCategoryId(container)
-//                        , true
-//                        , ModificationId(uuidGen.newUuid)
-//                        , CurrentUser.getActor
-//                        , Some("Group created by user")
-//                      )
-//
-//    createGroup match {
-//        case Full(x) =>
-//          nodeGroup = Some(x.group)
-//
-//          setNodeGroupCategoryForm
-//          onCreateSuccess  & onSuccessCallback(x.group.id.value)
-//        case Empty =>
-//          setNodeGroupCategoryForm
-//          logger.error("An error occurred while saving the Group")
-//           formTracker.addFormError(error("An error occurred while saving the Group"))
-//          onFailure & onFailureCallback()
-//        case Failure(m,_,_) =>
-//          setNodeGroupCategoryForm
-//          logger.error("An error occurred while saving the Group:" + m)
-//          formTracker.addFormError(error("An error occurred while saving the Group: " + m))
-//          onFailure & onFailureCallback()
-//      }
-//  }
+  /**
+   * Create a group from the given parameter
+   * Do not deploy on create (nobody can already be using that group)
+   * @param name
+   * @param description
+   * @param query
+   * @param isDynamic
+   * @param nodeList
+   * @param container
+   * @return
+   */
+  private def createGroup(name : String, description : String, query : Query, isDynamic : Boolean, nodeList : List[NodeId], container: String ) : JsCmd = {
+    val createGroup = woNodeGroupRepository.createNodeGroup(
+                          name
+                        , description
+                        , Some(query)
+                        , isDynamic
+                        , nodeList.toSet
+                        , new NodeGroupCategoryId(container)
+                        , true
+                        , ModificationId(uuidGen.newUuid)
+                        , CurrentUser.getActor
+                        , Some("Group created by user")
+                      )
 
-//  /**
-//   * Update a group from the given parameter
-//   * Redeploy on update (perhaps the group is in use)
-//   * @param name
-//   * @param description
-//   * @param query
-//   * @param isDynamic
-//   * @param nodeList
-//   * @param container
-//   * @return
-//   */
-//  private def updateGroup(originalNodeGroup : NodeGroup, name : String, description : String, query : Query, isDynamic : Boolean, nodeList : List[NodeId], container:String, isEnabled : Boolean = true ) : JsCmd = {
-//    val newNodeGroup = new NodeGroup(originalNodeGroup.id, name, description, Some(query), isDynamic, nodeList.toSet, isEnabled, originalNodeGroup.isSystem)
-//    val modId = ModificationId(uuidGen.newUuid)
-//    (for {
-//      moved <- woNodeGroupRepository.move(originalNodeGroup, NodeGroupCategoryId(container), modId, CurrentUser.getActor, crReasons.map(_.is)) ?~!
-//               "Error when moving NodeGroup %s ('%s') to '%s'".format(originalNodeGroup.id, originalNodeGroup.name, container)
-//      saved <- woNodeGroupRepository.update(newNodeGroup, modId, CurrentUser.getActor, crReasons.map(_.is)) ?~!
-//               "Error when updating the group %s".format(originalNodeGroup.id)
-//    } yield {
-//      (moved,saved)
-//    }) match {
-//        case Full((moved,saved)) =>
-//          moved match {
-//            case None => // OK! move should always be None
-//            case Some(change) =>
-//              logger.warn("moving a group should not produce a change, which is %s".format(change))
-//          }
-//          saved match {
-//            case Some(change) => // There is a modification diff, launch a deployment.
-//              asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
-//            case None => // No change, do not deploy
-//          }
-//          nodeGroup = Some(newNodeGroup)
-//
-//          setNodeGroupCategoryForm
-//          onUpdateSuccess & onSuccessCallback(originalNodeGroup.id.value) & successPopup
-//        case Empty =>
-//          setNodeGroupCategoryForm
-//          logger.error("An error occurred while updating the group")
-//           formTracker.addFormError(error("An error occurred while updating the group"))
-//          onFailure & onFailureCallback()
-//        case f:Failure =>
-//          setNodeGroupCategoryForm
-//          logger.error("An error occurred while updating the group:" + f.messageChain)
-//          formTracker.addFormError(error("An error occurred while updating the group: " + f.msg))
-//          onFailure & onFailureCallback()
-//      }
-//  }
+    createGroup match {
+        case Full(x) =>
+          _nodeGroup = Some(x.group)
+
+          setNodeGroupCategoryForm
+          onCreateSuccess  & onSuccessCallback(x.group.id.value)
+        case Empty =>
+          setNodeGroupCategoryForm
+          logger.error("An error occurred while saving the Group")
+           formTracker.addFormError(error("An error occurred while saving the Group"))
+          onFailure & onFailureCallback()
+        case Failure(m,_,_) =>
+          setNodeGroupCategoryForm
+          logger.error("An error occurred while saving the Group:" + m)
+          formTracker.addFormError(error("An error occurred while saving the Group: " + m))
+          onFailure & onFailureCallback()
+      }
+  }
+
+  /**
+   * Update a group from the given parameter
+   * Redeploy on update (perhaps the group is in use)
+   * @param name
+   * @param description
+   * @param query
+   * @param isDynamic
+   * @param nodeList
+   * @param container
+   * @return
+   */
+  private def updateGroup(originalNodeGroup : NodeGroup, name : String, description : String, query : Query, isDynamic : Boolean, nodeList : List[NodeId], container:String, isEnabled : Boolean = true ) : JsCmd = {
+    val newNodeGroup = new NodeGroup(originalNodeGroup.id, name, description, Some(query), isDynamic, nodeList.toSet, isEnabled, originalNodeGroup.isSystem)
+    val modId = ModificationId(uuidGen.newUuid)
+    (for {
+      moved <- woNodeGroupRepository.move(originalNodeGroup, NodeGroupCategoryId(container), modId, CurrentUser.getActor, crReasons.map(_.is)) ?~!
+               "Error when moving NodeGroup %s ('%s') to '%s'".format(originalNodeGroup.id, originalNodeGroup.name, container)
+      saved <- woNodeGroupRepository.update(newNodeGroup, modId, CurrentUser.getActor, crReasons.map(_.is)) ?~!
+               "Error when updating the group %s".format(originalNodeGroup.id)
+    } yield {
+      (moved,saved)
+    }) match {
+        case Full((moved,saved)) =>
+          moved match {
+            case None => // OK! move should always be None
+            case Some(change) =>
+              logger.warn("moving a group should not produce a change, which is %s".format(change))
+          }
+          saved match {
+            case Some(change) => // There is a modification diff, launch a deployment.
+              asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
+            case None => // No change, do not deploy
+          }
+          _nodeGroup = Some(newNodeGroup)
+
+          setNodeGroupCategoryForm
+          onUpdateSuccess & onSuccessCallback(originalNodeGroup.id.value) & successPopup
+        case Empty =>
+          setNodeGroupCategoryForm
+          logger.error("An error occurred while updating the group")
+           formTracker.addFormError(error("An error occurred while updating the group"))
+          onFailure & onFailureCallback()
+        case f:Failure =>
+          setNodeGroupCategoryForm
+          logger.error("An error occurred while updating the group:" + f.messageChain)
+          formTracker.addFormError(error("An error occurred while updating the group: " + f.msg))
+          onFailure & onFailureCallback()
+      }
+  }
 
   private[this] def updateAndDisplayNotifications() : NodeSeq = {
     notifications :::= formTracker.formErrors
@@ -793,11 +774,14 @@ class NodeGroupForm(
 
 
   private[this] def updateLocalParentCategory() : Unit = {
-    parentCategory = roNodeGroupRepository.getParentGroupCategory(nodeGroup.id)
+    parentCategory = _nodeGroup.map(x => roNodeGroupRepository.getParentGroupCategory(x.id))
 
     parentCategoryId = parentCategory match {
-      case Full(y) =>  y.id.value
-      case _ => ""
+      case Some(x) =>  x match {
+        case Full(y) =>  y.id.value
+        case _ => ""
+      }
+      case None => ""
     }
   }
 
