@@ -199,8 +199,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       val select :Elem =SHtml.select(
           multipleValues ::: selectValues
         , Full(default)
-        , list => {logger.info(list)
-        value = list}
+        , list => value = list
         , ("style","width:auto;")
       )
       (s"value='${default}' [selected]" #> "selected").apply(
@@ -227,7 +226,6 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
           case _ => selectedValues.head
       }
 
-      logger.warn(extendedDefault)
       val multiSelect =  SHtml.multiSelect(
             selectValues
           , extendedDefault

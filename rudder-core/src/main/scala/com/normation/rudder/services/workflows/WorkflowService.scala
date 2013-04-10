@@ -121,7 +121,7 @@ class NoWorkflowServiceImpl(
   val stepsValue :List[WorkflowNodeId] = List()
 
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
-    logger.info("Automatically saving change")
+    logger.debug("Automatically saving change")
     for {
       result <- commit.save(changeRequestId, actor, reason)
     } yield {
@@ -134,7 +134,7 @@ class NoWorkflowServiceImpl(
 
   // should we keep this one or the previous ??
   def onSuccessWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    logger.info("Automatically saving change")
+    logger.debug("Automatically saving change")
     for {
       result <- commit.save(changeRequestId, actor, reason)
     } yield {

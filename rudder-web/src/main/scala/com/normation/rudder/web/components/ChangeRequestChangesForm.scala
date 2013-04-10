@@ -230,9 +230,10 @@ class ChangeRequestChangesForm(
           },
           "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
           "aoColumns": [
-            { "sWidth": "100px" },
+            { "sWidth": "120px" },
             { "sWidth": "40px" },
-            { "sWidth": "40px" }
+            { "sWidth": "40px" },
+            { "sWidth": "100px" }
           ],
         } );
         $$('.dataTables_filter input').attr("placeholder", "Search"); """)
@@ -250,6 +251,7 @@ class ChangeRequestChangesForm(
         <th>Action</th>
         <th>Actor</th>
         <th>Date</th>
+        <th>Reason</th>
       </tr>
       </thead>
       <tbody >
@@ -434,14 +436,12 @@ class ChangeRequestChangesForm(
       groups.map(a => <li>a group change></li>)++
       rules.flatMap(ruleChange =>
         <li>{
-          ruleChange.change.map{change =>  logger.warn(change.diff)
-              change.diff match {
+          ruleChange.change.map{_.diff match {
 
             case ModifyToRuleDiff(rule) =>
               ruleChange.initialState match {
                 case Some(initialRule) =>
                   val diff = diffService.diffRule(initialRule, rule)
-                  logger.info(diff)
                   displayRuleDiff(diff, rule)
                 case None =>
                   val msg = s"Could not display diff for ${rule.name} (${rule.id.value.toUpperCase})"
@@ -481,11 +481,13 @@ class ChangeRequestChangesForm(
       <td id="action"/>
       <td id="actor"/>
       <td id="date"/>
+      <td id="reason"/>
    </tr>
 
-  def displayEvent(action:NodeSeq, actor:EventActor, date:DateTime ) =
+  def displayEvent(action:NodeSeq, actor:EventActor, date:DateTime, changeMessage:String ) =
    ( "#action *" #> {action } &
      "#actor *" #> actor.name &
+     "#reason *" #> changeMessage &
      "#date *"  #> DateFormaterService.getFormatedDate(date)
    ).apply(CRLine)
 
@@ -495,13 +497,13 @@ class ChangeRequestChangesForm(
            case ModifyChangeRequest(_) => "Change request details modified"
            case DeleteChangeRequest(_) => "Change request deleted"
     })
-    displayEvent(action,crEvent.principal,crEvent.creationDate)
+    displayEvent(action,crEvent.principal,crEvent.creationDate,crEvent.eventDetails.reason.getOrElse(""))
   }
 
   def displayWorkflowEvent(wfEvent: WorkflowStepChanged)= {
     val step = eventLogDetailsService.getWorkflotStepChange(wfEvent.details)
     val action = step.map(step => Text(s"State changed from ${step.from} to ${step.to}")).getOrElse(Text("State changed"))
-    displayEvent(action,wfEvent.principal,wfEvent.creationDate)
+    displayEvent(action,wfEvent.principal,wfEvent.creationDate,wfEvent.eventDetails.reason.getOrElse(""))
    }
 
   def displayRuleChange(ruleChange: RuleChange) = {
@@ -510,7 +512,7 @@ class ChangeRequestChangesForm(
            case DeleteRuleDiff(rule) => <span>Delete rule {<a href={ruleLink(rule.id)} onclick="noBubble(event);">{rule.name}</a>}</span>
            case ModifyToRuleDiff(rule) => <span>Modify rule {<a href={ruleLink(rule.id)} onclick="noBubble(event);">{rule.name}</a>}</span>
          }
-   displayEvent(action,ruleChange.firstChange.actor,ruleChange.firstChange.creationDate)
+   displayEvent(action,ruleChange.firstChange.actor,ruleChange.firstChange.creationDate, ruleChange.firstChange.reason.getOrElse(""))
   }
 
   def displayNodeGroupChange(groupChange: NodeGroupChange) = {
@@ -519,7 +521,7 @@ class ChangeRequestChangesForm(
            case DeleteNodeGroupDiff(group) => <span>Delete group {<a href={groupLink(group.id)} onclick="noBubble(event);">{group.name}</a>}</span>
            case ModifyToNodeGroupDiff(group) => <span>Modify group {<a href={groupLink(group.id)} onclick="noBubble(event);">{group.name}</a>}</span>
          }
-   displayEvent(action,groupChange.firstChange.actor,groupChange.firstChange.creationDate)
+   displayEvent(action,groupChange.firstChange.actor,groupChange.firstChange.creationDate, groupChange.firstChange.reason.getOrElse(""))
   }
 
 
@@ -529,7 +531,7 @@ class ChangeRequestChangesForm(
            case d : DeleteDirectiveDiff => <span>Delete Directive {<a href={directiveLink(d.directive.id)} onclick="noBubble(event);">{d.directive.name}</a>}</span>
            case m : ModifyToDirectiveDiff => <span>Modify Directive {<a href={directiveLink(m.directive.id)} onclick="noBubble(event);">{m.directive.name}</a>}</span>
          }
-   displayEvent(action,directiveChange.firstChange.actor,directiveChange.firstChange.creationDate)
+   displayEvent(action,directiveChange.firstChange.actor,directiveChange.firstChange.creationDate, directiveChange.firstChange.reason.getOrElse(""))
   }
 
 }
