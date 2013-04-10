@@ -131,18 +131,19 @@ class ChangeRequestServiceImpl(
 
   private[this] def saveAndLogChangeRequest(diff:ChangeRequestDiff,actor:EventActor,reason:Option[String]) = {
     val changeRequest = diff.changeRequest
+    // We need to remap back to the original type to fetch the id of the CR created
     val save = diff match {
-      case add:AddChangeRequestDiff         => woChangeRequestRepository.createChangeRequest(diff.changeRequest, actor, reason)
-      case modify:ModifyToChangeRequestDiff => woChangeRequestRepository.updateChangeRequest(changeRequest, actor, reason)
-      case delete:DeleteChangeRequestDiff   => woChangeRequestRepository.deleteChangeRequest(changeRequest.id, actor, reason)
+      case add:AddChangeRequestDiff         => woChangeRequestRepository.createChangeRequest(diff.changeRequest, actor, reason).map(AddChangeRequestDiff(_))
+      case modify:ModifyToChangeRequestDiff => woChangeRequestRepository.updateChangeRequest(changeRequest, actor, reason).map(x => modify) // For modification the id is already correct 
+      case delete:DeleteChangeRequestDiff   => woChangeRequestRepository.deleteChangeRequest(changeRequest.id, actor, reason).map(DeleteChangeRequestDiff(_))
     }
 
     for {
     saved  <- save ?~! s"could not save change request ${changeRequest.info.name}"
     modId  =  ModificationId(uuidGen.newUuid)
-    logged <- changeRequestEventLogService.saveChangeRequestLog(modId, actor, diff, reason) ?~!
-                s"could not save event log for change request ${changeRequest.id} creation"
-    } yield { saved }
+    logged <- changeRequestEventLogService.saveChangeRequestLog(modId, actor, saved, reason) ?~!
+                s"could not save event log for change request ${saved.changeRequest.id} creation"
+    } yield { saved.changeRequest }
   }
 
   def get(id:ChangeRequestId) : Box[Option[ChangeRequest]] = roChangeRequestRepository.get(id)
