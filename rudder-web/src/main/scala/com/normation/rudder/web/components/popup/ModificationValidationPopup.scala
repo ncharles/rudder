@@ -164,7 +164,7 @@ object ModificationValidationPopup extends Loggable {
          </div>
       </div>
     , "create"    ->
-      <div>Are you sure you want to create the {item}?</div>
+      <div><h2>Are you sure you want to create this {item}?</h2></div>
   )
 
 }

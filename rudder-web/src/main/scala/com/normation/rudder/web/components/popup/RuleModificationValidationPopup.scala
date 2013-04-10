@@ -84,6 +84,35 @@ object RuleModificationValidationPopup extends Loggable {
     , "save"    -> "Update a Rule"
     , "create"  -> "Create a Rule"
   )
+  
+  private def explanationMessages = Map(
+      "enable"  ->
+      <div>
+        <img src="/images/icWarn.png" alt="Warning!" height="32" width="32" class="warnicon"/>
+        <h2>Are you sure that you want to enable this Rule?</h2>
+        <br />
+      </div>
+    , "disable" ->
+      <div>
+        <img src="/images/icWarn.png" alt="Warning!" height="32" width="32" class="warnicon"/>
+        <h2>Are you sure that you want to disable this Rule?</h2>
+        <br />
+      </div>
+    , "delete"  ->
+      <div>
+        <img src="/images/icWarn.png" alt="Warning!" height="32" width="32" class="warnicon"/>
+        <h2>Are you sure that you want to delete this Rule?</h2>
+        <br />
+      </div>
+    , "save"    ->
+      <div>
+         <h2 style="padding-left:42px;">Are you sure that you want to update this Rule?</h2>
+         <br />
+      </div>
+    , "create"    ->
+      <div><h2 style="padding-left:42px;">Are you sure you want to create this Rule?</h2></div>
+  )
+
 }
 
 class RuleModificationValidationPopup(
@@ -124,6 +153,7 @@ class RuleModificationValidationPopup(
     (
       "#validationForm" #> { (xml:NodeSeq) => SHtml.ajaxForm(xml) } andThen
       "#dialogTitle *" #> titles(action) &
+      "#explanationMessageZone" #> explanationMessages(action) &
       ".reasonsFieldsetPopup" #> {
         crReasons.map { f =>
           <div>
@@ -236,6 +266,7 @@ class RuleModificationValidationPopup(
     } else {
        //based on the choice of the user, create or update a Change request
         val savedChangeRequest = {
+          logger.info("starting workflow")
           for {
             diff   <- ruleDiffFromAction()
             cr     <- changeRequestService.createChangeRequestFromRule(
@@ -252,6 +283,7 @@ class RuleModificationValidationPopup(
             cr.id
           }
         }
+        logger.info("yeah, JS !")
         savedChangeRequest match {
           case Full(cr) =>
             if (workflowEnabled)
