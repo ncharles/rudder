@@ -224,7 +224,6 @@ object RudderConfig extends Loggable {
   val RUDDER_BATCH_REPORTS_LOGINTERVAL = config.getInt("rudder.batch.reports.logInterval") //1 //one minute
   val RUDDER_TECHNIQUELIBRARY_GIT_REFS_PATH = config.getString("rudder.techniqueLibrary.git.refs.path")
   val RUDDER_AUTOARCHIVEITEMS = config.getBoolean("rudder.autoArchiveItems") //true
-  val RUDDER_AUTODEPLOYONMODIFICATION = config.getBoolean("rudder.autoDeployOnModification") //true
   val RUDDER_UI_CHANGEMESSAGE_ENABLED = config.getBoolean("rudder.ui.changeMessage.enabled") //false
   val RUDDER_UI_CHANGEMESSAGE_MANDATORY = config.getBoolean("rudder.ui.changeMessage.mandatory") //false
   val RUDDER_UI_CHANGEMESSAGE_EXPLANATION = config.getString("rudder.ui.changeMessage.explanation") //"Please enter a message explaining the reason for this change."
@@ -836,7 +835,6 @@ object RudderConfig extends Loggable {
           reportingServiceImpl,
           historizationService)
       , eventLogDeploymentServiceImpl
-      , RUDDER_AUTODEPLOYONMODIFICATION
       , deploymentStatusSerialisation)
     techniqueRepositoryImpl.registerCallback(
         new DeployOnTechniqueCallback("DeployOnPTLibUpdate", agent)
