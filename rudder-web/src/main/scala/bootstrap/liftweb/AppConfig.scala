@@ -118,11 +118,12 @@ import com.normation.rudder.services.workflows.ChangeRequestServiceImpl
 import com.normation.rudder.services.workflows.WorkflowServiceImpl
 import com.normation.rudder.services.workflows.NoWorkflowServiceImpl
 import com.normation.rudder.services.modification.DiffServiceImpl
-import com.normation.rudder.services.workflows.CommitAndDeployChangeRequest
 import com.normation.cfclerk.xmlwriters.SectionSpecWriter
 import com.normation.cfclerk.xmlwriters.SectionSpecWriterImpl
 import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
 import com.normation.rudder.services.eventlog.WorkflowEventLogService
+import com.normation.rudder.services.workflows.CommitAndDeployChangeRequestService
+import com.normation.rudder.services.workflows.CommitAndDeployChangeRequestServiceImpl
 
 /**
  * Define a resource for configuration.
@@ -343,11 +344,13 @@ object RudderConfig extends Loggable {
 
   val workflowEventLogService =    new WorkflowEventLogServiceImpl(eventLogRepository,uuidGen)
   val diffService: DiffService = new DiffServiceImpl(roDirectiveRepository)
-  val commitAndDeployChangeRequest = new CommitAndDeployChangeRequest(
+  val commitAndDeployChangeRequest : CommitAndDeployChangeRequestService = new CommitAndDeployChangeRequestServiceImpl(
                 uuidGen
               , roChangeRequestRepository
               , roDirectiveRepository
               , woDirectiveRepository
+              , roNodeGroupRepository
+              , roRuleRepository
               , woRuleRepository
               , asyncDeploymentAgent
               , dependencyAndDeletionService

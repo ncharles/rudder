@@ -16,15 +16,16 @@
     <div id="CRName"/>
     <hr class="spacer"/>
     <div class="wbBaseField">
+      <b class="threeCol">State: </b>
+      <span id="CRStatusDetails">
+        Here comes change request status
+      </span>
+    </div>
+    <hr class="spacer"/>
+    <div class="wbBaseField">
       <b class="threeCol">ID: </b>
       <span id="CRId">
         Here comes the rudder ID
-      </span>
-    </div>
-    <div class="wbBaseField">
-      <b class="threeCol">Status: </b>
-      <span id="CRStatusDetails">
-        Here comes change request status
       </span>
     </div>
     <hr class="spacer"/>
@@ -65,7 +66,7 @@
 </component:changes>
 
 <component:popup>
-  <div id="changeStatePopup" class="nodisplay ui-widget" style="max-height:500px;">
+  <div id="changeStatePopup" class="ui-widget" style="max-height:500px;">
     <div class="simplemodal-title">
       <h1 ><span id="header"></span></h1>
       <hr/>
@@ -80,12 +81,12 @@
 <component:popupContent>
     <div class="simplemodal-content">
       <br />
-      <div class="popupContent" id="intro"/>
-  
+      <div class="popupContent" id="intro" style="margin-left:20px"/>
   <div style="padding:20px">
+  <div id="formError"/>
   <hr class="spacer" />
   <div class="wbBaseField">
-    <b class="threeCol">Next status: </b>
+    <b class="threeCol">Next state: </b>
     <span id="next">
       Here comes change request status
     </span>
@@ -107,4 +108,10 @@
     </div>
   </div>
 </component:popupContent>
+
+<component:actionButtons>
+        <div id="backStep" />
+        <div id="nextStep" style="float:right"/>
+        <div id="popupContent" class="nodisplay"/>
+</component:actionButtons>
 </xml:group>
