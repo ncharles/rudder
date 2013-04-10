@@ -313,11 +313,11 @@ class EventListDisplayer(
         case Full(WorkflowStepChange(crId,from,to)) =>
           Text("Change request #") ++
           <a href={changeRequestLink(crId)} onclick="noBubble(event);">{crId}</a> ++
-          Text(s" sent from ${from} to ${to}")
+          Text(s" state changed from ${from} to ${to}")
 
         case eb:EmptyBox => val fail = eb ?~! "could not display workflow step event log"
           logger.error(fail.msg)
-          Text("Workflow step changed")
+          Text("Change request state changed")
       }
     }
 

@@ -56,6 +56,8 @@ import com.normation.eventlog.EventLog
 import com.normation.rudder.domain.eventlog.ModifyChangeRequest
 import com.normation.rudder.domain.eventlog.AddChangeRequest
 import com.normation.rudder.domain.eventlog.DeleteChangeRequest
+import com.normation.rudder.services.workflows.NoWorkflowAction
+import com.normation.rudder.services.workflows.WorkflowAction
 
 
 object ChangeRequestDetails {
@@ -66,20 +68,26 @@ object ChangeRequestDetails {
       chooseTemplate("component", "header", xml)
     }) openOr Nil
 
- def popup =
+  def popup =
     (for {
       xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
     } yield {
       chooseTemplate("component", "popup", xml)
     }) openOr Nil
 
-     def popupContent =
+  def popupContent =
     (for {
       xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
     } yield {
       chooseTemplate("component", "popupContent", xml)
     }) openOr Nil
 
+  def actionButtons =
+    (for {
+      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
+    } yield {
+      chooseTemplate("component", "actionButtons", xml)
+    }) openOr Nil
 }
 
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
@@ -149,32 +157,38 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
 
     // Add action buttons
     case "actions" =>
-      ( xml =>
+      ( _ =>
         changeRequest match {
           case eb:EmptyBox => NodeSeq.Empty
           case Full(cr) =>
             step match {
             case eb:EmptyBox =>  NodeSeq.Empty
-            case Full(step) =>
+            case Full(step) => <div id="workflowActionButtons" style="margin: 0 40px">{displayActionButton(cr,step)}</div>
 
-              ("#backStep" #> { workflowService.backSteps(step) match {
-                  case Nil => NodeSeq.Empty
-                  case steps =>
-                    SHtml.ajaxButton(
-                        "Decline"
-                      , () => ChangeStepPopup("Refuse", steps, cr)
-              ) } }  &
-               "#nextStep" #> {workflowService.nextSteps(step) match {
-                             case Nil => NodeSeq.Empty
-                              case steps =>
-                               SHtml.ajaxButton(
-                                   "Accept"
-                                 , () => ChangeStepPopup("Accept",steps,cr)
-                               ) } }
-             ) (xml)
+
             }
         }
       )
+  }
+
+  def displayActionButton(cr:ChangeRequest,step:WorkflowNodeId) = {
+    ( "#backStep" #> {
+      workflowService.backSteps(step) match {
+        case Nil => NodeSeq.Empty
+        case steps =>
+          SHtml.ajaxButton(
+              "Decline"
+            , () => ChangeStepPopup("Decline", steps, cr)
+          ) } }  &
+      "#nextStep" #> {
+        workflowService.nextSteps(step) match {
+          case NoWorkflowAction => NodeSeq.Empty
+          case WorkflowAction(actionName,steps) =>
+            SHtml.ajaxButton(
+                actionName
+              , () => ChangeStepPopup(actionName,steps,cr)
+            ) } }
+    ) (actionButtons)
   }
 
   private[this] def changeDetailsCallback (cr:ChangeRequest)(statusUpdate:ChangeRequestInfo) =  {
@@ -203,7 +217,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       case eb:EmptyBox => ("Error when retrieving the last action",None)
       case Full(None)  => ("Error when retrieving the last action",None) //should not happen here !
       case Full(Some(event)) =>
-        val changeStep = eventlogDetailsService.getWorkflotStepChange(event.details).map(step => s"Sent from ${step.from} to ${step.to}").getOrElse("Step changed")
+        val changeStep = eventlogDetailsService.getWorkflotStepChange(event.details).map(step => s"State changed from ${step.from} to ${step.to}").getOrElse("Step changed")
 
         (s"${changeStep} on ${DateFormaterService.getFormatedDate(event.creationDate)} by ${event.principal.name}",Some(event.creationDate))
     }
@@ -231,6 +245,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       SetHtml("changeRequestHeader", displayHeader(cr)) &
       SetHtml("CRStatusDetails",workflowService.findStep(cr.id).map(x => Text(x.value)).openOr(<div class="error">Cannot find the status of this change request</div>) ) &
       SetHtml("changeRequestChanges", new ChangeRequestChangesForm(cr).dispatch("changes")(NodeSeq.Empty)) &
+    //  SetHtml("workflowActionButtons", displayActionButton)
       JsRaw("""correctButtons();
                $.modal.close();""")
 
@@ -247,43 +262,38 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
         </span>
 
 
-  def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
-    new WBTextAreaField("Message", "") {
-      override def setFilter = notNull _ :: trim _ :: Nil
-      override def inputField = super.inputField  %  ("style" -> "height:8em;")
-      //override def subContainerClassName = containerClass
-      override def validations() = {
-        if(mandatory){
-          valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
-        } else {
-          Nil
+    def buildReasonField(mandatory:Boolean, containerClass:String = "twoCol") = {
+      new WBTextAreaField("Message", "") {
+        override def setFilter = notNull _ :: trim _ :: Nil
+        override def inputField = super.inputField  %  ("style" -> "height:8em;")
+        override def validations() = {
+          if(mandatory){
+            valMinLen(5, "The reason must have at least 5 characters.") _ :: Nil
+          } else {
+            Nil
+          }
         }
       }
     }
-  }
+
     val changeMessage = {
-    import com.normation.rudder.web.services.ReasonBehavior._
-    userPropertyService.reasonsFieldBehavior match {
-      case Disabled => None
-      case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
-      case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
-    }
-  }
-
-
-
-
-    val stepMessage =
-      new WBTextAreaField("Message", "") {
-        override def setFilter = notNull _ :: trim _ :: Nil
-        override def inputField = super.inputField  % ("style" -> "height:5em;")
-        override def errorClassName = ""
-        override def validations() = valMinLen(5, "The message must have at least 5 characters.") _ :: Nil
+      import com.normation.rudder.web.services.ReasonBehavior._
+      userPropertyService.reasonsFieldBehavior match {
+        case Disabled => None
+        case Mandatory => Some(buildReasonField(true, "subContainerReasonField"))
+        case Optionnal => Some(buildReasonField(false, "subContainerReasonField"))
       }
+    }
 
-    def confirm() : JsCmd = {
-      nextChosen(cr.id,CurrentUser.getActor,Some(stepMessage.is))
-      closePopup
+    def changeMessageDisplay = {
+      changeMessage.map { f =>
+        <div>
+          <div style="margin:10px 0px 5px 0px; color:#444">
+            {userPropertyService.reasonsFieldExplanation}
+          </div>
+          {f.toForm_!}
+        </div>
+      }
     }
 
     val next = {
@@ -294,21 +304,58 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       }
     }
 
-    val content = {
+    val formTracker = new FormTracker( changeMessage.toList )
+
+    def updateAndDisplayNotifications() : NodeSeq = {
+      val notifications = formTracker.formErrors
+      formTracker.cleanErrors
+      if(notifications.isEmpty)
+        NodeSeq.Empty
+      else
+        <div id="notifications" class="notify"><ul>{notifications.map( n => <li>{n}</li>) }</ul></div>
+    }
+
+    val introMessage = {
+      <div>
+        <h2>You want to {action} that change request</h2>
+        <b>{ nextSteps match {
+          case Nil => "You can't confirm"
+          case (next,_) :: Nil => s"The change request will be sent to the '${next}' state"
+          case list => s"You have to chose a next state for the change request before you confirm"
+        } }
+        </b>
+     </div>
+    }
+    def content = {
       ( "#header"   #>  s"${action} CR #${cr.id}: ${cr.info.name}" &
         "#form -*"  #>
           SHtml.ajaxForm(
-            ( "#reason"  #> stepMessage.toForm_! &
+            ( "#reason"  #> changeMessageDisplay &
               "#next"    #> next &
               "#cancel"  #> SHtml.ajaxButton("Cancel", () => closePopup ) &
               "#confirm" #> SHtml.ajaxSubmit("Confirm", () => confirm()) &
-               "#intro *+" #>  s"You choose to ${action}  change request #${cr.id}, please enter a Confirmation message."
-            ) (popupContent)
+              "#intro *+" #> introMessage andThen
+              "#formError *" #> updateAndDisplayNotifications()
+              ) (popupContent)
           )
       ) ( popup ) ++
       Script(JsRaw("correctButtons();"))
     }
 
+    def updateForm = Replace("changeStatePopup",content)
+
+    def error(msg:String) = <span class="error">{msg}</span>
+
+    def confirm() : JsCmd = {
+      if (formTracker.hasErrors) {
+        formTracker.addFormError(error("The form contains some errors, please correct them"))
+        updateForm
+      }
+      else {
+        nextChosen(cr.id,CurrentUser.getActor,changeMessage.map(_.is))
+        closePopup
+      }
+    }
 
     SetHtml("popupContent",content) &
     JsRaw("createPopup('changeStatePopup', 150, 850)")

@@ -84,12 +84,19 @@ trait WorkflowService {
 
   val stepsValue :List[WorkflowNodeId]
 
-  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]]
+  val nextSteps: Map[WorkflowNodeId,WorkflowAction]
   val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]]
   def findStep(changeRequestId: ChangeRequestId) : Box[WorkflowNodeId]
 }
 
 
+case class WorkflowAction(name:String,actions:Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])] )
+
+object NoWorkflowAction extends WorkflowAction("Nothing",Seq())
+object WorkflowAction {
+  type WorkflowStepFunction = (ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId]
+  def apply(name:String,action:(WorkflowNodeId,WorkflowStepFunction)):WorkflowAction = WorkflowAction(name,Seq(action))
+}
 
 
 /**
@@ -206,7 +213,7 @@ class NoWorkflowServiceImpl(
 
   val noWorfkflow = WorkflowNodeId("No Workflow")
 
-  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] = Map()
+  val nextSteps: Map[WorkflowNodeId,WorkflowAction] = Map()
 
   val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] = Map()
 
@@ -306,12 +313,14 @@ class WorkflowServiceImpl(
 
   val stepsValue = steps.map(_.id)
 
-  val nextSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] =
+  val nextSteps: Map[WorkflowNodeId,WorkflowAction] =
     steps.map{
-      case Validation => Validation.id -> Seq((Deployment.id,stepValidationToDeployment _),(Deployed.id,stepValidationToDeployed _))
-      case Deployment => Deployment.id -> Seq((Deployed.id,stepDeploymentToDeployed _))
-      case Deployed   => Deployed.id -> Seq()
-      case Cancelled  => Cancelled.id -> Seq()
+      case Validation => val actions = Seq((Deployment.id,stepValidationToDeployment _),(Deployed.id,stepValidationToDeployed _))
+        Validation.id -> WorkflowAction("Validate",actions)
+      case Deployment => val action = (Deployed.id,stepDeploymentToDeployed _)
+        Deployment.id -> WorkflowAction("Deploy",action)
+      case Deployed   => Deployed.id -> NoWorkflowAction
+      case Cancelled  => Cancelled.id -> NoWorkflowAction
     }.toMap
 
   val backSteps: Map[WorkflowNodeId,Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])]] =
