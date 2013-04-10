@@ -61,33 +61,23 @@ import com.normation.rudder.services.workflows.WorkflowAction
 
 
 object ChangeRequestDetails {
-  def header =
-    (for {
-      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
-    } yield {
-      chooseTemplate("component", "header", xml)
-    }) openOr Nil
 
-  def popup =
-    (for {
-      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
-    } yield {
-      chooseTemplate("component", "popup", xml)
-    }) openOr Nil
+  private[this] val templatePathList = "templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil
+  private val templatePath = templatePathList.mkString("", "/", ".html")
 
-  def popupContent =
-    (for {
-      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
-    } yield {
-      chooseTemplate("component", "popupContent", xml)
-    }) openOr Nil
+  private[this] def chooseNodes(tag:String) : NodeSeq = {
+    val xml = chooseTemplate("component", tag, template)
+    if(xml.isEmpty) throw new Exception(s"Missing tag <component:${tag}> in template at path ${templatePath}")
+    else xml
+  }
 
-  def actionButtons =
-    (for {
-      xml <- Templates("templates-hidden" :: "components" :: "ComponentChangeRequest" :: Nil)
-    } yield {
-      chooseTemplate("component", "actionButtons", xml)
-    }) openOr Nil
+  def template = Templates(templatePathList).openOrThrowException(s"Can not find template at path ${templatePath}")
+
+  val header = chooseNodes("header")
+  val popup = chooseNodes("popup")
+  val popupContent = chooseNodes("popupContent")
+  val actionButtons = chooseNodes("actionButtons")
+  def unmergeableWarning = chooseNodes("warnUnmergeable")
 }
 
 class ChangeRequestDetails extends DispatchSnippet with Loggable {
@@ -102,6 +92,9 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
   private[this] val changeRequestService  = RudderConfig.changeRequestService
   private[this] val workflowService = RudderConfig.workflowService
   private[this] val eventlogDetailsService = RudderConfig.eventLogDetailsService
+  private[this] val commitAndDeployChangeRequest =  RudderConfig.commitAndDeployChangeRequest
+
+
   private[this] val changeRequestTableId = "ChangeRequestId"
   private[this] val CrId: Box[Int] = {S.param("crId").map(x=>x.toInt) }
   private[this] var changeRequest: Box[ChangeRequest] = CrId match {
@@ -124,7 +117,7 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
       ( xml =>
         changeRequest match {
           case eb:EmptyBox => NodeSeq.Empty
-          case Full(id) => displayHeader(id)
+          case Full(cr) => displayHeader(cr)
         }
       )
 
@@ -167,6 +160,13 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
             }
         }
       )
+
+    case "warnUnmergeable" => ( _ =>
+      changeRequest match {
+        case eb:EmptyBox => NodeSeq.Empty
+        case Full(cr) => displayWarnUnmergeable(cr)
+      }
+    )
   }
 
   def displayActionButton(cr:ChangeRequest,step:WorkflowNodeId):NodeSeq = {
@@ -179,13 +179,16 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
             , () => ChangeStepPopup("Decline", steps, cr)
           ) } }  &
       "#nextStep" #> {
-        workflowService.nextSteps(step) match {
-          case NoWorkflowAction => NodeSeq.Empty
-          case WorkflowAction(actionName,steps) =>
-            SHtml.ajaxButton(
-                actionName
-              , () => ChangeStepPopup(actionName,steps,cr)
-            ) } }
+        if(commitAndDeployChangeRequest.isMergeable(cr.id)) {
+          workflowService.nextSteps(step) match {
+            case NoWorkflowAction => NodeSeq.Empty
+            case WorkflowAction(actionName,steps) =>
+              SHtml.ajaxButton(
+                  actionName
+                , () => ChangeStepPopup(actionName,steps,cr)
+              ) }
+        } else NodeSeq.Empty
+      }
     ) (actionButtons)
   }
 
@@ -235,6 +238,15 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
     ) (header)
 
   }
+
+  def displayWarnUnmergeable(cr:ChangeRequest) : NodeSeq = {
+    if(commitAndDeployChangeRequest.isMergeable(cr.id)) {
+      NodeSeq.Empty
+    } else {
+      unmergeableWarning
+    }
+  }
+
 
   def ChangeStepPopup(action:String,nextSteps:Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])],cr:ChangeRequest) = {
     type stepChangeFunction = (ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId]

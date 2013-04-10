@@ -222,6 +222,15 @@ class DirectiveEditForm(
 
   private[this] def onFailure(): JsCmd = {
     formTracker.addFormError(error("The form contains some errors, please correct them."))
+    showErrorNotifications()
+  }
+  
+  private[this] def onNothingToDo() : JsCmd = {
+    formTracker.addFormError(error("There are no modification to save."))
+    showErrorNotifications()
+  }
+  
+  private[this] def showErrorNotifications() : JsCmd = {
     onFailureCallback() & Replace("editForm", showDirectiveForm) &
     JsRaw("""scrollToElement("notifications");""")
   }
@@ -351,10 +360,14 @@ class DirectiveEditForm(
           shortDescription = piShortDescription.is,
           priority = piPriority.is,
           longDescription = piLongDescription.is)
-        displayConfirmationPopup(
-            "save"
-          , updatedDirective
-        )
+        if (directive == updatedDirective) {
+          onNothingToDo()
+        } else {
+          displayConfirmationPopup(
+              "save"
+            , updatedDirective
+          )
+        }
       }
 
       //display confirmation pop-up that also manage workflows

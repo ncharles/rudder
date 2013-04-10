@@ -75,8 +75,10 @@ object ChangeRequestChangesForm {
       chooseTemplate("component", "changes", xml)
     } ) openOr Nil
 }
+
+
 class ChangeRequestChangesForm(
-  var changeRequest:ChangeRequest
+  changeRequest:ChangeRequest
 ) extends DispatchSnippet with Loggable {
   import ChangeRequestChangesForm._
 
