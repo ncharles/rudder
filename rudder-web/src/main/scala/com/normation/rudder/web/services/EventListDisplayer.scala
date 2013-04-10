@@ -928,6 +928,25 @@ class EventListDisplayer(
           case e:EmptyBox => logger.warn(e)
           errorMessage(e)
         }
+        }
+
+     case x:WorkflowStepChanged =>
+        "*" #> { logDetailsService.getWorkflotStepChange(x.details) match {
+        case Full(step) =>
+            <div class="evloglmargin">
+              <h4>Change request stated modified:</h4>
+              <ul class="evlogviewpad">
+                <li><b>Id: </b>{step.id}</li>
+                <li><b>From state: </b>{step.from}</li>
+                <li><b>To state: </b>{step.to}</li>
+                <li><b>By:</b>{x.principal.name}</li>
+                <li><b>Date:</b>{DateFormaterService.getFormatedDate(x.creationDate)}</li>
+                {reasonHtml}
+              </ul>
+            </div>
+          case e:EmptyBox => logger.warn(e)
+          errorMessage(e)
+        }
 
 
         }
