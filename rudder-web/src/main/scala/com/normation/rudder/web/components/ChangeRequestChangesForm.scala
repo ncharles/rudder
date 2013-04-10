@@ -95,7 +95,7 @@ class ChangeRequestChangesForm(
         changeRequest match {
           case cr: ConfigurationChangeRequest =>
             ( "#changeTree ul *" #>  treeNode(cr).toXml &
-              "#history *" #> displayHistory (cr.directives.values.map(_.changes).toList) &
+              "#history *" #> displayHistory (cr.directives.values.map(_.changes).toList,cr.nodeGroups.values.map(_.changes).toList,cr.rules.values.map(_.changes).toList) &
               "#diff *" #> diff(cr.directives.values.map(_.changes).toList,cr.nodeGroups.values.map(_.changes).toList,cr.rules.values.map(_.changes).toList)
             ) (form) ++
             Script(JsRaw(s"""buildChangesTree("#changeTree","${S.contextPath}");
@@ -339,11 +339,18 @@ class ChangeRequestChangesForm(
       </ul>
     }
 
+    def directiveinfoDiff(directiveIds:Set[DirectiveId]) = directiveIds.map{ id =>
+        val directive = roDirectiveRepo.getDirective(id)
+        directive.map(
+          directive => s" ${directive.name} (ID: ${id})"
+        ).openOr("Unknown Directive")
+    }.toSeq.sortBy(s => s).mkString("\n")
+
 
     ( "#ruleID" #> rule.id.value.toUpperCase &
       "#ruleName" #> displaySimpleDiff(diff.modName, "name", Text(rule.name)) &
       "#target" #> diff.modTarget.map(displayFormDiff(_, "target")(t => t.map(_.target).mkString("\n"))).getOrElse(groupTargetDetails(rule.targets)) &
-      "#policy" #> diff.modDirectiveIds.map(displayFormDiff(_, "directive")(t => t.map(_.value).mkString("\n"))).getOrElse(directiveTargetDetails(rule.directiveIds)) &
+      "#policy" #> diff.modDirectiveIds.map(displayFormDiff(_, "directive")(directiveinfoDiff)).getOrElse(directiveTargetDetails(rule.directiveIds)) &
       "#isEnabled"        #> displaySimpleDiff(diff.modIsActivatedStatus, "active", Text(rule.isEnabled.toString)) &
       "#shortDescription" #> displaySimpleDiff(diff.modShortDescription, "short", Text(rule.shortDescription)) &
       "#longDescription"  #> displaySimpleDiff(diff.modLongDescription, "long", Text(rule.longDescription))
@@ -491,7 +498,7 @@ class ChangeRequestChangesForm(
 
   def displayWorkflowEvent(wfEvent: WorkflowStepChanged)= {
     val step = eventLogDetailsService.getWorkflotStepChange(wfEvent.details)
-    val action = step.map(step => Text(s"Change workflow step from ${step.from} to ${step.to}")).getOrElse(Text("Step changed"))
+    val action = step.map(step => Text(s"State changed from ${step.from} to ${step.to}")).getOrElse(Text("State changed"))
     displayEvent(action,wfEvent.principal,wfEvent.creationDate)
    }
 
