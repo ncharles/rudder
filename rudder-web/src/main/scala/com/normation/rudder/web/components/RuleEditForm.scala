@@ -367,7 +367,11 @@ class RuleEditForm(
     JsRaw("""scrollToElement("notifications");""")
   }
 
-
+  private[this] def onNothingToDo() : JsCmd = {
+    formTracker.addFormError(error("There are no modification to save."))
+    onFailure()
+  }
+  
   /*
    * Create the ajax save button
    */
@@ -438,7 +442,11 @@ class RuleEditForm(
         directiveIds = selectedDirectiveIds,
         isEnabledStatus = rule.isEnabledStatus
       )
-      displayConfirmationPopup("save", newCr)
+       if (newCr == rule) {
+          onNothingToDo()
+        } else {
+          displayConfirmationPopup("save", newCr)
+        }
     }
   }
 
@@ -494,7 +502,6 @@ class RuleEditForm(
   }
 
   private[this] def updateAndDisplayNotifications : NodeSeq = {
-
     val notifications = formTracker.formErrors
     formTracker.cleanErrors
 
