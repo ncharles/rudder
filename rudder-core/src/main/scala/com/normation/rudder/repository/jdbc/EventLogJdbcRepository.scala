@@ -151,18 +151,32 @@ class EventLogJdbcRepository(
   }
 
 
-  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, xpath:String, optLimit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]= {
+  def getEventLogByChangeRequest(
+      changeRequest   : ChangeRequestId
+    , xpath           : String
+    , optLimit        : Option[Int] = None
+    , orderBy         : Option[String] = None
+    , eventTypeFilter : Option[Seq[EventLogFilter]] = None) : Box[Seq[EventLog]]= {
     Try {
       jdbcTemplate.query(
         new PreparedStatementCreator() {
            def createPreparedStatement(connection : Connection) : PreparedStatement = {
              val order = orderBy.map(o => " order by " + o).getOrElse("")
              val limit = optLimit.map( l => " limit " + l).getOrElse("")
-             val query= s"${SELECT_SQL} and cast (xpath('${xpath}', data) as text[]) = ? ${order} ${limit}"
+             val eventFilter = eventTypeFilter.map( seq => " and eventType in (" + seq.map(x => "?").mkString(",") + ")").getOrElse("")
+
+             val query= s"${SELECT_SQL} and cast (xpath('${xpath}', data) as text[]) = ? ${eventFilter} ${order} ${limit}"
              val ps = connection.prepareStatement(
                  query, Array[String]());
-
              ps.setArray(1, connection.createArrayOf("text", Seq(changeRequest.value.toString).toArray[AnyRef]) )
+
+             // if with have eventtype filter, apply them
+             eventTypeFilter.map { seq => seq.zipWithIndex.map { case (eventType, number) =>
+               // zipwithIndex starts at 0, and we have already 1 used for the array, so we +2 the index
+               ps.setString((number+2), eventType.eventType.serialize )
+               }
+             }
+
              ps
            }
          }, EventLogReportsMapper)
@@ -243,7 +257,6 @@ object EventLogReportsMapper extends RowMapper[EventLog] with Loggable {
         UserEventLogsFilter.eventList :::
         ChangeRequestLogsFilter.eventList :::
         TechniqueEventLogsFilter.eventList
-
 
 
   private[this] def mapEventLog(

@@ -215,5 +215,7 @@ trait EventLogRepository {
    */
   def getEventLogByCriteria(criteria : Option[String], limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
 
-  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, xpath:String, limit:Option[Int] = None, orderBy:Option[String] = None) : Box[Seq[EventLog]]
+
+  def getEventLogByChangeRequest(changeRequest : ChangeRequestId, xpath:String, optLimit:Option[Int] = None, orderBy:Option[String] = None, eventTypeFilter : Option[Seq[EventLogFilter]] = None) : Box[Seq[EventLog]]
+
 }

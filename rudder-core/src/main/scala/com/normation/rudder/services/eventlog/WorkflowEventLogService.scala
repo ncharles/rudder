@@ -27,10 +27,10 @@ class WorkflowEventLogServiceImpl (
   }
 
   def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[WorkflowStepChanged]] = {
-    eventLogRepository.getEventLogByChangeRequest(id,"/entry/workflowStep/changeRequestId/text()").map(_.collect{case w:WorkflowStepChanged => w})
+    eventLogRepository.getEventLogByChangeRequest(id,"/entry/workflowStep/changeRequestId/text()", eventTypeFilter=Some(Seq(WorkflowStepChanged))).map(_.collect{case w:WorkflowStepChanged => w})
   }
 
   def getLastLog(id:ChangeRequestId) : Box[Option[WorkflowStepChanged]] = {
-    eventLogRepository.getEventLogByChangeRequest(id,"/entry/workflowStep/changeRequestId/text()",Some(1),Some("creationDate desc")).map(_.collect{case w:WorkflowStepChanged => w}.headOption)
+    eventLogRepository.getEventLogByChangeRequest(id,"/entry/workflowStep/changeRequestId/text()",Some(1),Some("creationDate desc"), eventTypeFilter=Some(Seq(WorkflowStepChanged))).map(_.collect{case w:WorkflowStepChanged => w}.headOption)
   }
   }

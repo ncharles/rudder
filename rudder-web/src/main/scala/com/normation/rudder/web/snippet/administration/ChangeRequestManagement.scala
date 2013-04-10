@@ -67,6 +67,22 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   private[this] val initFilter : Box[String] = S.param("filter").map(_.replace("_", " "))
 
   val dataTableInit =
+    """
+     jQuery.extend( jQuery.fn.dataTableExt.oSort, {
+        "num-html-pre": function ( a ) {
+           var x = String(a).replace( /<[\s\S]*?>/g, "" );
+           return parseFloat( x );
+        },
+
+        "num-html-asc": function ( a, b ) {
+           return ((a < b) ? -1 : ((a > b) ? 1 : 0));
+        },
+
+        "num-html-desc": function ( a, b ) {
+           return ((a < b) ? 1 : ((a > b) ? -1 : 0));
+        }
+     } );
+    """ +
     s"""$$('#${changeRequestTableId}').dataTable( {
           "asStripeClasses": [ 'color1', 'color2' ],
           "bAutoWidth": false,
@@ -81,7 +97,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
           "sDom": '<"dataTables_wrapper_top"fl>rt<"dataTables_wrapper_bottom"ip>',
           "aaSorting": [[ 0, "asc" ]],
           "aoColumns": [
-            { "sWidth": "20px" },
+            { "sWidth": "20px" , "sType": "num-html"},
             { "sWidth": "40px" },
             { "sWidth": "100px" },
             { "sWidth": "40px" },
@@ -89,6 +105,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
           ],
         } );
         $$('.dataTables_filter input').attr("placeholder", "Search");
+
         ${initFilter match {
           case Full(filter) => s"$$('#${changeRequestTableId}').dataTable().fnFilter('${filter}',1,true,false,true);"
           case eb:EmptyBox => s"$$('#${changeRequestTableId}').dataTable().fnFilter('pending',1,true,false,true);"
@@ -97,9 +114,6 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
 
 
   def CRLine(cr: ChangeRequest)= {
-
-    val last = changeRequestEventLogService.getLastLog(cr.id)
-    logger.warn(last)
     <tr>
       <td id="crId">
          {SHtml.a(() => S.redirectTo(s"/secure/utilities/changeRequest/${cr.id}"), Text(cr.id.value.toString))}
@@ -112,9 +126,9 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       </td>
       <td id="crOwner">
          {
-           changeRequestEventLogService.getChangeRequestHistory(cr.id) match {
+           changeRequestEventLogService.getFirstLog(cr.id) match {
            case eb :EmptyBox => "Error while fetching Creator"
-           case Full(seq) => seq.headOption.map(_.principal.name).getOrElse("Unknown User")
+           case Full(result) => result.map(_.principal.name).getOrElse("Unknown User")
          }}
       </td>
       <td id="crDate">

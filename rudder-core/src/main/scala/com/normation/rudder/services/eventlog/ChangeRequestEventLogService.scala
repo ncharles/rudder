@@ -41,6 +41,7 @@ import com.normation.rudder.repository.EventLogRepository
 import com.normation.rudder.domain.eventlog.ChangeRequestEventLog
 import com.normation.rudder.domain.eventlog.ChangeRequestDiff
 import com.normation.eventlog._
+import com.normation.rudder.domain.eventlog.ChangeRequestLogsFilter
 
 
 /**
@@ -52,8 +53,18 @@ trait ChangeRequestEventLogService {
   //we certainly won't keep that one in the end
   def saveChangeRequestLog(modId: ModificationId, principal: EventActor, diff: ChangeRequestDiff, reason:Option[String]) : Box[EventLog]
 
+  /**
+   * Return the complet history, unsorted
+   */
   def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[ChangeRequestEventLog]]
 
+  /**
+   * Return the first logged action for the given ChangeRequest.
+   * If the change request is not found, a Full(None) is returned.
+   * Else, Full(Some(action)) in case of success, and a Failure
+   * describing what happened in other cases.
+   */
+  def getFirstLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]]
   /**
    * Return the last logged action for the given ChangeRequest.
    * If the change request is not find, a Full(None) is returned.
@@ -76,10 +87,18 @@ class ChangeRequestEventLogServiceImpl(
   }
 
   def getChangeRequestHistory(id: ChangeRequestId) : Box[Seq[ChangeRequestEventLog]] = {
-    eventLogRepository.getEventLogByChangeRequest(id,"/entry/changeRequest/id/text()").map(_.collect{case c:ChangeRequestEventLog => c})
+    eventLogRepository.getEventLogByChangeRequest(id,"/entry/changeRequest/id/text()", eventTypeFilter=Some(ChangeRequestLogsFilter.eventList.toSeq)).map(_.collect{case c:ChangeRequestEventLog => c})
+  }
+
+  def getFirstLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]] = {
+    getFirstOrLastLog(id, "creationDate asc")
   }
 
   def getLastLog(id:ChangeRequestId) : Box[Option[ChangeRequestEventLog]] = {
-    eventLogRepository.getEventLogByChangeRequest(id,"/entry/changeRequest/id/text()",Some(1),Some("creationDate desc")).map(_.collect{case c:ChangeRequestEventLog => c}.headOption)
+    getFirstOrLastLog(id, "creationDate desc")
+  }
+
+  private[this] def getFirstOrLastLog(id:ChangeRequestId, sortMethod:String) :  Box[Option[ChangeRequestEventLog]] = {
+    eventLogRepository.getEventLogByChangeRequest(id,"/entry/changeRequest/id/text()",Some(1),Some(sortMethod), Some(ChangeRequestLogsFilter.eventList.toSeq)).map(_.collect{case c:ChangeRequestEventLog => c}.headOption)
   }
 }
