@@ -241,7 +241,6 @@ class CommitAndDeployChangeRequestServiceImpl(
 
     def doNodeGroupChange(change:NodeGroupChanges, modId: ModificationId) : Box[NodeGroupId] = {
       val id = change.changes.initialState.map( _.id.value).getOrElse("new group")
-      logger.info(s"Save group with id '${id}'")
       Full(NodeGroupId(id))
     }
 

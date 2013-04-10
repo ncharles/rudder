@@ -34,7 +34,6 @@
 
 package com.normation.rudder.services.eventlog
 
-import scala.collection.mutable.{ Buffer, Map => MutMap }
 import com.normation.rudder.domain.workflows.ChangeRequestId
 import net.liftweb.common._
 import com.normation.rudder.repository.EventLogRepository
@@ -77,10 +76,6 @@ trait ChangeRequestEventLogService {
 class ChangeRequestEventLogServiceImpl(
    eventLogRepository : EventLogRepository
  ) extends ChangeRequestEventLogService with Loggable{
-  import scala.collection.mutable.{Map => MutMap, Buffer}
-
-  private[this] val repo = MutMap[ChangeRequestId, Buffer[ChangeRequestEventLog]]()
-
 
   def saveChangeRequestLog(modId: ModificationId, principal: EventActor, diff: ChangeRequestDiff, reason:Option[String]): Box[EventLog] = {
     eventLogRepository.saveChangeRequest(modId, principal, diff, reason)

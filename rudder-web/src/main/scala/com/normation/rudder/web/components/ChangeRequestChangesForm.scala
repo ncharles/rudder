@@ -109,9 +109,6 @@ class ChangeRequestChangesForm(
  def treeNode(changeRequest:ConfigurationChangeRequest) = new JsTreeNode{
 
   def directiveChild(directiveId:DirectiveId) = new JsTreeNode{
-
-    val directive= roDirectiveRepo.getDirective(directiveId)
-
     val changes = changeRequest.directives(directiveId).changes
     val directiveName = changes.initialState.map(_._2.name).getOrElse(changes.firstChange.diff.directive.name)
 
@@ -136,13 +133,11 @@ class ChangeRequestChangesForm(
   }
 
   def ruleChild(ruleId:RuleId) = new JsTreeNode{
-
-    val group= roRuleRepo.get(ruleId)
     val changes = changeRequest.rules(ruleId).changes
-    val groupeName = changes.initialState.map(_.name).getOrElse(changes.firstChange.diff.rule.name)
+    val ruleName = changes.initialState.map(_.name).getOrElse(changes.firstChange.diff.rule.name)
     val body = SHtml.a(
         () => SetHtml("history",displayHistory(Nil,Nil,List(changes)))
-      , <span>{groupeName}</span>
+      , <span>{ruleName}</span>
     )
 
     val children = Nil
@@ -159,8 +154,6 @@ class ChangeRequestChangesForm(
   }
 
   def groupChild(groupId:NodeGroupId) = new JsTreeNode{
-
-    val group= roGroupRepo.getNodeGroup(groupId)
     val changes = changeRequest.nodeGroups(groupId).changes
     val groupeName = changes.initialState.map(_.name).getOrElse(changes.firstChange.diff match{
            case a :AddNodeGroupDiff => a.group.name
