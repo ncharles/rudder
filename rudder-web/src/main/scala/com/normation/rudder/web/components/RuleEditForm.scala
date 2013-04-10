@@ -475,7 +475,7 @@ class RuleEditForm(
         , parentFormTracker = Some(formTracker)
       )
 
-    if(!(RudderConfig.RUDDER_UI_CHANGEMESSAGE_ENABLED && workflowEnabled)) {
+    if((!RudderConfig.RUDDER_UI_CHANGEMESSAGE_ENABLED) && (!workflowEnabled)) {
       popup.onSubmit
     } else {
       SetHtml("confirmUpdateActionDialog", popup.popupContent) &
