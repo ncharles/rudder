@@ -99,7 +99,6 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
   def CRLine(cr: ChangeRequest)= {
 
     val last = changeRequestEventLogService.getLastLog(cr.id)
-    logger.warn(last)
     <tr>
       <td id="crId">
          {SHtml.a(() => S.redirectTo(s"/secure/utilities/changeRequest/${cr.id}"), Text(cr.id.value.toString))}
@@ -185,8 +184,7 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
       val select :Elem =SHtml.select(
           multipleValues ::: selectValues
         , Full(default)
-        , list => {logger.info(list)
-        value = list}
+        , list => value = list
         , ("style","width:auto;")
       )
       (s"value='${default}' [selected]" #> "selected").apply(
@@ -213,7 +211,6 @@ class ChangeRequestManagement extends DispatchSnippet with Loggable {
           case _ => selectedValues.head
       }
 
-      logger.warn(extendedDefault)
       val multiSelect =  SHtml.multiSelect(
             selectValues
           , extendedDefault

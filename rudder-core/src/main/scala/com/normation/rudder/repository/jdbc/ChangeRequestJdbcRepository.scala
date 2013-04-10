@@ -162,11 +162,10 @@ class WoChangeRequestJdbcRepository(
            }
          },
          keyHolder)
-         logger.info(keyHolder.getKey().intValue.toString)
          roRepo.get(ChangeRequestId(keyHolder.getKey().intValue))
     } match {
       case Success(x) => x match {
-        case Full(Some(entry)) => 
+        case Full(Some(entry)) =>
               logger.debug(s"Created change Request with id ${entry.id.value}")
               Full(entry)
         case Full(None) => Failure("Couldn't find newly created entry when saving Change Request")

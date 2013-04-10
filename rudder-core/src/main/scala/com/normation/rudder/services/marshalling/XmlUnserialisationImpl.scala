@@ -381,7 +381,7 @@ class DeploymentStatusUnserialisationImpl extends DeploymentStatusUnserialisatio
 class ChangeRequestChangesUnserialisationImpl (
     nodeGroupUnserialiser : NodeGroupUnserialisation
   , directiveUnserialiser : DirectiveUnserialisation
-  , ruleUnserialiser      : RuleUnserialisation 
+  , ruleUnserialiser      : RuleUnserialisation
   , techRepo : TechniqueRepository
   , sectionSpecUnserialiser : SectionSpecParser
 ) extends ChangeRequestChangesUnserialisation with Loggable {
@@ -449,7 +449,7 @@ class ChangeRequestChangesUnserialisationImpl (
             diffDirective <- (changeNode \\ "directive").headOption
 
             (techniqueName,changeDirective,_)  <- directiveUnserialiser.unserialise(diffDirective)
-            change <- { val res = diff match {
+            change <- { diff match {
               case "add" => Full(AddDirectiveDiff(techniqueName,changeDirective))
               case "delete" => Full(DeleteDirectiveDiff(techniqueName,changeDirective))
               case "modifyTo" => (changeNode \\ "rootSection").headOption match {
@@ -463,8 +463,8 @@ class ChangeRequestChangesUnserialisationImpl (
 
               case  _ => Failure("should not happen")
             }
-            logger.info(res)
-            res
+
+
             }
         } yield {
 
@@ -476,7 +476,7 @@ class ChangeRequestChangesUnserialisationImpl (
         } }.toMap
       })
     }
-    
+
     def unserialiseRuleChange(changeRequest:XNode): Box[Map[RuleId,RuleChanges]]= {
       (for {
           rulesNode  <- (changeRequest \ "rules").headOption ?~! s"Missing child 'rules' in entry type changeRequest : ${xml}"

@@ -273,7 +273,6 @@ class RuleModificationValidationPopup(
     } else {
        //based on the choice of the user, create or update a Change request
         val savedChangeRequest = {
-          logger.info("starting workflow")
           for {
             diff   <- ruleDiffFromAction()
             cr     <- changeRequestService.createChangeRequestFromRule(
@@ -290,7 +289,6 @@ class RuleModificationValidationPopup(
             cr.id
           }
         }
-        logger.info("yeah, JS !")
         savedChangeRequest match {
           case Full(cr) =>
             if (workflowEnabled)

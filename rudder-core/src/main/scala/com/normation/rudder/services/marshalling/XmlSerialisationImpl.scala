@@ -274,7 +274,6 @@ class ChangeRequestChangesSerialisationImpl(
           case ModifyToDirectiveDiff(techniqueName,directive,rootSection) =>
              val rootSectionXml = change.diff match {
                case ModifyToDirectiveDiff(_,_,rs) =>
-                 logger.error(sectionSerializer.serialize(rs))
                  sectionSerializer.serialize(rs).getOrElse(NodeSeq.Empty)
                case _ => NodeSeq.Empty
              }
@@ -332,11 +331,11 @@ class ChangeRequestChangesSerialisationImpl(
           </directive>
           }
 
-        val rules = changeRequest.rules.map{ case (ruleId, rule) => 
+        val rules = changeRequest.rules.map{ case (ruleId, rule) =>
           <rule id={ruleId.value}>
             <initialState>
               {rule.changes.initialState.map{
-                case (initialRule) => 
+                case (initialRule) =>
                   ruleSerializer.serialise(initialRule)
                 }.getOrElse(NodeSeq.Empty)
               }
@@ -350,7 +349,7 @@ class ChangeRequestChangesSerialisationImpl(
           </rule>
         }
 
-        
+
     createTrimedElem(XML_TAG_CHANGE_REQUEST, xmlVersion)  (
       <groups>
         {groups}
