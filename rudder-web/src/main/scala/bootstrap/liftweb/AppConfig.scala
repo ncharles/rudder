@@ -355,12 +355,14 @@ object RudderConfig extends Loggable {
               , asyncDeploymentAgent
               , dependencyAndDeletionService
             )
+  val asyncWorkflowInfo = new AsyncWorkflowInfo
   val workflowService: WorkflowService = RUDDER_ENABLE_APPROVAL_WORKFLOWS match {
     case true => new WorkflowServiceImpl(
             workflowEventLogService
           , commitAndDeployChangeRequest
           , roWorkflowRepository
           , woWorkflowRepository
+          , asyncWorkflowInfo
         )
     case false => new NoWorkflowServiceImpl(
             commitAndDeployChangeRequest

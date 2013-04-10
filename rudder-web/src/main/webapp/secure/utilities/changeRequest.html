@@ -23,7 +23,14 @@
     <div id="changeRequestDetails">
       <div class="lift:administration.ChangeRequestDetails.details"/>
     </div>
-      <hr class="spacer"/>
+    
+    <hr class="spacer"/>
+
+    <div id="warnOnUnmergeable">
+      <div class="lift:administration.ChangeRequestDetails.warnUnmergeable"/>
+    </div>
+
+    <hr class="spacer"/>
         
     <div class="lift:administration.ChangeRequestDetails.changes">  
     </div>
@@ -35,6 +42,32 @@
       
   
  </div>
+  <div id="successWorkflow" class="nodisplay">
+    <div class="simplemodal-title">
+      <h1>Success</h1>
+      <hr/>
+    </div>
+    <div class="simplemodal-content">
+      <br />
+      <div>
+        <img src="/images/icOK.png" alt="Success" height="32" width="32" class="icon" />
+        <h2>Change request state has been changed to <span id="newStatus">next status</span></h2>
+        
+        <div id="successDialogContent" />
+      </div>
+      <hr class="spacer" />
+      <br />
+      <br />
+    </div>
+    <div class="simplemodal-bottom">
+      <hr/>
+      <p align="right">
+        <button class="simplemodal-close" onClick="return false;">
+          Close
+        </button>
+      </p>
+    </div>
+  </div>
  <br/>
 </div>
 </lift:surround>

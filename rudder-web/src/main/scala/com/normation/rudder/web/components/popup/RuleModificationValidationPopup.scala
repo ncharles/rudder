@@ -84,7 +84,7 @@ object RuleModificationValidationPopup extends Loggable {
     , "save"    -> "Update a Rule"
     , "create"  -> "Create a Rule"
   )
-  
+
   private def explanationMessages = Map(
       "enable"  ->
       <div>
@@ -210,7 +210,14 @@ class RuleModificationValidationPopup(
     }
   }
 
-  private[this] val defaultRequestName = s"Update Rule ${rule.name}"
+  private[this] val defaultActionName = Map (
+      "enable"  -> "Enable"
+    , "disable" -> "Disable"
+    , "delete"  -> "Delete"
+    , "save"    -> "Update"
+    , "create"  -> "Create"
+  )(action)
+  private[this] val defaultRequestName = s"${defaultActionName} Rule ${rule.name}"
 
   private[this] val changeRequestName = new WBTextField("Title", defaultRequestName) {
     override def setFilter = notNull _ :: trim _ :: Nil

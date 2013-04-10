@@ -53,7 +53,11 @@ import net.liftweb.common._
 import com.normation.rudder.repository._
 import com.normation.rudder.repository.inmemory.InMemoryChangeRequestRepository
 import com.normation.rudder.services.eventlog.WorkflowEventLogService
+import net.liftweb.http.CometActor
+import com.normation.rudder.batch.AsyncWorkflowInfo
 
+
+case object WorkflowUpdate
 /**
  * That service allows to glue Rudder with the
  * workflows engine.
@@ -186,6 +190,7 @@ class WorkflowServiceImpl(
   , commit         : CommitAndDeployChangeRequestService
   , roWorkflowRepo : RoWorkflowRepository
   , woWorkflowRepo : WoWorkflowRepository
+  , workflowComet  : AsyncWorkflowInfo
 ) extends WorkflowService with Loggable {
 
   private[this] case object Validation extends WorkflowNode {
@@ -242,6 +247,7 @@ class WorkflowServiceImpl(
       workflowStep = WorkflowStepChange(changeRequestId,from.id,to.id)
       log   <- workflowLogger.saveEventLog(workflowStep,actor,reason)
     } yield {
+      workflowComet ! WorkflowUpdate
       state
     }) match {
       case Full(state) => Full(state)
@@ -258,7 +264,12 @@ class WorkflowServiceImpl(
 
   def startWorkflow(changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
     logger.debug("start workflow")
-    woWorkflowRepo.createWorkflow(changeRequestId, Validation.id)
+    for {
+      workflow <- woWorkflowRepo.createWorkflow(changeRequestId, Validation.id)
+    } yield {
+      workflowComet ! WorkflowUpdate
+      workflow
+    }
   }
 
   private[this]  def onSuccessWorkflow(from: WorkflowNode, changeRequestId: ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[WorkflowNodeId] = {
