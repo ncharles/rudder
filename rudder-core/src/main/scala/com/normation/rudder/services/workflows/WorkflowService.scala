@@ -93,7 +93,6 @@ trait WorkflowService {
   def findStep(changeRequestId: ChangeRequestId) : Box[WorkflowNodeId]
 }
 
-
 case class WorkflowAction(name:String,actions:Seq[(WorkflowNodeId,(ChangeRequestId,EventActor, Option[String]) => Box[WorkflowNodeId])] )
 
 object NoWorkflowAction extends WorkflowAction("Nothing",Seq())
@@ -102,116 +101,12 @@ object WorkflowAction {
   def apply(name:String,action:(WorkflowNodeId,WorkflowStepFunction)):WorkflowAction = WorkflowAction(name,Seq(action))
 }
 
-
-/**
- * A service that will do whatever is needed to commit
- * modification about a change request in LDAP and
- * deploy them
- */
-class CommitAndDeployChangeRequest(
-    uuidGen             : StringUuidGenerator
-  , roChangeRequestRepo : RoChangeRequestRepository
-  , roDirectiveRepo     : RoDirectiveRepository
-  , woDirectiveRepo     : WoDirectiveRepository
-  , woRuleRepository    : WoRuleRepository
-  , asyncDeploymentAgent: AsyncDeploymentAgent
-  , dependencyService   : DependencyAndDeletionService
-) extends Loggable {
-
-  def save(changeRequestId:ChangeRequestId, actor:EventActor, reason: Option[String]) : Box[ChangeRequestId] = {
-    logger.info(s"Saving and deploying change request ${changeRequestId}")
-    for {
-      changeRequest <- roChangeRequestRepo.get(changeRequestId)
-      saved         <- changeRequest match {
-                         case Some(config:ConfigurationChangeRequest) => saveConfigurationChangeRequest(config)
-                         case x => Failure("We don't know how to deploy change request like this one: " + x)
-                       }
-    } yield {
-      saved
-    }
-  }
-
-  /*
-   * So, what to do ?
-   */
-  private[this] def saveConfigurationChangeRequest(cr:ConfigurationChangeRequest) : Box[ChangeRequestId] = {
-    import com.normation.utils.Control.sequence
-
-    def doDirectiveChange(directiveChanges:DirectiveChanges, modId: ModificationId) : Box[DirectiveId] = {
-      def save(tn:TechniqueName, d:Directive, change: DirectiveChangeItem) = {
-        for {
-          activeTechnique <- roDirectiveRepo.getActiveTechnique(tn)
-          saved           <- woDirectiveRepo.saveDirective(activeTechnique.id, d, modId, change.actor, change.reason)
-        } yield {
-          saved
-        }
-      }
-
-      for {
-        change <- directiveChanges.changes.change
-        done   <- change.diff match {
-                    case DeleteDirectiveDiff(tn,d) =>
-                      dependencyService.cascadeDeleteDirective(d.id, modId, change.actor, change.reason).map( _ => d.id)
-                    case ModifyToDirectiveDiff(tn,d,rs) => save(tn,d, change).map( _ => d.id )
-                    case AddDirectiveDiff(tn,d) => save(tn,d, change).map( _ => d.id )
-                  }
-      } yield {
-        done
-      }
-    }
-
-    def doNodeGroupChange(change:NodeGroupChanges, modId: ModificationId) : Box[NodeGroupId] = {
-      val id = change.changes.initialState.map( _.id.value).getOrElse("new group")
-      logger.info(s"Save group with id '${id}'")
-      Full(NodeGroupId(id))
-    }
-
-    def doRuleChange(change:RuleChanges, modId: ModificationId) : Box[RuleId] = {
-      for {
-        change <- change.changes.change
-        done   <- change.diff match {
-                    case DeleteRuleDiff(r) =>
-                      woRuleRepository.delete(r.id, modId, change.actor, change.reason).map( _ => r.id)
-                    case AddRuleDiff(r) =>
-                      woRuleRepository.create(r, modId, change.actor, change.reason).map( _ => r.id)
-                    case ModifyToRuleDiff(r) =>
-                      woRuleRepository.update(r, modId, change.actor, change.reason).map( _ => r.id)
-                  }
-      } yield {
-        done
-      }
-    }
-
-    val modId = ModificationId(uuidGen.newUuid)
-
-    /*
-     * TODO: we should NOT commit into git each modification,
-     * but wait until the last line and then commit.
-     */
-
-    for {
-      directives <- sequence(cr.directives.values.toSeq) { directiveChange =>
-                      doDirectiveChange(directiveChange, modId)
-                    }
-      groups     <- sequence(cr.nodeGroups.values.toSeq) { nodeGroupChange =>
-                      doNodeGroupChange(nodeGroupChange, modId)
-                    }
-      rules      <- sequence(cr.rules.values.toSeq) { rule =>
-                      doRuleChange(rule, modId)
-                    }
-    } yield {
-      asyncDeploymentAgent ! AutomaticStartDeployment(modId, RudderEventActor)
-      cr.id
-    }
-  }
-
-}
 /**
  * The simplest workflow ever, that doesn't wait for approval
  * It has only one state : Deployed
  */
 class NoWorkflowServiceImpl(
-    commit : CommitAndDeployChangeRequest
+    commit : CommitAndDeployChangeRequestService
   , crRepo : InMemoryChangeRequestRepository
 ) extends WorkflowService with Loggable {
 
@@ -246,7 +141,7 @@ class NoWorkflowServiceImpl(
        // always delete the CR
       crRepo.deleteChangeRequest(changeRequestId, actor, reason)
       // and return a no workflow
-      result
+      changeRequestId
     }
   }
 
@@ -292,7 +187,7 @@ class NoWorkflowServiceImpl(
 
 class WorkflowServiceImpl(
     workflowLogger : WorkflowEventLogService
-  , commit         : CommitAndDeployChangeRequest
+  , commit         : CommitAndDeployChangeRequestService
   , roWorkflowRepo : RoWorkflowRepository
   , woWorkflowRepo : WoWorkflowRepository
   , workflowComet  : AsyncWorkflowInfo
