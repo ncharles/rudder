@@ -162,10 +162,8 @@ class ChangeRequestDetails extends DispatchSnippet with Loggable {
           case eb:EmptyBox => NodeSeq.Empty
           case Full(cr) =>
             step match {
-            case eb:EmptyBox =>  NodeSeq.Empty
-            case Full(step) => <div id="workflowActionButtons" style="margin: 0 40px">{displayActionButton(cr,step)}</div>
-
-
+              case eb:EmptyBox =>  NodeSeq.Empty
+              case Full(step) => <div id="workflowActionButtons" style="margin: 0 40px">{displayActionButton(cr,step)}</div>
             }
         }
       )

@@ -101,15 +101,7 @@
     <lift:authz role="deployment_read">
       <lift:comet type="AsyncDeployment" name="deploymentStatus" />
     </lift:authz>
-    <div class="lift:WorkflowInformation.pendingModification modificationsDisplayer">
-      <lift:authz role="validator_read">
-        <span >Open change requests:</span>
-        <span class="pendingModifications" >[here comes the modifications]</span>
-      </lift:authz>
-      <lift:authz role="deployer_read">
-        <span class="pendingDeployment" >[here comes the pending deployment]</span>
-      </lift:authz>
-    </div>
+      <lift:comet type="WorkflowInformation" name="workflowInfo" />
     
     <h1><a href="/secure/"><img src="/images/logoRudder.jpg" alt="Rudder" /></a></h1>
 

@@ -32,7 +32,7 @@
 *************************************************************************************
 */
 
-package com.normation.rudder.web.snippet
+package com.normation.rudder.web.comet
 
 import scala.xml._
 import net.liftweb.common._
@@ -43,29 +43,42 @@ import net.liftweb.http.js._
 import JsCmds._
 import JE._
 import net.liftweb.util.Helpers._
-
 import bootstrap.liftweb.RudderConfig
+import com.normation.rudder.services.workflows.WorkflowUpdate
 
-class WorkflowInformation extends DispatchSnippet with Loggable {
+
+
+
+class WorkflowInformation extends CometActor with CometListener with Loggable {
   private[this] val workflowService = RudderConfig.workflowService
   private[this] val workflowEnabled = RudderConfig.RUDDER_ENABLE_APPROVAL_WORKFLOWS
+  private[this] val asyncWorkflow   = RudderConfig.asyncWorkflowInfo
 
-  def dispatch = {
-    case "pendingModification" => {
-      workflowEnabled match {
-        case true =>  ( pendingModifications & pendingDeployment )
-        case _ => ".modificationsDisplayer" #> Text("")
-      }
+  def registerWith = asyncWorkflow
 
-    }
+  def render = {
+    new RenderOut(( workflowEnabled match {
+      case true =>   pendingModifications & pendingDeployment
+      case _ => ".modificationsDisplayer" #> Text("")
+    } ) (layout))
   }
+
+  val layout =
+    <div id="workflowInfo" class="modificationsDisplayer"><lift:authz role="validator_read">
+        <span >Open change requests:</span>
+        <span class="pendingModifications" >[here comes the modifications]</span>
+      </lift:authz>
+      <lift:authz role="deployer_read">
+        <span class="pendingDeployment" >[here comes the pending deployment]</span>
+      </lift:authz>
+  </div>
 
   def pendingModifications = {
     workflowService.getValidation match {
       case Full(seq) =>
         seq.size match {
-          case 0 => ".pendingModifications" #> <span  style="font-size:12px">Pending review: 0</span>
-          case size => ".pendingModifications" #> <span style="font-size:12px;"> <a href="/secure/utilities/changeRequests/Pending_validation" style="color:#999999">Pending review: {size}</a> </span>
+          case 0 => ".pendingModifications" #> <span  style="font-size:12px; padding-left:25px; padding-top:2px">Pending review: 0</span>
+          case size => ".pendingModifications" #> <span style="font-size:12px; padding-top:2px">          <img src="/images/icWarn.png" alt="Warning!" height="15" width="15" class="warnicon"/> <a href="/secure/utilities/changeRequests/Pending_validation" style="color:#999999">Pending review: {size}</a> </span>
         }
       case e:EmptyBox => ".pendingModifications" #>  <p class="error">Error when trying to fetch pending change requests.</p>
     }
@@ -75,10 +88,14 @@ class WorkflowInformation extends DispatchSnippet with Loggable {
     workflowService.getDeployment match {
       case Full(seq) =>
         seq.size match {
-          case 0 => ".pendingDeployment" #> <span  style="font-size:12px">Pending deployment: 0</span>
-          case size => ".pendingDeployment" #>  <span style="font-size:12px; "> <a href="/secure/utilities/changeRequests/Pending_deployment" style="color:#999999">Pending deployment: {size}</a> </span>
+          case 0 => ".pendingDeployment" #> <span  style="font-size:12px padding-left:25px; padding-top:2px">Pending deployment: 0</span>
+          case size => ".pendingDeployment" #>  <span style="font-size:12px; padding-top:2px">          <img src="/images/icWarn.png" alt="Warning!" height="15" width="15" class="warnicon"/> <a href="/secure/utilities/changeRequests/Pending_deployment" style="color:#999999">Pending deployment: {size}</a> </span>
         }
       case e:EmptyBox => ".pendingDeployment" #>  <p class="error">Error when trying to fetch pending change requests.</p>
     }
+  }
+
+  override def lowPriority = {
+    case WorkflowUpdate => reRender
   }
 }
