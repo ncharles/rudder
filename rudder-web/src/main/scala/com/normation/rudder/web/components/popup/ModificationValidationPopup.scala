@@ -307,9 +307,18 @@ class ModificationValidationPopup(
     }
   }
 
-  private[this] val defaultRequestName = item match {
-    case Left((t,a,r,d,opt)) => s"Update Directive ${d.name}"
-    case Right((g,opt)) => s"Update Group ${g.name}"
+  private[this] val defaultRequestName = {
+    val defaultActionName = Map (
+      "enable"  -> "Enable"
+    , "disable" -> "Disable"
+    , "delete"  -> "Delete"
+    , "save"    -> "Update"
+    , "create"  -> "Create"
+  )(action)
+    item match {
+    case Left((t,a,r,d,opt)) => s"${defaultActionName} Directive ${d.name}"
+    case Right((g,opt)) => s"${defaultActionName} Group ${g.name}"
+  }
   }
 
   private[this] val changeRequestName = new WBTextField("Title", defaultRequestName) {
