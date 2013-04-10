@@ -88,7 +88,7 @@ class WorkflowInformation extends CometActor with CometListener with Loggable {
     workflowService.getDeployment match {
       case Full(seq) =>
         seq.size match {
-          case 0 => ".pendingDeployment" #> <span  style="font-size:12px padding-left:25px; padding-top:2px">Pending deployment: 0</span>
+          case 0 => ".pendingDeployment" #> <span  style="font-size:12px; padding-left:25px; padding-top:2px">Pending deployment: 0</span>
           case size => ".pendingDeployment" #>  <span style="font-size:12px; padding-top:2px">          <img src="/images/icWarn.png" alt="Warning!" height="15" width="15" class="warnicon"/> <a href="/secure/utilities/changeRequests/Pending_deployment" style="color:#999999">Pending deployment: {size}</a> </span>
         }
       case e:EmptyBox => ".pendingDeployment" #>  <p class="error">Error when trying to fetch pending change requests.</p>
