@@ -78,3 +78,20 @@ class CheckMigrationEventLog2_3(
     }
   }
 }
+
+class CheckMigrationEventLog3_4(
+  manageEventLogsMigration: ControlEventLogsMigration_3_4
+) extends BootstrapChecks {
+
+  override def checks() : Unit = {
+    manageEventLogsMigration.migrate() match {
+      case Full(_) => //ok, and logging should already be done
+      case eb:EmptyBox =>
+        val e = eb ?~! "Error when migrating EventLogs' datas from format 3 to 4 in database"
+        MigrationLogger(4).error(e.messageChain)
+        e.rootExceptionCause.foreach { ex =>
+          MigrationLogger(4).error("Exception was:", ex)
+        }
+    }
+  }
+}
