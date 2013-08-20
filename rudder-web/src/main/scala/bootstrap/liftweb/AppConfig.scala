@@ -243,6 +243,9 @@ object RudderConfig extends Loggable {
   val RUDDER_UI_CHANGEMESSAGE_MANDATORY = config.getBoolean("rudder.ui.changeMessage.mandatory") //false
   val RUDDER_UI_CHANGEMESSAGE_EXPLANATION = config.getString("rudder.ui.changeMessage.explanation") //"Please enter a message explaining the reason for this change."
   val RUDDER_SYSLOG_PORT = config.getInt("rudder.syslog.port") //514
+  val RUDDER_REPORT_AGGREGATION_DELAY =  config.getInt("rudder.aggregateReports.reportDelay")
+  val RUDDER_REPORT_AGGREGATION_MAX_DAYS = config.getInt("rudder.aggregateReports.maxDays")
+  val RUDDER_AGGREGATE_REPORTS_INTERVAL = config.getInt("rudder.aggregateReports.reportInterval")
 
   val BIN_EMERGENCY_STOP = config.getString("bin.emergency.stop")
   val HISTORY_INVENTORIES_ROOTDIR = config.getString("history.inventories.rootdir")
@@ -1260,6 +1263,7 @@ object RudderConfig extends Loggable {
     , previousMigrationController = Some(eventLogsMigration_2_3_Management)
   )
 
+
   /**
    * *************************************************
    * Bootstrap check actions
@@ -1356,37 +1360,47 @@ object RudderConfig extends Loggable {
 //  import com.normation.plugins.{ SnippetExtensionRegister, SnippetExtensionRegisterImpl }
 //  private[this] lazy val snippetExtensionRegister: SnippetExtensionRegister = new SnippetExtensionRegisterImpl()
 
+  /*
+   * Reports aggregation
+   */
 
+  val aggregatedReportsJdbcRepository = {
     val systemRules = Seq(
-      RuleId("inventory-all")
-    , RuleId("hasPolicyServer-root")
-    , RuleId("root-DP"))
+                          RuleId("inventory-all")
+                        , RuleId("hasPolicyServer-root")
+                        , RuleId("root-DP")
+                      )
+    new AggregatedReportsJdbcRepository(squerylDatasourceProvider, systemRules)
+  }
 
-  val advancedReportsJdbcRepository = new AdvancedReportsJdbcRepository(squerylDatasourceProvider, systemRules)
+  val updatesEntryJdbcRepository = new UpdatesEntriesJdbcRepository(squerylDatasourceProvider)
 
-  val updatesEntryJdbcRepository = new UpdatesEntryJdbcRepository(squerylDatasourceProvider)
   val aggregationService = {
-    val delay = /*if (reportDelay>=0) reportDelay else {
-      logger.error("'advancedReporting.batch.aggregateReport.reportDelay' property is not correctly set using 1 as default value, please check /opt/rudder/etc/plugins/advancedreporting/configuration.plugin.advancedReporting.properties")
-      */1
-
-    val max   = /*if (maxDays>0) maxDays else {
-      logger.error("'advancedReporting.batch.aggregateReport.maxDays' property is not correctly set using 5 as default value, please check /opt/rudder/etc/plugins/advancedreporting/configuration.plugin.advancedReporting.properties")
-      */5
+    val delay = if (RUDDER_REPORT_AGGREGATION_DELAY >= 0) {
+                  RUDDER_REPORT_AGGREGATION_DELAY
+                } else {
+                  logger.error("'rudder.aggregateReports.reportDelay' property is not correctly set using 1 as default value, please check /opt/rudder/etc/rudder-web.properties")
+                  1
+                }
+    val max   = if (RUDDER_REPORT_AGGREGATION_MAX_DAYS > 0) {
+                  RUDDER_REPORT_AGGREGATION_MAX_DAYS
+                } else {
+                  logger.error("'rudder.aggregateReports.maxDays' property is not correctly set using 5 as default value, please check /opt/rudder/etc/rudder-web.properties")
+                  5
+                }
 
     new AggregationService(
-      RudderConfig.expectedReportRepository
-    , RudderConfig.reportsRepository
-    , RudderConfig.reportingService
-    , advancedReportsRepository = advancedReportsJdbcRepository
-    , updatesEntriesRepository  = updatesEntryJdbcRepository
+      expectedReportRepository
+    , reportsRepository
+    , reportingService
+    , aggregatedReportsJdbcRepository
+    , updatesEntryJdbcRepository
     , delay
     , max
   )
   }
-  val aggregateReportUpdateInterval = 1
 
- val aggregateReportScheduler = new AggregateReports(aggregationService,aggregateReportUpdateInterval)
+ val aggregateReportScheduler = new AggregateReports(aggregationService,RUDDER_AGGREGATE_REPORTS_INTERVAL)
 }
 
 
