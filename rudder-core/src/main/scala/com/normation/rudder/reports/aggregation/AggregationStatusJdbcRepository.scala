@@ -42,76 +42,74 @@ import com.normation.rudder.repository.jdbc._
 import java.sql.Timestamp
 import org.squeryl.KeyedEntity
 import org.joda.time.DateTime
+import net.liftweb.util.Helpers.tryo
 
-class UpdatesEntriesJdbcRepository(sessionProvider : SquerylConnectionProvider) extends UpdatesEntriesRepository with  Loggable{
+class AggregationStatusJdbcRepository (
+    sessionProvider : SquerylConnectionProvider
+) extends AggregationStatusRepository with Loggable {
   import AggregationConstants._
 
-  def toTimeStamp(d:DateTime) : Timestamp = new Timestamp(d.getMillis)
-
-
-  def getNameUpdateTime() : Option[DateTime] = {
-    getUpdateTime(NAME_UPDATE_KEY)
+  def getAggregationStatus : Box[Option[(Int,DateTime)]] = {
+    getValue(AGGREGATION_STATUS)
   }
 
-  def getAgregationUpdateTime() : Option[DateTime] = {
-   getUpdateTime(AGREGATION_UPDATE_KEY)
-  }
+  private def getValue(key : String) : Box[Option[(Int,DateTime)]] = {
+    try {
+      sessionProvider.ourTransaction {
+        val q = from(AggregationStatusTable.aggregationStatus)(entry =>
+	        where(entry.key === key)
+	        select(entry)
+        )
+        val result = q.toList
 
-  private def getUpdateTime(key : String) : Option[DateTime] = {
-    sessionProvider.ourTransaction {
-      val q = from(Updates.updates)(entry =>
-	      where(entry.key === key)
-	      select(entry)
-	    )
-	    val result =
-	      q.toList
-
-
-      result match {
-        case Nil => None
-        case head :: Nil => Some(new DateTime(head.dateTime))
-        case _ =>
-          logger.error("Too many entry matching %s in table updates".format(NAME_UPDATE_KEY))
-          None
+        result match {
+          case Nil => Full(None)
+          case head :: Nil => Full(Some((head.lastId,new DateTime(head.date))))
+          case _ =>
+            val msg = s"Too many entry matching ${key} in table aggregationStatus"
+            logger.error(msg)
+            Failure(msg)
+        }
       }
+    } catch {
+     case e:Exception => Failure(s"Error while fetching ${key} in table aggregationStatus")
     }
 
-
   }
 
-
-  def setNameUpdateTime(date : DateTime) = {
-   setUpdateTime(NAME_UPDATE_KEY, date)
+  def setAggregationStatus(newId : Int, reportsDate : DateTime) : Box[UpdateEntry] = {
+    setValue(AGGREGATION_STATUS, newId, reportsDate)
   }
 
-  def setAgregationUpdateTime(date : DateTime) = {
-   setUpdateTime(AGREGATION_UPDATE_KEY, date)
-  }
-
-  private def setUpdateTime(key : String, date : DateTime) = {
-    sessionProvider.ourTransaction {
-      	val q = update(Updates.updates)(entry =>
+  private def setValue(key : String, reportId : Int, reportsDate : DateTime) : Box[UpdateEntry] = {
+    try {
+      sessionProvider.ourTransaction {
+        val timeStamp = toTimeStamp(reportsDate)
+      	val q = update(AggregationStatusTable.aggregationStatus)(entry =>
         	where(entry.key === key)
-        	set(entry.dateTime := toTimeStamp(date)))
-
+        	set(entry.lastId := reportId, entry.date := timeStamp))
+        val entry = new UpdateEntry(key, reportId, timeStamp)
         if (q ==0) // could not update
-          Updates.updates.insert(new UpdateEntry(key, toTimeStamp(date)))
-
+          Full(AggregationStatusTable.aggregationStatus.insert(entry))
+        else {
+          Full(entry)
+        }
+      }
+    } catch {
+     case e:Exception => Failure(s"Error while setting ${key} in table aggregationStatus")
     }
   }
 
 }
 
-
-
-
 case class UpdateEntry(
-    @Column("key") key: String,
-    @Column("value") dateTime: Timestamp
+    @Column("key")    key    : String,
+    @Column("lastId") lastId : Int,
+    @Column("date")   date   : Timestamp
 ) extends KeyedEntity[String]  {
 	def id = key
 }
 
-object Updates extends Schema {
-  val updates = table[UpdateEntry]("updates")
+object AggregationStatusTable extends Schema {
+  val aggregationStatus = table[UpdateEntry]("aggregationStatus")
 }

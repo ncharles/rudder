@@ -127,4 +127,6 @@ trait ReportsRepository {
   def getLastHundredErrorReports(kinds:List[String]) : Box[Seq[(Reports,Int)]]
 
   def getErrorReportsBeetween(lower : Int, upper:Int,kinds:List[String]) : Box[Seq[Reports]]
+
+  def getReportsfromId(id : Int, endDate : DateTime) : Box[Seq[(Reports,Int)]]
 }

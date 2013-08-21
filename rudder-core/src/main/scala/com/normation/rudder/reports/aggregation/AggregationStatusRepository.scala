@@ -35,16 +35,12 @@
 package com.normation.rudder.reports.aggregation
 
 import org.joda.time.DateTime
+import net.liftweb.common.Box
 
-trait UpdatesEntriesRepository {
+trait AggregationStatusRepository {
 
-  def getNameUpdateTime() : Option[DateTime]
+  def getAggregationStatus : Box[Option[(Int,DateTime)]]
 
-  def getAgregationUpdateTime() : Option[DateTime]
-
-  def setNameUpdateTime(date : DateTime) : Unit
-
-  def setAgregationUpdateTime(date : DateTime) : Unit
-
+  def setAggregationStatus (newId : Int) : Box[UpdateEntry]
 
 }

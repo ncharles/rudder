@@ -254,10 +254,10 @@ class AggregatedReportsJdbcRepository(
 
 
 object Reportings extends Schema {
-  val reports = table[AggregatedReports]("AggregatedReports")
+  val reports = table[AggregatedReports]("advancedreports")
 
     on(reports)(t => declare(
-      t.id.is(autoIncremented("AggregatedReportsid"), primaryKey)
+      t.id.is(autoIncremented("advancedreportsid"), primaryKey)
       )
       )
 }

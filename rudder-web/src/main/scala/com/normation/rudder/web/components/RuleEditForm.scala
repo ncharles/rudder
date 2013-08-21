@@ -74,6 +74,7 @@ import net.liftweb.util.ClearClearable
 import net.liftweb.util.Helpers
 import net.liftweb.util.Helpers._
 import com.normation.rudder.domain.nodes.NodeInfo
+import org.joda.time.DateTime
 
 object RuleEditForm {
 
@@ -156,6 +157,8 @@ class RuleEditForm(
   private[this] val getFullDirectiveLib = RudderConfig.roDirectiveRepository.getFullDirectiveLibrary _
   private[this] val getAllNodeInfos     = RudderConfig.nodeInfoService.getAll _
 
+  val aggregatedReport = RudderConfig.aggregatedReportsJdbcRepository
+
 
   //////////////////////////// public methods ////////////////////////////
   val extendsAt = SnippetExtensionKey(classOf[RuleEditForm].getSimpleName)
@@ -166,6 +169,7 @@ class RuleEditForm(
   )
 
   private[this] def showForm(tab :Int = 0) : NodeSeq = {
+    logger.info(aggregatedReport.getAggregatedReportsByDate(rule.id, DateTime.now.minusMinutes(15), DateTime.now))
     (getFullNodeGroupLib(), getFullDirectiveLib(), getAllNodeInfos()) match {
       case (Full(groupLib), Full(directiveLib), Full(nodeInfos)) =>
         val allNodeInfos = nodeInfos.map( x => (x.id -> x) ).toMap

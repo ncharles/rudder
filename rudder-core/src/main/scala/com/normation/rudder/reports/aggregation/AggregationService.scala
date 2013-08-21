@@ -52,6 +52,7 @@ import org.joda.time.Interval
 import net.liftweb.common._
 import com.normation.rudder.services.reports.ReportingService
 import com.normation.rudder.domain.reports.bean.ReportType._
+import com.normation.rudder.domain.reports.RuleExpectedReports
 
 /**
  * That service contains most of the logic to merge
@@ -62,11 +63,56 @@ class AggregationService(
   , reportsRepository        : ReportsRepository
   , reportingService         : ReportingService
   , aggregatedReportsRepository: AggregatedReportsRepository
-  , updatesEntriesRepository : UpdatesEntriesRepository
+  , updatesEntriesRepository : AggregationStatusRepository
   , reportDelay : Int // in hours
   , maxDays : Int // in days
 ) extends Loggable {
   import AggregationConstants._
+
+
+//  def checkReport(report: Reports, expectedReport : RuleExpectedReports) = {
+//    if ( report.)
+
+//  }
+  def newAggregation = {
+    updatesEntriesRepository.getAggregationStatus match {
+      case Full(Some((lastReportId,lastReportDate))) =>
+        val reports = reportsRepository.getReportsfromId(lastReportId, lastReportDate) match {
+          case Full(reports) =>
+            for {
+              (ruleId, reportsByRule) <- reports.groupBy(_._1.ruleId)
+              executionTimeStamps = reportsByRule.map(_._1.executionTimestamp).distinct
+              firstExecutionTimeStamp = executionTimeStamps.minBy(_.getMillis())
+              lastExecutionTimeStamp = executionTimeStamps.maxBy(_.getMillis())
+              expectedReports <- expectedReportRepository.findExpectedReports(ruleId, Some(firstExecutionTimeStamp), Some(lastExecutionTimeStamp))
+              lineariseExpectedReports  = expectedReports.flatMap(lineariseExpectedReport(_)).distinct
+              aggregatedReports <- aggregatedReportsRepository.getAggregatedReportsByDate(ruleId, firstExecutionTimeStamp, lastExecutionTimeStamp)
+              expectedMap = lineariseExpectedReports.groupBy(KeyOfExecution(_))
+              reportMap = reportsByRule.groupBy(report => KeyOfExecution(report._1))
+              aggregatedReportMap = aggregatedReports.groupBy(KeyOfExecution(_))
+            } yield {
+               for {
+                 (key,reports) <- reportMap
+               } yield {
+                 // Check if there is an expected report
+                 val ReportsToAdd = expectedMap.get(key) match {
+                   // There is no expected report => Map to UnexpectedReport
+                   case None =>
+                     reports.groupBy(_._1.executionTimestamp).map(reports => AggregatedReports(reports._2.head._1,UnknownReportType,reports._2.size,reports._2.size)).toSeq
+                   case Some()
+                 }
+               }
+            }
+          case _ =>
+        }
+
+
+      case Full(None) =>
+      case eb:EmptyBox =>
+
+    }
+
+  }
 
   def getTimeInterval() : Option[Interval] = {
 
@@ -422,13 +468,13 @@ class AggregationService(
    * unfold expected reports to have proper lines
    */
   def lineariseExpectedReport(
-        nodeId : NodeId
-      , aRuleExpectedReports : RuleExpectedReports
+      aRuleExpectedReports : RuleExpectedReports
   ) : Seq[LinearisedExpectedReport] = {
 
     for {
       directivesOnNodes <- aRuleExpectedReports.directivesOnNodes
       directive <- directivesOnNodes.directiveExpectedReports
+      nodeId <- directivesOnNodes.nodeIds
        component <- directive.components
        value <-component.componentsValues
     } yield {
@@ -438,11 +484,14 @@ class AggregationService(
         , aRuleExpectedReports.ruleId
         , aRuleExpectedReports.serial
         , component.componentName
+        , component.cardinality
         , value
       )
     }
   }
 }
+
+//case class MissingReports (expected : Int, received : Int) => Sérialisé en _received_expected pour stocker le nombre
 
 case class LinearisedNodeStatusReport(
     nodeId       : NodeId
@@ -476,6 +525,7 @@ object LinearisedNodeStatusReport {
         , execDate)
     }
   }
+
   def apply(executionBatch:ExecutionBatch) : Seq[LinearisedNodeStatusReport] =
     executionBatch.getNodeStatus.flatMap(LinearisedNodeStatusReport(_,executionBatch.serial,executionBatch.executionTime))
 }
@@ -483,12 +533,13 @@ object LinearisedNodeStatusReport {
 
 // a class not unlike the AggregatedReports
 case class LinearisedExpectedReport(
-      nodeId       : NodeId,
-      directiveId  : DirectiveId,
-      ruleId       : RuleId,
-      serial       : Int,
-      component    : String,
-      keyValue     : String
+    nodeId       : NodeId
+  , directiveId  : DirectiveId
+  , ruleId       : RuleId
+  , serial       : Int
+  , component    : String
+  , cardinality  : Int
+  , keyValue     : String
 ) extends HashcodeCaching
 
 // this class that identify the entry
@@ -505,6 +556,9 @@ object KeyOfExecution {
     KeyOfExecution(entry.ruleId, entry.directiveId, entry.component, entry.keyValue,entry.nodeId)
 
   def apply(entry : LinearisedNodeStatusReport) : KeyOfExecution =
+    KeyOfExecution(entry.ruleId, entry.directiveId, entry.component, entry.keyValue,entry.nodeId)
+
+  def apply(entry : Reports) : KeyOfExecution =
     KeyOfExecution(entry.ruleId, entry.directiveId, entry.component, entry.keyValue,entry.nodeId)
 
   def apply(entry : AggregatedReports) : KeyOfExecution =
