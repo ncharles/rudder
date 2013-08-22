@@ -74,32 +74,48 @@ class AggregationService(
 //    if ( report.)
 
 //  }
+  val reportInterval : Int = 5
+
   def newAggregation = {
     updatesEntriesRepository.getAggregationStatus match {
       case Full(Some((lastReportId,lastReportDate))) =>
         val reports = reportsRepository.getReportsfromId(lastReportId, lastReportDate) match {
           case Full(reports) =>
             for {
-              (ruleId, reportsByRule) <- reports.groupBy(_._1.ruleId)
-              executionTimeStamps = reportsByRule.map(_._1.executionTimestamp).distinct
+              (ruleId, reportsByRule) <- reports.map(_._1).groupBy(_.ruleId)
+              executionTimeStamps = reportsByRule.map(_.executionTimestamp).distinct
               firstExecutionTimeStamp = executionTimeStamps.minBy(_.getMillis())
               lastExecutionTimeStamp = executionTimeStamps.maxBy(_.getMillis())
               expectedReports <- expectedReportRepository.findExpectedReports(ruleId, Some(firstExecutionTimeStamp), Some(lastExecutionTimeStamp))
               lineariseExpectedReports  = expectedReports.flatMap(lineariseExpectedReport(_)).distinct
-              aggregatedReports <- aggregatedReportsRepository.getAggregatedReportsByDate(ruleId, firstExecutionTimeStamp, lastExecutionTimeStamp)
-              expectedMap = lineariseExpectedReports.groupBy(KeyOfExecution(_))
-              reportMap = reportsByRule.groupBy(report => KeyOfExecution(report._1))
-              aggregatedReportMap = aggregatedReports.groupBy(KeyOfExecution(_))
+           //   aggregatedReports <- aggregatedReportsRepository.getAggregatedReportsByDate(ruleId, firstExecutionTimeStamp, lastExecutionTimeStamp)
+              expectedMap = lineariseExpectedReports.groupBy(ReportKey(_))
+              reportMap = reportsByRule.groupBy(ReportKey(_))
+            //  aggregatedReportMap = aggregatedReports.groupBy(KeyOfExecution(_))
             } yield {
                for {
                  (key,reports) <- reportMap
                } yield {
                  // Check if there is an expected report
-                 val ReportsToAdd = expectedMap.get(key) match {
+                 val ReportsToAdd : Seq[AggregatedReport] = expectedMap.get(key) match {
                    // There is no expected report => Map to UnexpectedReport
                    case None =>
-                     reports.groupBy(_._1.executionTimestamp).map(reports => AggregatedReports(reports._2.head._1,UnknownReportType,reports._2.size,reports._2.size)).toSeq
-                   case Some()
+                     reports.groupBy(_.executionTimestamp).map{ case (_,reports) => AggregatedReport(reports.head,UnknownReportType,reports.size,reports.size)}.toSeq
+                   case Some(expectedReports) =>
+                     reports.groupBy(_.executionTimestamp).flatMap{
+                       case (executionTimeStamp,reports) =>
+                         val headReport = reports.head
+                             expectedReports.find(_.serial == headReport.serial) match {
+                         case None => Seq(AggregatedReport(headReport,UnknownReportType,reports.size,reports.size))
+                         case Some(expected) =>
+                           val res = reports.groupBy(_.severity).map{
+                           case(severity,reports) =>
+                             val headReport = reports.head
+                             AggregatedReport(headReport,ReportType(headReport),reports.size,reports.size)
+                          }.toSeq
+                          res
+                       }
+                     }.toSeq
                  }
                }
             }
@@ -113,7 +129,7 @@ class AggregationService(
     }
 
   }
-
+/*
   def getTimeInterval() : Option[Interval] = {
 
     val intervalStartDateTime = (updatesEntriesRepository.getAgregationUpdateTime) getOrElse {
@@ -135,7 +151,193 @@ class AggregationService(
     }
   }
 
+    , @Column("directiveid") directiveId: String
+  , @Column("ruleid") ruleId: String
+  , @Column("beginserial") beginSerial: Int
+  , @Column("endserial") endSerial: Int
+  , @Column("component") component: String
+  , @Column("keyvalue") keyValue: String
+  , state: DBReportType
+  , @Column("message") message: String
+  , @Column("starttime") startTime: Timestamp
+  , @Column("endtime") endTime: Timestamp // only the endtime is mutable
+  , @Column("received") received : Int
+  , @Column("expected") expected : Int
+*/
 
+  def resolveconflictingReport (conflicting : AggregatedReport, report : AggregatedReport) : (Option[AggregatedReport],Seq[AggregatedReport],Option[AggregatedReport]) = {
+
+    def splitBegin (base: AggregatedReport, newReportBegin: Timestamp) = {
+      val splittedEnd =  AggregatedReport (
+          base.nodeId
+        , base.directiveId
+        , base.ruleId
+        , base.beginSerial
+        , base.endSerial
+        , base.component
+        , base.keyValue
+        , SuccessReportType
+        , ""
+        , newReportBegin
+        , base.endTime
+        , 0
+        , base.expected
+      )
+      val splittedBegin = base.copy(endTime = newReportBegin)
+      (splittedBegin,splittedEnd)
+    }
+
+    def splitEnd (base: AggregatedReport, newReportEnd: Timestamp) = {
+      val splittedBegin =  AggregatedReport (
+          base.nodeId
+        , base.directiveId
+        , base.ruleId
+        , base.beginSerial
+        , base.endSerial
+        , base.component
+        , base.keyValue
+        , SuccessReportType
+        , ""
+        , base.startTime
+        , newReportEnd
+        , 0
+        , base.expected
+      )
+      val splittedEnd = base.copy(startTime = newReportEnd)
+      (splittedBegin,splittedEnd)
+    }
+
+    val (notConflictingBegin, conflictingEnd) = if (conflicting.startDate isBefore report.startDate) {
+      val (notConflictingBegin, conflictingEnd) = splitEnd(conflicting,report.startTime)
+
+      (Some(notConflictingBegin), conflictingEnd)
+    } else {
+      (None,conflicting)
+    }
+
+    val (notConflictingEnd, conflictingPart) = if (conflictingEnd.endDate isAfter report.endDate) {
+      val ( conflictingPart, notConflictingEnd) = splitEnd(conflicting,report.startTime)
+
+      (Some(notConflictingEnd), conflictingPart)
+    } else {
+      (None,conflictingEnd)
+
+    }
+
+    // Check if there is to much Report
+    val newCount = report.received + conflictingPart.received
+    val resolvedConflicts = if (newCount > report.expected) {
+      // TOO MUCH PUT UNKNOWN WITH NEWCOUNT RECEIVED
+      Seq(conflicting.copy(state = UnknownReportType, received = newCount, expected = newCount))
+    } else {
+      // Check if same state
+      if (report.state == conflictingPart.state) {
+        // Update receive Number and return
+        Seq(conflictingPart.copy(received = newCount))
+      } else {
+        // check if both are empty (should not Happen empty reports whoudl already been treated because they should all get Success status (with 0 reports)
+        if (newCount == 0){
+          // Both empty report, Wrong report type here, repair it
+          Seq(conflicting.copy(state = SuccessReportType))
+        } else {
+          // Still need to remove empty if there exists, There will still be at least one report in it
+          Seq(conflictingPart,report).filter(_.received == 0)
+        }
+      }
+    }
+
+   (notConflictingBegin ,resolvedConflicts, notConflictingEnd)
+  }
+
+  def mergeOneAggregatedReport ( base : Seq[AggregatedReport], report : AggregatedReport ) : Seq [AggregatedReport] = {
+    def createEmptyReport (base: AggregatedReport, begin : Timestamp, end: Timestamp) = {
+      AggregatedReport (
+          base.nodeId
+        , base.directiveId
+        , base.ruleId
+        , base.beginSerial
+        , base.endSerial
+        , base.component
+        , base.keyValue
+        , SuccessReportType
+        , ""
+        , begin
+        , end
+        , 0
+        , base.expected
+      )
+    }
+
+  // Is the report after all aggregated reports
+  val res : Seq[AggregatedReport] = if (base.forall(_.endDate isBefore report.startDate)) {
+    // Get last report from this list
+    val maxEndDate : AggregatedReport = base.maxBy(_.endDate.getMillis())
+    if (maxEndDate.endDate isAfter (report.startDate minusMinutes (2 * reportInterval))) {
+      // Check if same report has been received
+      if (maxEndDate.state == report.state && maxEndDate.received == report.received) {
+        // Extend actual report
+        base.map{baseReport =>
+        if (baseReport == maxEndDate) {
+          baseReport.copy(endTime = report.endTime)
+        } else {
+          baseReport
+        } }
+      } else {
+        // Check if this a no answer
+        if (report.received == 0) {
+          // Nothing to do, waiting for a new report
+          base
+        } else {
+          // extend previous to beginning of new report and and this new report
+          base.map{baseReport =>
+            if (baseReport == maxEndDate) {
+            baseReport.copy(endTime = report.startTime)
+            } else {
+              baseReport
+          } } ++ Seq(report)
+        }
+      }
+    } else {
+      base ++ Seq(createEmptyReport(report, maxEndDate.endTime, report.startTime), report)
+    }
+
+  } else {
+    val (conflictingReports, noConfflictReports) = base.partition(baseReport => baseReport.interval == report.interval || baseReport.interval.overlaps(report.interval) || report.interval.overlaps(baseReport.interval)  )
+    val conflicted = conflictingReports.map(resolveconflictingReport(_, report))
+    val finalnoCOnficlts =
+    for {
+      resolvedConflict <- resolvedConflicts
+      beginInterval = new Interval(resolvedConflict.startDate minusMinutes( 2 * reportInterval), resolvedConflict.startDate)
+      (toMergeBeginWith,notOTmerge) = finalnoCOnficlts.partition(noConflict => beginInterval contains noConflict.endDate )
+    } yield {
+      val sameState = toMergeBeginWith.filter(toMerge => toMerge.state == resolvedConflict.state && toMerge.received == resolvedConflict.received)
+      if (sameState.size == 1) {
+        sameState.head.copy(endTime = )
+      }
+    }
+    Seq()
+  }
+  Seq()
+
+  }
+
+  def mergeAggregatedReports ( base : Seq[AggregatedReport], toMerge : Seq[AggregatedReport]) = {
+    val baseMap = base.groupBy(ReportKey(_))
+    val mergeMap = toMerge.groupBy(ReportKey(_))
+    val mergingMap = (for {
+      key <- (baseMap.keys ++ mergeMap.keys).toSeq.distinct
+    } yield {
+      key -> (baseMap.getOrElse(key, Seq()),mergeMap.getOrElse(key,Seq()))
+    }).toMap
+
+    mergingMap.map {
+      case (_,(baseReports,Seq())) if baseReports.size > 0 => baseReports
+      case (_,(Seq(),mergeReports)) if mergeReports.size > 0 => mergeReports
+      // Should not happen
+      case (_,(Seq(),Seq())) => Seq()
+      case (_,(baseReports,mergeReports)) =>
+    }
+  }
 
 
   def aggregateReports() : Unit = {
@@ -231,7 +433,7 @@ class AggregationService(
                * i'm wondering if I should order on the endtime or on the id
                */
               val aggregation = scala.collection.mutable.Map() ++
-              aggregatedReports.groupBy(KeyOfExecution(_)).
+              aggregatedReports.groupBy(ReportKey(_)).
               mapValues(_.sortWith( (x,y) => x.endTime.before(y.endTime)).map((_,false)).toBuffer)
 
               for ((expectedKey, expected) <- linearisedExpectedReports) {
@@ -290,12 +492,12 @@ class AggregationService(
    */
   def aggregate(
       report : Option[LinearisedNodeStatusReport]
-    , agregated : Option[Buffer[(AggregatedReports,Boolean)]]
+    , agregated : Option[Buffer[(AggregatedReport,Boolean)]]
     , executionTime : DateTime
     , isComplete : Boolean
     , applicationDate : DateTime
     , expected : LinearisedExpectedReport
-  ) : Buffer[(AggregatedReports,Boolean)] = {
+  ) : Buffer[(AggregatedReport,Boolean)] = {
     report match {
       case None => // no answers !
         agregated match {
@@ -303,7 +505,7 @@ class AggregationService(
             // nothing before ?
             // do we want to have a different behavior if there is incomplete response, with a massive gap ?
             // TODO : isn't it worth waiting the NoAnswerTime ?
-            val report = AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+            val report = AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                     expected.ruleId.value, expected.serial, expected.serial,
                     expected.component, expected.keyValue, if (isComplete) NoAnswerReportType else ErrorReportType,
                     "", "", applicationDate, executionTime)
@@ -325,7 +527,7 @@ class AggregationService(
                   buffer
                 } else {
                   // so this is an error
-                  addToBuffer(AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+                  addToBuffer(AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                         expected.ruleId.value, expected.serial, expected.serial,
                         expected.component, expected.keyValue, ErrorReportType,
                         "", "", executionTime, executionTime),
@@ -336,7 +538,7 @@ class AggregationService(
                 logger.trace("long is %s to %s".format(previous.endTime, executionTime))
                 // a long time without answer
                 // add a noanswer from last execution
-                 val extension = addToBuffer( AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+                 val extension = addToBuffer( AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                         expected.ruleId.value, expected.serial, expected.serial,
                         expected.component, expected.keyValue, NoAnswerReportType,
                         "", "", previous.endTime, executionTime),
@@ -345,7 +547,7 @@ class AggregationService(
                   if (!isComplete) {
                    // add a no answer from last execution
                     // then add an error
-                    addToBuffer( AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+                    addToBuffer( AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                         expected.ruleId.value, expected.serial, expected.serial,
                         expected.component, expected.keyValue,  ErrorReportType,
                         "", "", executionTime, executionTime),
@@ -369,18 +571,18 @@ class AggregationService(
           case None =>
             // if the executionTime is just after the applicationdate, we say its applied
             if (applicationDate.plus(NoAnswerTime).isAfter(executionTime)) {
-              val report = AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+              val report = AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                   expected.ruleId.value, expected.serial, aReport.serial,
                   aReport.component, aReport.keyValue, aReport.reportType,
                   aReport.message, "", applicationDate, executionTime)
               Buffer((report,true))
             }
             else {
-             val noAnswer = AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+             val noAnswer = AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                   expected.ruleId.value, expected.serial, expected.serial,
                   aReport.component, aReport.keyValue, NoAnswerReportType,
                   "", "", applicationDate, executionTime)
-             val report = AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+             val report = AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                   expected.ruleId.value, expected.serial, aReport.serial,
                   aReport.component, aReport.keyValue, aReport.reportType,
                   aReport.message, "", executionTime, executionTime)
@@ -421,7 +623,7 @@ class AggregationService(
                  * either case, the endTime is now
                  * compare the status if the previous is recent
                  */
-                val report = AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+                val report = AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                     expected.ruleId.value, expected.serial, aReport.serial,
                     aReport.component, aReport.keyValue, aReport.reportType,
                     aReport.message, "", executionTime, executionTime)
@@ -429,12 +631,12 @@ class AggregationService(
               } else {
                 // no answer for more than 10 minutes !
                 val noAnswer =
-                  AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+                  AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                     expected.ruleId.value, expected.serial, expected.serial,
                     aReport.component, aReport.keyValue, NoAnswerReportType,
                     "", "", previous.endTime, executionTime)
                 val report =
-                  AggregatedReports(expected.nodeId.value, expected.directiveId.value,
+                  AggregatedReport(expected.nodeId.value, expected.directiveId.value,
                     expected.ruleId.value, aReport.serial, aReport.serial,
                     aReport.component, aReport.keyValue, aReport.reportType,
                     aReport.message, "", executionTime, executionTime)
@@ -450,14 +652,14 @@ class AggregationService(
    * If it's the same type as earlier, simply extends one
    * If not, close the previous and add the new one
    */
-  def addToBuffer(toAdd : AggregatedReports, buffer :Buffer[(AggregatedReports,Boolean)] ) : Buffer[(AggregatedReports,Boolean)] = {
+  def addToBuffer(toAdd : AggregatedReport, buffer :Buffer[(AggregatedReport,Boolean)] ) : Buffer[(AggregatedReport,Boolean)] = {
     buffer.last match {
-      case (report : AggregatedReports,_) if report.state == toAdd.state =>
+      case (report : AggregatedReport,_) if report.state == toAdd.state =>
         report.endTime = toAdd.endTime
         report.endSerial = toAdd.endSerial
         buffer.update(buffer.size - 1, (report,true))
         buffer
-      case (report : AggregatedReports,_) =>
+      case (report : AggregatedReport,_) =>
         report.endTime = toAdd.startTime
         buffer.update(buffer.size-1, (report,true))
         buffer :+ (toAdd,true)
@@ -543,7 +745,7 @@ case class LinearisedExpectedReport(
 ) extends HashcodeCaching
 
 // this class that identify the entry
-case class KeyOfExecution(
+case class ReportKey(
        ruleId      : RuleId
     ,  directiveId : DirectiveId
     ,  component   : String
@@ -551,19 +753,18 @@ case class KeyOfExecution(
     ,  nodeId      : NodeId
 ) extends HashcodeCaching
 
-object KeyOfExecution {
-  def apply(entry : LinearisedExpectedReport) : KeyOfExecution =
-    KeyOfExecution(entry.ruleId, entry.directiveId, entry.component, entry.keyValue,entry.nodeId)
+object ReportKey {
+  def apply(entry : LinearisedExpectedReport) : ReportKey =
+    ReportKey(entry.ruleId, entry.directiveId, entry.component, entry.keyValue, entry.nodeId)
 
-  def apply(entry : LinearisedNodeStatusReport) : KeyOfExecution =
-    KeyOfExecution(entry.ruleId, entry.directiveId, entry.component, entry.keyValue,entry.nodeId)
+  def apply(entry : LinearisedNodeStatusReport) : ReportKey =
+    ReportKey(entry.ruleId, entry.directiveId, entry.component, entry.keyValue, entry.nodeId)
 
-  def apply(entry : Reports) : KeyOfExecution =
-    KeyOfExecution(entry.ruleId, entry.directiveId, entry.component, entry.keyValue,entry.nodeId)
+  def apply(entry : Reports) : ReportKey =
+    ReportKey(entry.ruleId, entry.directiveId, entry.component, entry.keyValue, entry.nodeId)
 
-  def apply(entry : AggregatedReports) : KeyOfExecution =
-    KeyOfExecution(
-        RuleId(entry.ruleId),
-        DirectiveId(entry.directiveId), entry.component, entry.keyValue,NodeId(entry.nodeId))
+  def apply(entry : AggregatedReport) : ReportKey =
+    ReportKey(
+        RuleId(entry.ruleId),        DirectiveId(entry.directiveId), entry.component, entry.keyValue, NodeId(entry.nodeId))
 
 }

@@ -60,7 +60,7 @@ class AggregatedReportsJdbcRepository(
   //val session = sessionProvider.getSession()
   //session.bindToCurrentThread
 
-  def getAggregatedReports(ruleId : RuleId, serial:Int, nodeId: NodeId) : Box[Seq[AggregatedReports]] = {
+  def getAggregatedReports(ruleId : RuleId, serial:Int, nodeId: NodeId) : Box[Seq[AggregatedReport]] = {
     logger.debug("trying to get advanced reports for node %s on rule %s with serial %d".format(nodeId.value,ruleId.value,serial))
     try {sessionProvider.ourTransaction {
       val q = from(Reportings.reports)(entry =>
@@ -71,7 +71,7 @@ class AggregatedReportsJdbcRepository(
         select(entry)
       )
       // trick : I really don't want to send a stream, but rather consume the resultset (i need to traverse it several time)
-      Full(Seq[AggregatedReports]() ++ q)
+      Full(Seq[AggregatedReport]() ++ q)
     }
     } catch {
       case e:Exception  => logger.error("error while fetching advanced reports %s".format(e))
@@ -82,7 +82,7 @@ class AggregatedReportsJdbcRepository(
   /**
    * Get the last aggregated report for a given Node/CR
    */
-  def getLatestAggregatedReports(ruleId : RuleId, nodeId: NodeId) : Box[Seq[AggregatedReports]] = {
+  def getLatestAggregatedReports(ruleId : RuleId, nodeId: NodeId) : Box[Seq[AggregatedReport]] = {
     try { sessionProvider.ourTransaction {
       val result = from(Reportings.reports)(result =>
         where(result.ruleId === ruleId.value
@@ -99,7 +99,7 @@ class AggregatedReportsJdbcRepository(
          select(result)
       )
       // trick : I really don't want to send a stream, but rather consume the resultset (i need to traverse it several time)
-      Full(Seq[AggregatedReports]() ++ result)
+      Full(Seq[AggregatedReport]() ++ result)
     }
     } catch {
       case e:Exception  => logger.error("error while fetching advanced reports %s".format(e))
@@ -108,14 +108,14 @@ class AggregatedReportsJdbcRepository(
   }
 
 
-  def createAggregatedReports(reports : Seq[AggregatedReports]) : Seq[AggregatedReports] = {
+  def createAggregatedReports(reports : Seq[AggregatedReport]) : Seq[AggregatedReport] = {
     sessionProvider.ourTransaction {
         reports.map(report => Reportings.reports.insert(report) )
 
     }
   }
 
-  def updateAggregatedReports(reports : Seq[AggregatedReports]) : Seq[Int] = {
+  def updateAggregatedReports(reports : Seq[AggregatedReport]) : Seq[Int] = {
     sessionProvider.ourTransaction {
         reports.map(report => update(Reportings.reports)(entry =>
                 where (entry.id === report.id)
@@ -135,7 +135,7 @@ class AggregatedReportsJdbcRepository(
    * create them if they don't exist
    * update them otherwise
    */
-  def saveAggregatedReports(reports : Seq[AggregatedReports]) : Unit = {
+  def saveAggregatedReports(reports : Seq[AggregatedReport]) : Unit = {
     sessionProvider.ourTransaction {
         val updated = updateAggregatedReports(reports.filter(x => x.id != 0))
         val created = createAggregatedReports(reports.filter(x => x.id == 0))
@@ -149,7 +149,7 @@ class AggregatedReportsJdbcRepository(
       ruleId               : RuleId
     , beginDate            : DateTime
     , endDate              : DateTime
-  ) : Box[Seq[AggregatedReports]] = {
+  ) : Box[Seq[AggregatedReport]] = {
 
     if(beginDate.getMillis >= endDate.getMillis) Full(Seq())
     else {
@@ -170,7 +170,7 @@ class AggregatedReportsJdbcRepository(
 
 
           // trick : I really don't want to send a stream, but rather consume the resultset (i need to traverse it several time)
-          (Seq[AggregatedReports]() ++ q).map { x =>
+          (Seq[AggregatedReport]() ++ q).map { x =>
                 if (x.startTime.getTime() < start.getTime()) x.copy(startTime = start) else x
              }.map { x =>
                 if ((x.endTime == null) || (x.endTime.getTime() > end.getTime())) x.copy(endTime = end) else x
@@ -185,7 +185,7 @@ class AggregatedReportsJdbcRepository(
       nodeId      : NodeId
     , beginDate   : DateTime
     , endDate     : DateTime
-  ) : Box[Seq[AggregatedReports]] = {
+  ) : Box[Seq[AggregatedReport]] = {
 
     if(beginDate.getMillis >= endDate.getMillis) Full(Seq())
     else {
@@ -206,7 +206,7 @@ class AggregatedReportsJdbcRepository(
           select(entry)
         )
         // trick : I really don't want to send a stream, but rather consume the resultset (i need to traverse it several time)
-        (Seq[AggregatedReports]() ++ q).map { x =>
+        (Seq[AggregatedReport]() ++ q).map { x =>
                 if (x.startTime.getTime() < start.getTime()) x.copy(startTime = start) else x
            }.map { x =>
               if ((x.endTime == null) || (x.endTime.getTime() > end.getTime())) x.copy(endTime = end) else x
@@ -222,7 +222,7 @@ class AggregatedReportsJdbcRepository(
    */
   def isNotAppliedOnlyToThisGroup(
       ruleId    : RuleId
-    , reports   : Seq[AggregatedReports]
+    , reports   : Seq[AggregatedReport]
     , beginDate : DateTime
     , endDate   : DateTime
   ) : Box[Boolean] = {
@@ -254,7 +254,7 @@ class AggregatedReportsJdbcRepository(
 
 
 object Reportings extends Schema {
-  val reports = table[AggregatedReports]("advancedreports")
+  val reports = table[AggregatedReport]("advancedreports")
 
     on(reports)(t => declare(
       t.id.is(autoIncremented("advancedreportsid"), primaryKey)

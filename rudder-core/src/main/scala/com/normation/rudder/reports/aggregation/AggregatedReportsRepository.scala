@@ -49,7 +49,7 @@ trait AggregatedReportsRepository {
       	ruleId : RuleId
       , serial : Int
       , nodeId : NodeId
-  ) : Box[Seq[AggregatedReports]]
+  ) : Box[Seq[AggregatedReport]]
 
   /**
    * Get the last aggregated report for a given Node/Rule
@@ -57,18 +57,18 @@ trait AggregatedReportsRepository {
   def getLatestAggregatedReports(
       ruleId : RuleId
     , nodeId : NodeId
-  ) : Box[Seq[AggregatedReports]]
+  ) : Box[Seq[AggregatedReport]]
 
   /**
    * Save the reports :
    * create them if they don't exist
    * update them otherwise
    */
-  def saveAggregatedReports(reports : Seq[AggregatedReports]) : Unit
+  def saveAggregatedReports(reports : Seq[AggregatedReport]) : Unit
 
-  def updateAggregatedReports(reports : Seq[AggregatedReports]) : Seq[Int]
+  def updateAggregatedReports(reports : Seq[AggregatedReport]) : Seq[Int]
 
-  def createAggregatedReports(reports : Seq[AggregatedReports]) : Seq[AggregatedReports]
+  def createAggregatedReports(reports : Seq[AggregatedReport]) : Seq[AggregatedReport]
 
    /**
     *  Retrieve all the reports for a Rule between two dates
@@ -85,7 +85,7 @@ trait AggregatedReportsRepository {
       ruleId    : RuleId
     , beginDate : DateTime
     , endDate   : DateTime
-  ) : Box[Seq[AggregatedReports]]
+  ) : Box[Seq[AggregatedReport]]
 
   /**
    * Retrieve all reports for a Node between to date
@@ -99,7 +99,7 @@ trait AggregatedReportsRepository {
       nodeId    : NodeId
     , beginDate : DateTime
     , endDate   : DateTime
-  ) : Box[Seq[AggregatedReports]]
+  ) : Box[Seq[AggregatedReport]]
 
 
   /**
@@ -108,7 +108,7 @@ trait AggregatedReportsRepository {
    */
   def isNotAppliedOnlyToThisGroup(
       ruleId    : RuleId
-    , reports   : Seq[AggregatedReports]
+    , reports   : Seq[AggregatedReport]
     , beginDate : DateTime
     , endDate   : DateTime
   ) : Box[Boolean]

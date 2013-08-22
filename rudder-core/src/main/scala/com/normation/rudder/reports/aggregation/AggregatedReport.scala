@@ -46,6 +46,9 @@ import org.squeryl.customtypes.StringField
 import com.normation.rudder.domain.reports.bean._
 import com.normation.rudder.domain.reports.bean.Reports._
 import AggregationConstants._
+import org.joda.time.DateTime
+import org.squeryl.customtypes.TimestampField
+import org.joda.time.Interval
 
 
 /**
@@ -91,33 +94,34 @@ object DBReportType {
   implicit def StringToDbReportType (status:String) : DBReportType = DBReportType(status)
 }
 
-
-case class AggregatedReports (
+case class AggregatedReport (
     @Column("nodeid") nodeId: String
   , @Column("directiveid") directiveId: String
   , @Column("ruleid") ruleId: String
   , @Column("beginserial") beginSerial: Int
-  , @Column("endserial") var endSerial: Int
+  , @Column("endserial") endSerial: Int
   , @Column("component") component: String
   , @Column("keyvalue") keyValue: String
   , state: DBReportType
   , @Column("message") message: String
-  , @Column("userdefinedmessage") userDefinedMessage: String
   , @Column("starttime") startTime: Timestamp
-  , @Column("endtime") var endTime: Timestamp // only the endtime is mutable
+  , @Column("endtime") endTime: Timestamp // only the endtime is mutable
   , @Column("received") received : Int
   , @Column("expected") expected : Int
 ) extends KeyedEntity[Long] {
   @Column("id")
   val id = 0L
+
+  val startDate : DateTime = new DateTime(startTime)
+  val endDate   : DateTime = new DateTime(endTime)
+  val interval  : Interval = new Interval(startDate,endDate)
 }
 
-object AggregatedReports {
+object AggregatedReport {
 
-
-  def apply (report : Reports, reportType : ReportType, received:Int, expected:Int) : AggregatedReports = {
+  def apply (report : Reports, reportType : ReportType, received:Int, expected:Int) : AggregatedReport = {
     val timestamp = toTimeStamp(report.executionTimestamp)
-    AggregatedReports(
+    AggregatedReport(
         report.nodeId.value
       , report.directiveId.value
       , report.ruleId.value
@@ -127,7 +131,6 @@ object AggregatedReports {
       , report.keyValue
       , reportType
       , report.message
-      , ""
       , timestamp
       , timestamp
       , received

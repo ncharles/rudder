@@ -35,6 +35,10 @@
 
 package com.normation.rudder.domain.reports.bean
 
+
+import com.normation.rudder.domain.reports.bean._
+
+
 /**
  * List of all type of report we are expecting, as a result
  * So far :
@@ -47,7 +51,7 @@ package com.normation.rudder.domain.reports.bean
 
 
 trait ReportType {
-  
+
   val severity :String
 
 }
@@ -92,7 +96,16 @@ object ReportType {
   def getSeverityFromStatus(status : ReportType) : String = {
       status.severity
   }
-  
+
+  def apply(report : Reports) : ReportType = {
+    report match {
+      case _ : ResultSuccessReport  => SuccessReportType
+      case _ : ResultErrorReport    => ErrorReportType
+      case _ : ResultRepairedReport => RepairedReportType
+      case _                        => UnknownReportType
+    }
+  }
+
   def apply(status : String):ReportType = { status match {
     case "Success" => SuccessReportType
     case "Repaired" => RepairedReportType
@@ -102,6 +115,6 @@ object ReportType {
     case _ => UnknownReportType
   }
   }
-  
+
   implicit def reportTypeSeverity(reportType:ReportType):String = ReportType.getSeverityFromStatus(reportType)
 }
