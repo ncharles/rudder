@@ -302,6 +302,7 @@ class AggregationService(
     }
 
   } else {
+    // ATTENTION NE PAS MERGE/SPLIT SI le rapport est empty
     val (conflictingReports, noConfflictReports) = base.partition(baseReport => baseReport.interval == report.interval || baseReport.interval.overlaps(report.interval) || report.interval.overlaps(baseReport.interval)  )
     val conflicted = conflictingReports.map(resolveconflictingReport(_, report))
     val finalnoCOnficlts =
