@@ -41,6 +41,6 @@ trait AggregationStatusRepository {
 
   def getAggregationStatus : Box[Option[(Int,DateTime)]]
 
-  def setAggregationStatus (newId : Int) : Box[UpdateEntry]
+  def setAggregationStatus (newId : Int, reportsDate : DateTime) : Box[UpdateEntry]
 
 }

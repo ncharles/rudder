@@ -274,3 +274,32 @@ CREATE TABLE Workflow(
   id integer references ChangeRequest(id)
 , state text
 );
+
+create sequence AggregatedReportsId START 101;
+
+CREATE TABLE AggregatedReports (
+id integer PRIMARY KEY default nextval('AggregatedReportsId'),
+nodeId text NOT NULL CHECK (nodeId <> ''),
+directiveId text NOT NULL CHECK (directiveId <> ''),
+ruleId text NOT NULL CHECK (ruleId <> ''),
+beginSerial integer NOT NULL,
+endSerial integer NOT NULL,
+component text NOT NULL CHECK (component <> ''),
+keyValue text,
+startTime timestamp with time zone NOT NULL,
+endTime timestamp with time zone NOT NULL,
+state varchar(64),
+message text,
+received integer NOT NULL,
+expected integer NOT NULL
+);
+
+create index nodesid_adv_idx on AdvancedReports (nodeId);
+create index ruleid_adv_idx on AdvancedReports (ruleId);
+create index endtime_adv_idx on AdvancedReports (endTime);
+
+create table AggregationStatus (
+key text PRIMARY KEY,
+lastId integer NOT NULL,
+date timestamp with time zone NOT NULL
+);

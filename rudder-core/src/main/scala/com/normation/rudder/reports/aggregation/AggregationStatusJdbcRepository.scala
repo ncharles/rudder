@@ -66,13 +66,13 @@ class AggregationStatusJdbcRepository (
           case Nil => Full(None)
           case head :: Nil => Full(Some((head.lastId,new DateTime(head.date))))
           case _ =>
-            val msg = s"Too many entry matching ${key} in table aggregationStatus"
+            val msg = s"Too many entry matching ${key} in table aggregationStatus "
             logger.error(msg)
             Failure(msg)
         }
       }
     } catch {
-     case e:Exception => Failure(s"Error while fetching ${key} in table aggregationStatus")
+     case e:Exception => Failure(s"Error while fetching ${key} in table aggregationStatus :$e")
     }
 
   }
@@ -89,6 +89,7 @@ class AggregationStatusJdbcRepository (
         	where(entry.key === key)
         	set(entry.lastId := reportId, entry.date := timeStamp))
         val entry = new UpdateEntry(key, reportId, timeStamp)
+        logger.info(q.toString)
         if (q ==0) // could not update
           Full(AggregationStatusTable.aggregationStatus.insert(entry))
         else {
@@ -96,7 +97,7 @@ class AggregationStatusJdbcRepository (
         }
       }
     } catch {
-     case e:Exception => Failure(s"Error while setting ${key} in table aggregationStatus")
+     case e:Exception => Failure(s"Error while setting ${key} in table aggregationStatus cause is: $e")
     }
   }
 
@@ -104,12 +105,12 @@ class AggregationStatusJdbcRepository (
 
 case class UpdateEntry(
     @Column("key")    key    : String,
-    @Column("lastId") lastId : Int,
+    @Column("lastid") lastId : Int,
     @Column("date")   date   : Timestamp
 ) extends KeyedEntity[String]  {
 	def id = key
 }
 
 object AggregationStatusTable extends Schema {
-  val aggregationStatus = table[UpdateEntry]("aggregationStatus")
+  val aggregationStatus = table[UpdateEntry]("aggregationstatus")
 }

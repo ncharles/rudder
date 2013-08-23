@@ -115,6 +115,13 @@ class AggregatedReportsJdbcRepository(
     }
   }
 
+  def deleteAggregatedReports(reports : Seq[AggregatedReport]) : Seq[Int] = {
+    val toDelete = reports.filter(_.id != 0)
+    sessionProvider.ourTransaction {
+        toDelete.map(report => Reportings.reports.deleteWhere(line => line.id === report.id) )
+
+    }
+  }
   def updateAggregatedReports(reports : Seq[AggregatedReport]) : Seq[Int] = {
     sessionProvider.ourTransaction {
         reports.map(report => update(Reportings.reports)(entry =>
@@ -122,6 +129,9 @@ class AggregatedReportsJdbcRepository(
                 set(
                     entry.endTime 	:= report.endTime
                 	, entry.endSerial := report.endSerial
+                	, entry.state.value := report.state.value
+                	, entry.received := report.received
+                	, entry.expected := report.expected
                 )
               )
 
@@ -254,10 +264,10 @@ class AggregatedReportsJdbcRepository(
 
 
 object Reportings extends Schema {
-  val reports = table[AggregatedReport]("advancedreports")
+  val reports = table[AggregatedReport]("aggregatedreports")
 
     on(reports)(t => declare(
-      t.id.is(autoIncremented("advancedreportsid"), primaryKey)
+      t.id.is(autoIncremented("aggregatedreportsid"), primaryKey)
       )
       )
 }

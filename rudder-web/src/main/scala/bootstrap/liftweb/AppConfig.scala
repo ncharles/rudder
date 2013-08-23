@@ -1373,7 +1373,7 @@ object RudderConfig extends Loggable {
     new AggregatedReportsJdbcRepository(squerylDatasourceProvider, systemRules)
   }
 
-  val updatesEntryJdbcRepository = new UpdatesEntriesJdbcRepository(squerylDatasourceProvider)
+  val updatesEntryJdbcRepository = new AggregationStatusJdbcRepository(squerylDatasourceProvider)
 
   val aggregationService = {
     val delay = if (RUDDER_REPORT_AGGREGATION_DELAY >= 0) {

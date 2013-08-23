@@ -18,7 +18,7 @@ class AggregateReports(
 ) extends AbstractScheduler {
 
   override type T = Unit
-  override val executeTask: () => Box[Unit]  = () => tryo{aggregationService.aggregateReports}
+  override val executeTask: () => Box[Unit]  = () => tryo{aggregationService.newAggregation}
   override lazy val displayName : String = "Aggregate Report"
   override lazy val propertyName : String = "rudder.aggregateReport.updateInterval"
 

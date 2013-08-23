@@ -112,4 +112,6 @@ trait AggregatedReportsRepository {
     , beginDate : DateTime
     , endDate   : DateTime
   ) : Box[Boolean]
+
+    def deleteAggregatedReports(reports : Seq[AggregatedReport]) : Seq[Int]
 }
