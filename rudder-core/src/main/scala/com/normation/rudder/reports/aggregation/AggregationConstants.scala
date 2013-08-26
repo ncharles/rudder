@@ -21,5 +21,5 @@ object AggregationConstants {
   val DATETIME_FORMAT = "yyyy-MM-dd"
   val DATETIME_PARSER = DateTimeFormat.forPattern(DATETIME_FORMAT)
 
-  def toTimeStamp(d:DateTime) : Timestamp = new Timestamp(d.getMillis)
+  implicit def toTimeStamp(d:DateTime) : Timestamp = new Timestamp(d.getMillis)
 }

@@ -271,3 +271,22 @@ object Reportings extends Schema {
       )
       )
 }
+
+case class AggregatedSquerylReport (
+    @Column("nodeid")      nodeId      : String
+  , @Column("directiveid") directiveId : String
+  , @Column("ruleid")      ruleId      : String
+  , @Column("beginserial") beginSerial : Int
+  , @Column("endserial")   endSerial   : Int
+  , @Column("component")   component   : String
+  , @Column("keyvalue")    keyValue    : String
+  , @Column("state")       state       : String
+  , @Column("message")     message     : String
+  , @Column("starttime")   startTime   : Timestamp
+  , @Column("endtime")     endTime     : Timestamp
+  , @Column("received")    received    : Int
+  , @Column("expected")    expected    : Int
+) extends KeyedEntity[Long] {
+  @Column("id")
+  val id = 0L
+}

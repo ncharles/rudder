@@ -112,6 +112,12 @@ case class AggregatedReport (
   @Column("id")
   val id = 0L
 
+/*  override def equals (that: Any) = { that match {
+    case aggregated:AggregatedReport => true
+    case _ => false
+  } }*/
+  override def hashCode = 0
+
   val startDate : DateTime = new DateTime(startTime)
   val endDate   : DateTime = new DateTime(endTime)
   val interval  : Interval = new Interval(startDate,endDate)
