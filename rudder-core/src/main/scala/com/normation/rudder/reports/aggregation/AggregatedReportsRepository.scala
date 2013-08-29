@@ -68,7 +68,7 @@ trait AggregatedReportsRepository {
 
   def updateAggregatedReports(reports : Seq[AggregatedReport]) : Seq[Int]
 
-  def createAggregatedReports(reports : Seq[AggregatedReport]) : Seq[AggregatedReport]
+  def createAggregatedReports(reports : Seq[AggregatedReport]) : Box[Seq[AggregatedReport]]
 
    /**
     *  Retrieve all the reports for a Rule between two dates

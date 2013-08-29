@@ -30,11 +30,11 @@ class AggregationTest extends Specification {
   }
 
   val baseReport : AggregatedReport = AggregatedReport (
-    "one"
-  , "policy"
-  , "cr"
+    NodeId("one")
+  , RuleId("cr")
   , 12
   , 12
+  , DirectiveId("policy")
   , "component"
   , "value"
   , SuccessReportType
@@ -43,14 +43,15 @@ class AggregationTest extends Specification {
   , now.plusMinutes(10)
   , 0
   , 1
+  , 42
 )
 
   val begining : AggregatedReport = AggregatedReport (
-    "one"
-  , "policy"
-  , "cr"
+    NodeId("one")
+  , RuleId("cr")
   , 12
   , 12
+  , DirectiveId("policy")
   , "component"
   , "value"
   , SuccessReportType
@@ -59,16 +60,17 @@ class AggregationTest extends Specification {
   , now
   , 0
   , 1
+  , 42
 )
 
   val dummyAgregation = new AggregationService(null, null, null, null, null,0,0)
 
   val ending : AggregatedReport = AggregatedReport (
-    "one"
-  , "policy"
-  , "cr"
+    NodeId("one")
+  , RuleId("cr")
   , 12
   , 12
+  , DirectiveId("policy")
   , "component"
   , "value"
   , SuccessReportType
@@ -77,6 +79,7 @@ class AggregationTest extends Specification {
   , now.plusMinutes(10)
   , 0
   , 1
+  , 0
  )
 
 
@@ -85,13 +88,13 @@ class AggregationTest extends Specification {
     val (begin,reports,end) = dummyAgregation.resolveconflictingReport(baseReport, reportToAdd)
     "be a success when we have a success" in {
 
-      begin.map(AggregatedReportDummy(_)) === Some(AggregatedReportDummy(begining))
+      begin === Some(begining)
     }
 
   }
 
 }
-
+/*
 case class AggregatedReportDummy (
     nodeId: String,
     policyInstanceId: String,
@@ -145,4 +148,4 @@ object AggregatedReportDummy {
         a.expected
     )
   }
-}
+}*/

@@ -34,114 +34,100 @@
 
 package com.normation.rudder.reports.aggregation
 
-import org.squeryl.KeyedEntity
-import org.squeryl.PrimitiveTypeMode._
-import org.squeryl.Schema
-import org.squeryl.annotations.Column
-import java.sql.Timestamp
-import org.squeryl.customtypes.CustomType
-import com.normation.rudder.domain.reports.bean.ReportType._
 import com.normation.rudder.domain.reports.bean.ReportType
-import org.squeryl.customtypes.StringField
 import com.normation.rudder.domain.reports.bean._
 import com.normation.rudder.domain.reports.bean.Reports._
 import AggregationConstants._
 import org.joda.time.DateTime
 import org.squeryl.customtypes.TimestampField
 import org.joda.time.Interval
+import com.normation.inventory.domain.NodeId
+import com.normation.rudder.domain.policies.DirectiveId
+import com.normation.rudder.domain.policies.RuleId
+import net.liftweb.common.Loggable
 
 
-/**
- * An example of trait that can be mixed into CustomType,
- * to add meta data and validation
- */
-trait Domain[A] {
-  self: CustomType[A] =>
-
-  def label: String
-  def validate(a: A): Unit
-  def value: A
-
-  validate(value)
-}
-
-case class DBReportType(reportType:ReportType) extends StringField(ReportType.getSeverityFromStatus(reportType)) with Domain[String]{
-      override def equals(obj: Any) = obj match {
-        case DBReportType(report) => reportType eq report
-        case report:ReportType => reportType eq report
-        case _ => false
-    }
-
-   def this(status:String) = this(status match {
-    // Use reports kind,
-    case ERRORKEY => ErrorReportType
-    case NOANSWERKEY => NoAnswerReportType
-    case RESULT_SUCCESS => SuccessReportType
-    case RESULT_REPAIRED => RepairedReportType
-    case _ => ReportType(status)
-  })
-
-   val label = "state"
-   def validate(s:String):Unit = {}
-}
-
-object DBReportType {
-
-  def apply(status:String) = new DBReportType(status)
-  implicit def reportTypeToDbReportType (reportType:ReportType) : DBReportType = DBReportType(reportType)
-  implicit def dbreportTypeToReportType (reportType:DBReportType) : ReportType = reportType.reportType
-
-  implicit def StringToDbReportType (status:String) : DBReportType = DBReportType(status)
-}
 
 case class AggregatedReport (
-    @Column("nodeid") nodeId: String
-  , @Column("directiveid") directiveId: String
-  , @Column("ruleid") ruleId: String
-  , @Column("beginserial") beginSerial: Int
-  , @Column("endserial") endSerial: Int
-  , @Column("component") component: String
-  , @Column("keyvalue") keyValue: String
-  , state: DBReportType
-  , @Column("message") message: String
-  , @Column("starttime") startTime: Timestamp
-  , @Column("endtime") endTime: Timestamp // only the endtime is mutable
-  , @Column("received") received : Int
-  , @Column("expected") expected : Int
-) extends KeyedEntity[Long] {
-  @Column("id")
-  val id = 0L
+    nodeId      : NodeId
+  , ruleId      : RuleId
+  , beginSerial : Int
+  , endSerial   : Int
+  , directiveId : DirectiveId
+  , component   : String
+  , keyValue    : String
+  , state       : ReportType
+  , message     : String
+  , startDate   : DateTime
+  , endDate     : DateTime
+  , received    : Int
+  , expected    : Int
+  , id          : Long
+) extends Loggable {
+  val interval  : Interval = {
+    if (startDate .isAfter( endDate))
+      logger.error(s"$startDate is over $endDate")
 
-/*  override def equals (that: Any) = { that match {
-    case aggregated:AggregatedReport => true
-    case _ => false
-  } }*/
-  override def hashCode = 0
+    new Interval(startDate,endDate plus(1))
+  }
 
-  val startDate : DateTime = new DateTime(startTime)
-  val endDate   : DateTime = new DateTime(endTime)
-  val interval  : Interval = new Interval(startDate,endDate)
+  def toSquerylEntity : AggregatedSquerylReport = {
+    AggregatedSquerylReport(
+        nodeId.value
+      , ruleId.value
+      , beginSerial
+      , endSerial
+      , directiveId.value
+      , component
+      , keyValue
+      , state.severity
+      , message
+      , toTimeStamp(startDate)
+      , toTimeStamp(endDate)
+      , received
+      , expected
+      , id
+    )
+  }
 }
 
 object AggregatedReport {
 
   def apply (report : Reports, reportType : ReportType, received:Int, expected:Int) : AggregatedReport = {
-    val timestamp = toTimeStamp(report.executionTimestamp)
     AggregatedReport(
-        report.nodeId.value
-      , report.directiveId.value
-      , report.ruleId.value
+        report.nodeId
+      , report.ruleId
       , report.serial
       , report.serial
+      , report.directiveId
       , report.component
       , report.keyValue
       , reportType
       , report.message
-      , timestamp
-      , timestamp
+      , report.executionTimestamp
+      , report.executionTimestamp
       , received
       , expected
+      , 0
+    )
+  }
 
+    def apply (report : AggregatedSquerylReport) : AggregatedReport = {
+    AggregatedReport(
+        NodeId(report.nodeId)
+      , RuleId(report.ruleId)
+      , report.beginSerial
+      , report.endSerial
+      , DirectiveId(report.directiveId)
+      , report.component
+      , report.keyValue
+      , ReportType(report.state)
+      , report.message
+      , new DateTime(report.startTime)
+      , new DateTime(report.endTime)
+      , report.received
+      , report.expected
+      , report.id
     )
   }
 }

@@ -61,7 +61,7 @@ class AggregatedReportsJdbcRepository(
   //session.bindToCurrentThread
 
   def getAggregatedReports(ruleId : RuleId, serial:Int, nodeId: NodeId) : Box[Seq[AggregatedReport]] = {
-    logger.debug("trying to get advanced reports for node %s on rule %s with serial %d".format(nodeId.value,ruleId.value,serial))
+    logger.debug("trying to get aggregated reports for node %s on rule %s with serial %d".format(nodeId.value,ruleId.value,serial))
     try {sessionProvider.ourTransaction {
       val q = from(Reportings.reports)(entry =>
         where(entry.ruleId === ruleId.value
@@ -69,13 +69,13 @@ class AggregatedReportsJdbcRepository(
           and (entry.endSerial gte serial)
           and entry.nodeId === nodeId.value)
         select(entry)
-      )
+      ).map(AggregatedReport(_))
       // trick : I really don't want to send a stream, but rather consume the resultset (i need to traverse it several time)
       Full(Seq[AggregatedReport]() ++ q)
     }
     } catch {
-      case e:Exception  => logger.error("error while fetching advanced reports %s".format(e))
-          Failure("error while fetching advanced reports %s".format(e))
+      case e:Exception  => logger.error("error while fetching aggregated reports %s".format(e))
+          Failure("error while fetching aggregated reports %s".format(e))
     }
   }
 
@@ -97,21 +97,26 @@ class AggregatedReportsJdbcRepository(
             )
          )
          select(result)
-      )
+      ).map(AggregatedReport(_))
       // trick : I really don't want to send a stream, but rather consume the resultset (i need to traverse it several time)
       Full(Seq[AggregatedReport]() ++ result)
     }
     } catch {
-      case e:Exception  => logger.error("error while fetching advanced reports %s".format(e))
-          Failure("error while fetching advanced reports %s".format(e))
+      case e:Exception  => logger.error("error while fetching aggregated reports %s".format(e))
+          Failure("error while fetching aggregated reports %s".format(e))
     }
   }
 
 
-  def createAggregatedReports(reports : Seq[AggregatedReport]) : Seq[AggregatedReport] = {
-    sessionProvider.ourTransaction {
-        reports.map(report => Reportings.reports.insert(report) )
-
+  def createAggregatedReports(reports : Seq[AggregatedReport]) : Box[Seq[AggregatedReport]] = {
+    val squerylReports = reports.map(_.toSquerylEntity)
+    try {
+      val res = sessionProvider.ourTransaction {
+        squerylReports.map(report => Reportings.reports.insert(report) )
+      }.map(AggregatedReport(_))
+      Full(res)
+    } catch {
+      case e:Exception => Failure("could not create aggregated reports")
     }
   }
 
@@ -123,20 +128,20 @@ class AggregatedReportsJdbcRepository(
     }
   }
   def updateAggregatedReports(reports : Seq[AggregatedReport]) : Seq[Int] = {
+    val squerylReports = reports.map(_.toSquerylEntity)
     sessionProvider.ourTransaction {
-        reports.map(report => update(Reportings.reports)(entry =>
-                where (entry.id === report.id)
-                set(
-                    entry.endTime 	:= report.endTime
-                	, entry.endSerial := report.endSerial
-                	, entry.state.value := report.state.value
-                	, entry.received := report.received
-                	, entry.expected := report.expected
-                )
-              )
-
-            )
-
+      squerylReports.map( report =>
+        update(Reportings.reports)( entry =>
+          where (entry.id === report.id)
+          set(
+              entry.endTime   := report.endTime
+            , entry.endSerial := report.endSerial
+            , entry.state     := report.state
+            , entry.received  := report.received
+            , entry.expected  := report.expected
+          )
+        )
+      )
     }
   }
 
@@ -176,16 +181,9 @@ class AggregatedReportsJdbcRepository(
               entry.endTime > start
           )
           select(entry)
-        )
+        ).map(AggregatedReport(_))
 
-
-          // trick : I really don't want to send a stream, but rather consume the resultset (i need to traverse it several time)
-          (Seq[AggregatedReport]() ++ q).map { x =>
-                if (x.startTime.getTime() < start.getTime()) x.copy(startTime = start) else x
-             }.map { x =>
-                if ((x.endTime == null) || (x.endTime.getTime() > end.getTime())) x.copy(endTime = end) else x
-             }
-
+        (Seq[AggregatedReport]() ++ q)
       } ) ?~! "Error when trying to get report information for configuration rule '%s' from date '%s' to date '%s'".format(ruleId, beginDate, endDate)
     }
   }
@@ -214,13 +212,8 @@ class AggregatedReportsJdbcRepository(
               entry.ruleId.notIn(systemRules.map(x => x.value))
           )
           select(entry)
-        )
-        // trick : I really don't want to send a stream, but rather consume the resultset (i need to traverse it several time)
-        (Seq[AggregatedReport]() ++ q).map { x =>
-                if (x.startTime.getTime() < start.getTime()) x.copy(startTime = start) else x
-           }.map { x =>
-              if ((x.endTime == null) || (x.endTime.getTime() > end.getTime())) x.copy(endTime = end) else x
-           }
+        ).map(AggregatedReport(_))
+        (Seq[AggregatedReport]() ++ q)
 
       } ) ?~! "Error when trying to get report information for node '%s' from date '%s' to date '%s'".format(nodeId, beginDate, endDate)
     }
@@ -264,7 +257,7 @@ class AggregatedReportsJdbcRepository(
 
 
 object Reportings extends Schema {
-  val reports = table[AggregatedReport]("aggregatedreports")
+  val reports = table[AggregatedSquerylReport]("aggregatedreports")
 
     on(reports)(t => declare(
       t.id.is(autoIncremented("aggregatedreportsid"), primaryKey)
@@ -274,10 +267,10 @@ object Reportings extends Schema {
 
 case class AggregatedSquerylReport (
     @Column("nodeid")      nodeId      : String
-  , @Column("directiveid") directiveId : String
   , @Column("ruleid")      ruleId      : String
   , @Column("beginserial") beginSerial : Int
   , @Column("endserial")   endSerial   : Int
+  , @Column("directiveid") directiveId : String
   , @Column("component")   component   : String
   , @Column("keyvalue")    keyValue    : String
   , @Column("state")       state       : String
@@ -286,7 +279,6 @@ case class AggregatedSquerylReport (
   , @Column("endtime")     endTime     : Timestamp
   , @Column("received")    received    : Int
   , @Column("expected")    expected    : Int
+  , @Column("id")          id          : Long = 0L
 ) extends KeyedEntity[Long] {
-  @Column("id")
-  val id = 0L
 }
