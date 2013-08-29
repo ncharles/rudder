@@ -24,10 +24,21 @@ class AggregationTest extends Specification {
   private implicit def str2nodeId(s:String) = NodeId(s)
 
   val now = DateTime.now()
-  val reportToAdd : AggregatedReport = {
-    val baseReport = new ResultSuccessReport(now, "cr", "policy", "one", 12, "component", "value",now, "message")
-    AggregatedReport(baseReport,SuccessReportType,1,1)
-  }
+
+  val report: Reports  = ResultSuccessReport(now, "cr", "policy", "one", 12, "component", "value",now, "message")
+
+  val expectedReport = LinearisedExpectedReport(
+    NodeId("one")       : NodeId
+  , DirectiveId("policy")  : DirectiveId
+  , RuleId("cr")       : RuleId
+  , 12       : Int
+  , "component"    : String
+  , 1  : Int
+  , "value"     : String
+  , now minusMinutes(10)    : DateTime
+  , now plusMinutes(10)      : DateTime
+)
+  val reportToAdd : AggregatedReport = AggregatedReport(report,SuccessReportType,1,1)
 
   val baseReport : AggregatedReport = AggregatedReport (
     NodeId("one")
@@ -85,12 +96,17 @@ class AggregationTest extends Specification {
 
   "Aggregation" should {
 
-    val (begin,reports,end) = dummyAgregation.resolveconflictingReport(baseReport, reportToAdd)
-    "be a success when we have a success" in {
+    val (begin,reports,end) = dummyAgregation.splitConflict(baseReport, reportToAdd)
+    "have a beginning" in {
 
       begin === Some(begining)
     }
 
+  }
+
+  "Reports" should {
+    val result = dummyAgregation.createAggregatedReportsFromReports(Seq(report), Seq(expectedReport))
+    result.head === reportToAdd
   }
 
 }
