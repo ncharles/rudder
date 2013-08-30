@@ -40,7 +40,8 @@ class AggregationTest extends Specification {
 )
   val reportToAdd : AggregatedReport = AggregatedReport(report,SuccessReportType,1,1)
 
-  val baseReport : AggregatedReport = AggregatedReport (
+
+    val baseReport : AggregatedReport = AggregatedReport (
     NodeId("one")
   , RuleId("cr")
   , 12
@@ -50,11 +51,44 @@ class AggregationTest extends Specification {
   , "value"
   , SuccessReportType
   , ""
-  , now.minusMinutes(10)
-  , now.plusMinutes(10)
+  , now.minusMinutes(5)
+  , now.plusMinutes(5)
   , 0
   , 1
   , 42
+)
+  val beforebaseReport : AggregatedReport = AggregatedReport (
+    NodeId("one")
+  , RuleId("cr")
+  , 12
+  , 12
+  , DirectiveId("policy")
+  , "component"
+  , "value"
+  , SuccessReportType
+  , ""
+  , now.minusMinutes(15)
+  , now.minusMinutes(5)
+  , 1
+  , 1
+  , 41
+)
+
+  val beginning2 : AggregatedReport = AggregatedReport (
+    NodeId("one")
+  , RuleId("cr")
+  , 12
+  , 12
+  , DirectiveId("policy")
+  , "component"
+  , "value"
+  , SuccessReportType
+  , ""
+  , now.minusMinutes(15)
+  , now
+  , 1
+  , 1
+  , 41
 )
 
   val begining : AggregatedReport = AggregatedReport (
@@ -67,7 +101,7 @@ class AggregationTest extends Specification {
   , "value"
   , SuccessReportType
   , ""
-  , now.minusMinutes(10)
+  , now.minusMinutes(5)
   , now
   , 0
   , 1
@@ -87,7 +121,7 @@ class AggregationTest extends Specification {
   , SuccessReportType
   , ""
   , now
-  , now.plusMinutes(10)
+  , now.plusMinutes(5)
   , 0
   , 1
   , 0
@@ -102,12 +136,56 @@ class AggregationTest extends Specification {
       begin === Some(begining)
     }
 
+    "have an ending" in   {
+      end === Some(ending)
+    }
+
+    "have a report" in {
+      reports === Seq(reportToAdd)
+    }
+
   }
 
   "Reports" should {
     val result = dummyAgregation.createAggregatedReportsFromReports(Seq(report), Seq(expectedReport))
     result.head === reportToAdd
   }
+
+  "Merge" should {
+    val (toSave,toDelete) = dummyAgregation.mergeAggregatedReports(Seq(baseReport), Seq(reportToAdd))
+    val (toSave2,toDelete2) = dummyAgregation.mergeAggregatedReports(Seq(beforebaseReport,baseReport), Seq(reportToAdd))
+    println(toSave2)
+
+    "save must have 3 elements to save " in {
+
+      toSave must haveTheSameElementsAs (Seq(begining,reportToAdd, ending))
+    }
+
+    "Delete must be Empty" in {
+      toDelete must beEmpty
+    }
+
+        "save2 must have 3 elements to save " in {
+
+      toSave2 must haveTheSameElementsAs (Seq( ending,beginning2))
+    }
+  }
+
+    "MergeOne" should {
+    val (toSave,toDelete,_) = dummyAgregation.mergeOneAggregatedReport(Seq(baseReport), reportToAdd)
+
+    "have 3 elements to save " in {
+
+      toSave.size === 3
+    }
+
+    "Delete must be Empty" in {
+      toDelete.isEmpty
+    }
+
+
+  }
+
 
 }
 /*

@@ -375,8 +375,8 @@ class ReportsJdbcRepository(jdbcTemplate : JdbcTemplate) extends ReportsReposito
       }
   }
 
-  def getOldestReportWithId : Box[Option[(Reports,Int)]] = {
-    jdbcTemplate.query(s"${idQuery} order by executionTimeStamp asc limit 1",
+  def getReportsWithLowestId : Box[Option[(Reports,Int)]] = {
+    jdbcTemplate.query(s"${idQuery} order by id asc limit 1",
           ReportsWithIdMapper).toSeq match {
       case seq if seq.size > 1 => Failure("Too many answer for the latest report in the database")
       case seq => Full(seq.headOption)

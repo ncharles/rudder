@@ -130,5 +130,5 @@ trait ReportsRepository {
 
   def getReportsfromId(id : Int, endDate : DateTime) : Box[Seq[(Reports,Int)]]
 
-  def getOldestReportWithId : Box[Option[(Reports,Int)]]
+  def getReportsWithLowestId : Box[Option[(Reports,Int)]]
 }

@@ -113,7 +113,7 @@ trait AbstractScheduler extends Loggable {
         //if one update is pending, immediatly start one other
 
         //schedule next update, in minutes
-        LAPinger.schedule(this, StartUpdate, realUpdateInterval*1000* 5)
+        LAPinger.schedule(this, StartUpdate, realUpdateInterval*1000* 5000)
 
         //log some information
         val format = "yyyy/MM/dd HH:mm:ss"
@@ -152,7 +152,8 @@ trait AbstractScheduler extends Loggable {
               case x:ThreadDeath => throw x
               case x:InterruptedException => throw x
               case e => logger.error(e)
-                updateManager ! UpdateResult(processId,startTime,new DateTime, Failure("Exception caught during update process.",Full(e), Empty))
+                //updateManager ! UpdateResult(processId,startTime,new DateTime, Failure("Exception caught during update process.",Full(e), Empty))
+                throw e
             }
           }
         }
