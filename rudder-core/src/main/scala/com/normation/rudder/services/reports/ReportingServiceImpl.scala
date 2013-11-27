@@ -60,6 +60,7 @@ import com.normation.cfclerk.services.TechniqueRepository
 import com.normation.rudder.domain.policies.ExpandedRuleVal
 import com.normation.utils.Control._
 import scala.collection.mutable.Buffer
+import com.normation.cfclerk.domain.TechniqueRudder
 
 class ReportingServiceImpl(
     confExpectedRepo: RuleExpectedReportsRepository
@@ -314,24 +315,28 @@ class ReportingServiceImpl(
      * We can have several components, one by section.
      * If there is no component for that policy, the policy is autobounded to DEFAULT_COMPONENT_KEY
      */
-    val allComponents = container.technique.rootSection.getAllSections.flatMap { section =>
-      if(section.isComponent) {
-        section.componentKey match {
-          case None =>
-            //a section that is a component without componentKey variable: card=1, value="None"
-            Some((section.name, Seq(DEFAULT_COMPONENT_KEY), Seq(DEFAULT_COMPONENT_KEY)))
-          case Some(varName) =>
-            //a section with a componentKey variable: card=variable card
-            val values = container.variables.get(varName).map( _.values).getOrElse(Seq())
-            val unexpandedValues = container.originalVariables.get(varName).map( _.values).getOrElse(Seq())
-            if (values.size != unexpandedValues.size)
-              logger.warn("Caution, the size of unexpanded and expanded variables for autobounding variable in section %s for directive %s are not the same : %s and %s".format(
-                  section.componentKey, container.directiveId.value, values, unexpandedValues ))
-            Some((section.name, values, unexpandedValues))
-        }
-      } else {
-        None
-      }
+    val allComponents = container.technique match {
+      case tr : TechniqueRudder =>
+		    tr.rootSection.getAllSections.flatMap { section =>
+		      if(section.isComponent) {
+		        section.componentKey match {
+		          case None =>
+		            //a section that is a component without componentKey variable: card=1, value="None"
+		            Some((section.name, Seq(DEFAULT_COMPONENT_KEY), Seq(DEFAULT_COMPONENT_KEY)))
+		          case Some(varName) =>
+		            //a section with a componentKey variable: card=variable card
+		            val values = container.variables.get(varName).map( _.values).getOrElse(Seq())
+		            val unexpandedValues = container.originalVariables.get(varName).map( _.values).getOrElse(Seq())
+		            if (values.size != unexpandedValues.size)
+		              logger.warn("Caution, the size of unexpanded and expanded variables for autobounding variable in section %s for directive %s are not the same : %s and %s".format(
+		                  section.componentKey, container.directiveId.value, values, unexpandedValues ))
+		            Some((section.name, values, unexpandedValues))
+		        }
+		      } else {
+		        None
+		      }
+		    }
+      case _ => Seq()
     }
 
     if(allComponents.size < 1) {

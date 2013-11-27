@@ -693,7 +693,7 @@ class WoLDAPDirectiveRepository(
       //for logging, before deletion
       directive       <- mapper.entry2Directive(entry)
       activeTechnique <- getActiveTechnique(id) ?~! "Can not find the User Policy Temple Entry for directive %s".format(id)
-      technique       <- techniqueRepository.get(TechniqueId(activeTechnique.techniqueName,directive.techniqueVersion))
+      technique       <- techniqueRepository.getTR(TechniqueId(activeTechnique.techniqueName,directive.techniqueVersion))
       //delete
       deleted         <- userLibMutex.writeLock { con.delete(entry.dn) }
       diff            =  DeleteDirectiveDiff(technique.id.name, directive)

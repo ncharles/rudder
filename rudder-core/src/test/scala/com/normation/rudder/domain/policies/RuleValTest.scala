@@ -57,7 +57,7 @@ import com.normation.cfclerk.domain.InputVariable
 @RunWith(classOf[BlockJUnit4ClassRunner])
 class RuleValTest {
 
-  def newTechnique(id: TechniqueId) = Technique(id, "tech" + id, "", Seq(), Seq(), TrackerVariableSpec(), SectionSpec("plop"), Set(), None)
+  def newTechnique(id: TechniqueId) = TechniqueRudder(id, "tech" + id, "", Seq(), Seq(), TrackerVariableSpec(), SectionSpec("plop"), Set(), None)
 
   @Test
   def testCRwithNoPI() {

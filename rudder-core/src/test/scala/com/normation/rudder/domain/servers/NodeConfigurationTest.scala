@@ -54,7 +54,7 @@ import com.normation.inventory.domain.NodeId
 @RunWith(classOf[BlockJUnit4ClassRunner])
 class NodeConfigurationTest {
 
-  def newTechnique(id: TechniqueId) = Technique(id, "tech" + id, "", Seq(), Seq(), TrackerVariableSpec(), SectionSpec("plop"), Set(), None)
+  def newTechnique(id: TechniqueId) = TechniqueRudder(id, "tech" + id, "", Seq(), Seq(), TrackerVariableSpec(), SectionSpec("plop"), Set(), None)
 
   private val simplePolicy = new RuleWithCf3PolicyDraft(
       new RuleId("ruleId"),

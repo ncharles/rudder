@@ -124,19 +124,39 @@ class LDAPNodeConfigurationMapper(
           }
         ruleId <- e(A_RULE_UUID) ?~! errorMessage(A_RULE_UUID)
         policyPackage <- techniqueRepository.get(TechniqueId(techniqueId,policyVersion)) ?~! "Can not found technique '%s'".format(TechniqueId(techniqueId,policyVersion).toString)
-        varSpecs = policyPackage.getAllVariableSpecs
-        vared <- variableBuilderService.buildVariables(varSpecs, parsePolicyVariables(e.valuesFor(A_DIRECTIVE_VARIABLES).toSeq)) ?~! "Error when building variables from their specs and values"
-        priority <- e.getAsInt(A_PRIORITY) ?~! errorMessage(A_PRIORITY)
-        serial <- e.getAsInt(A_SERIAL) ?~! errorMessage(A_SERIAL)
-        tid = TechniqueId(techniqueId, policyVersion)
-        technique <- techniqueRepository.get(tid) ?~! s"Can not find the technique with ID ${tid}"
-        directive = new RuleWithCf3PolicyDraft(new RuleId(ruleId),
-            new Cf3PolicyDraft(Cf3PolicyDraftId(id),technique,
-            //remove trackerVariableVar
-            vared.filterKeys(k => k != policyPackage.trackerVariableSpec.name),
-            vared.get(policyPackage.trackerVariableSpec.name).map(x => x.asInstanceOf[TrackerVariable]).getOrElse(policyPackage.trackerVariableSpec.toVariable()),
-            priority,
-            serial))
+        directive <- policyPackage match {
+          		case tr: TechniqueRudder => 
+          			val varSpecs = tr.getAllVariableSpecs
+          		  	for {
+				        vared    <- variableBuilderService.buildVariables(varSpecs, parsePolicyVariables(e.valuesFor(A_DIRECTIVE_VARIABLES).toSeq)) ?~! "Error when building variables from their specs and values"
+				        priority <- e.getAsInt(A_PRIORITY) ?~! errorMessage(A_PRIORITY)
+				        serial   <- e.getAsInt(A_SERIAL) ?~! errorMessage(A_SERIAL)
+				        tid      = TechniqueId(techniqueId, policyVersion)
+				        technique <- techniqueRepository.get(tid) ?~! s"Can not find the technique with ID ${tid}"
+          			} yield {
+          				new RuleWithCf3PolicyDraft(new RuleId(ruleId),
+				            new Cf3PolicyDraft(Cf3PolicyDraftId(id),technique,
+				            //remove trackerVariableVar
+				            vared.filterKeys(k => k != tr.trackerVariableSpec.name),
+				            vared.get(tr.trackerVariableSpec.name).map(x => x.asInstanceOf[TrackerVariable]).getOrElse(tr.trackerVariableSpec.toVariable()),
+				            priority,
+				            serial))
+          			}
+          		case _ =>
+	          		  for {
+	          		    priority <- e.getAsInt(A_PRIORITY) ?~! errorMessage(A_PRIORITY)
+					    serial   <- e.getAsInt(A_SERIAL) ?~! errorMessage(A_SERIAL)
+	          		  } yield {
+		          		  new RuleWithCf3PolicyDraft(new RuleId(ruleId),
+						            new Cf3PolicyDraft(Cf3PolicyDraftId(id),policyPackage,
+						            //remove trackerVariableVar
+						            Map(),
+						            null,
+						            priority,
+						            serial))
+	          		  }
+        } 
+
 
       } yield (directive, e.isA(OC_TARGET_RULE_WITH_CF3POLICYDRAFT))
     }

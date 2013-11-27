@@ -67,29 +67,45 @@ class RuleValServiceImpl (
       case Some((fullActiveTechnique, directive)) =>
         for {
           policyPackage <- Box(fullActiveTechnique.techniques.get(directive.techniqueVersion)) ?~! s"The required version of technique is not available for directive ${directive.name}"
-          varSpecs = policyPackage.rootSection.getAllVariables ++ policyPackage.systemVariableSpecs :+ policyPackage.trackerVariableSpec
-          vared <- variableBuilderService.buildVariables(varSpecs, directive.parameters)
-          exists <- {
-            if (vared.isDefinedAt(policyPackage.trackerVariableSpec.name)) {
-              Full("OK")
-            } else {
-              logger.error("Cannot find key %s in Directive %s when building Rule %s".format(policyPackage.trackerVariableSpec.name, piId.value, ruleId.value))
-              Failure("Cannot find key %s in Directibe %s when building Rule %s".format(policyPackage.trackerVariableSpec.name, piId.value, ruleId.value))
-            }
-          }
-          trackerVariable <- vared.get(policyPackage.trackerVariableSpec.name)
-          otherVars = vared - policyPackage.trackerVariableSpec.name
         } yield {
-            logger.debug("Creating a DirectiveVal %s from the ruleId %s".format(fullActiveTechnique.techniqueName, ruleId.value))
-
-            Some(DirectiveVal(
-                policyPackage,
-                directive.id,
-                directive.priority,
-                policyPackage.trackerVariableSpec.toVariable(trackerVariable.values),
-                otherVars,
-                vared
-            ))
+          policyPackage match {
+            case tr:TechniqueRudder =>
+                    val varSpecs = tr.rootSection.getAllVariables ++ tr.systemVariableSpecs :+ tr.trackerVariableSpec
+                    
+                    for {
+			          vared <- variableBuilderService.buildVariables(varSpecs, directive.parameters)
+			          exists <- {
+			            if (vared.isDefinedAt(tr.trackerVariableSpec.name)) {
+			              Full("OK")
+			            } else {
+			              logger.error("Cannot find key %s in Directive %s when building Rule %s".format(tr.trackerVariableSpec.name, piId.value, ruleId.value))
+			              Failure("Cannot find key %s in Directibe %s when building Rule %s".format(tr.trackerVariableSpec.name, piId.value, ruleId.value))
+			            }
+			          }
+			          trackerVariable <- vared.get(tr.trackerVariableSpec.name)
+			          otherVars = vared - tr.trackerVariableSpec.name
+              		} yield {
+			            logger.debug("Creating a DirectiveVal %s from the ruleId %s".format(fullActiveTechnique.techniqueName, ruleId.value))
+			
+			            DirectiveVal(
+			                policyPackage,
+			                directive.id,
+			                directive.priority,
+			                tr.trackerVariableSpec.toVariable(trackerVariable.values),
+			                otherVars,
+			                vared
+			            )
+			        }
+            case _ =>
+			    Some(DirectiveVal(
+			      policyPackage,
+			      directive.id,
+			      directive.priority,
+			      null,
+			      Map(),
+			      Map()
+			    ))     
+          }
         }
     }
   }
