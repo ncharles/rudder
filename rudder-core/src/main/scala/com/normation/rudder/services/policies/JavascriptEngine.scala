@@ -492,6 +492,14 @@ final object JsEngine {
       }
     }
 
+    // If it's a password, we need to reconstruct the correct password structure
+    def reconstructPassword(value: String, isPassword: Boolean) : String = {
+      if (isPassword) {
+          (PASSWORD_PREFIX + value)
+       } else {
+         value
+       }
+    }
     /**
      * This is the user-accessible eval.
      * It is expected to throws, and should always be used in
@@ -502,29 +510,22 @@ final object JsEngine {
     def eval(variable: Variable, lib: JsRudderLibBinding): Box[Variable] = {
 
       val (default, js, isPassword) = getEvaluatorTuple(variable)
-      
+
       for {
         values <- sequence(variable.values) { value =>
           (if (value.startsWith(default)) {
             val script = value.substring(default.length())
             //do something with script
-            singleEval(script, lib.bindings)
+            singleEval(script, lib.bindings).map(reconstructPassword(_, isPassword))
           } else {
             if (value.startsWith(js)) {
               val script = value.substring(js.length())
               //do something with script
-              singleEval(script, lib.bindings)
+              singleEval(script, lib.bindings).map(reconstructPassword(_, isPassword))
             } else {
               Full(value)
             }
-          }).map{ x => 
-            // If it's a password, we need to reconstruct the correct password structure
-            if (isPassword) {
-              (PASSWORD_PREFIX + x) 
-            } else {
-              x
-            }
-          } ?~! s"Invalid script '${value}' for Variable ${variable.spec.name} - please check method call and/or syntax"
+          }) ?~! s"Invalid script '${value}' for Variable ${variable.spec.name} - please check method call and/or syntax"
         }
       } yield {
           variable.copyWithSavedValues(values)
