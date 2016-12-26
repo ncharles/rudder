@@ -680,7 +680,7 @@ object ExecutionBatch extends Loggable {
       }
     }
 
-    NodeStatusReport(nodeId, runInfo, status, ruleNodeStatusReports)
+    NodeStatusReport.applyByNode(nodeId, runInfo, status, ruleNodeStatusReports)
   }
 
 
@@ -947,21 +947,17 @@ object ExecutionBatch extends Loggable {
    */
   private[reports] def checkExpectedComponentWithReports(
       expectedComponent: ComponentExpectedReport
-    , filteredReports  : Seq[Reports]
+    , filteredReports  : Seq[ResultReports]
     , noAnswerType     : ReportType
     , policyMode       : PolicyMode //the one of the directive, or node, or global
   ) : ComponentStatusReport = {
-
-    // First, filter out all the not interesting reports
-    // (here, interesting means non log, info, etc)
-    val purgedReports = filteredReports.filter(x => x.isInstanceOf[ResultReports])
 
     // build the list of unexpected ComponentValueStatusReport
     // i.e value
     val unexpectedStatusReports = {
       val unexpectedReports = getUnexpectedReports(
           expectedComponent.componentsValues.toList
-        , purgedReports
+        , filteredReports
       )
       unexpectedReports.foreach { r =>
         ComplianceDebugLogger.node(r.nodeId).warn(s"Unexpected report for Directive '${r.directiveId.value}', Rule '${r.ruleId.value}' generated on '${r.executionTimestamp}' "+
@@ -1013,7 +1009,7 @@ object ExecutionBatch extends Loggable {
       if(valueKind.none.isEmpty) {
       (None, Seq())
       } else {
-        val reports = purgedReports.filter(r => r.keyValue == DEFAULT_COMPONENT_KEY)
+        val reports = filteredReports.filter(r => r.keyValue == DEFAULT_COMPONENT_KEY)
         ( Some(buildComponentValueStatus(
               DEFAULT_COMPONENT_KEY
             , reports
@@ -1036,7 +1032,7 @@ object ExecutionBatch extends Loggable {
         // at most the number of values if there is also cfevars
         // because the remaining values may be for cfengine vars
         val reports = {
-          val possible = purgedReports.filter(r => values.contains(r.keyValue))
+          val possible = filteredReports.filter(r => values.contains(r.keyValue))
           if(valueKind.cfeVar.size > 0) {
             possible.take(values.size)
           } else {
@@ -1058,7 +1054,7 @@ object ExecutionBatch extends Loggable {
 
     // Remove all already parsed reports so we only look in remaining reports for Cfengine variables
     val usedReports = noneReports ++ simpleReports
-    val remainingReports = purgedReports.diff(usedReports)
+    val remainingReports = filteredReports.diff(usedReports)
 
     // Find what reports matche what cfengine variables
 

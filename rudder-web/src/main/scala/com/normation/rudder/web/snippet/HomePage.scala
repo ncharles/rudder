@@ -184,7 +184,7 @@ class HomePage extends Loggable {
       userRules <- roRuleRepo.getIds()
       reports   <- reportingService.findRuleNodeStatusReports(nodeInfos.keySet, userRules)
       n3 = System.currentTimeMillis
-      _ = TimingDebugLogger.debug(s"Compute compliance: ${n3 - n2}ms")
+      _ = TimingDebugLogger.trace(s"Compute compliance - findRuleNodeStatusReports: ${n3 - n2}ms")
     } yield {
 
       val reportsByNode = reports.mapValues { status => ComplianceLevel.sum(status.report.reports.map(_.compliance)) }
@@ -266,6 +266,9 @@ class HomePage extends Loggable {
       val complianceBar = compliance.toJsArray
 
       val globalCompliance = compliance.complianceWithoutPending.round
+
+      val n4 = System.currentTimeMillis
+      TimingDebugLogger.debug(s"Compute compliance for HomePage: ${n4 - n2}ms")
 
       Script(OnLoad(JsRaw(s"""
         homePage(
