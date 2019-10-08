@@ -386,13 +386,15 @@ z5VEb9yx2KikbWyChM1Akp82AV5BzqE80QIBIw==
    *   ************************************************************************
    */
 
+  val g0id = NodeGroupId("0")
+  val g0 = NodeGroup (g0id, "Real nodes", "", None, false, Set(rootId, node1.id, node2.id), true)
   val g1 = NodeGroup (NodeGroupId("1"), "Empty group", "", None, false, Set(), true)
   val g2 = NodeGroup (NodeGroupId("2"), "only root", "", None, false, Set(NodeId("root")), true)
   val g3 = NodeGroup (NodeGroupId("3"), "Even nodes", "", None, false, nodeIds.filter(_.value.toInt == 2), true)
   val g4 = NodeGroup (NodeGroupId("4"), "Odd nodes", "", None, false, nodeIds.filter(_.value.toInt != 2), true)
   val g5 = NodeGroup (NodeGroupId("5"), "Nodes id divided by 3", "", None, false, nodeIds.filter(_.value.toInt == 3), true)
   val g6 = NodeGroup (NodeGroupId("6"), "Nodes id divided by 5", "", None, false, nodeIds.filter(_.value.toInt == 5), true)
-  val groups = Set(g1, g2, g3, g4, g5, g6 ).map(g => (g.id, g))
+  val groups = Set(g0, g1, g2, g3, g4, g5, g6).map(g => (g.id, g))
 
   val groupTargets = groups.map{ case (id, g) => (GroupTarget(g.id), g) }
 
@@ -663,6 +665,21 @@ class TestNodeConfiguration() {
     )
   }
 
+  val commonDirective = Directive(
+      DirectiveId("common-root")
+    , TechniqueVersion("1.0")
+    , Map(
+        ("ALLOWEDNETWORK", Seq("192.168.0.0/16"))
+      , ("OWNER", Seq("${rudder.node.admin}"))
+      , ("UUID", Seq("${rudder.node.id}"))
+      , ("POLICYSERVER_ID", Seq("${rudder.node.policyserver.id}"))
+      , ("POLICYSERVER", Seq("${rudder.node.policyserver.hostname}"))
+      , ("POLICYSERVER_ADMIN", Seq("${rudder.node.policyserver.admin}"))
+      )
+    , "common-root"
+    , "", None, "", 5, true, true
+  )
+
   def common(nodeId: NodeId, allNodeInfos: Map[NodeId, NodeInfo]) = {
     val id = PolicyId(RuleId("hasPolicyServer-root"), DirectiveId("common-root"), TechniqueVersion("1.0"))
     draft(
@@ -792,6 +809,21 @@ class TestNodeConfiguration() {
        , spec("RPM_PACKAGE_VERSION_DEFINITION").toVariable(Seq("default","default","default"))
      ).map(v => (v.spec.name, v)).toMap
   }
+  def rpmDirective(id: String, pkg: String) = Directive(
+      DirectiveId(id)
+    , TechniqueVersion("7.0")
+    , Map(
+         ("RPM_PACKAGE_CHECK_INTERVAL", Seq("5"))
+       , ("RPM_PACKAGE_POST_HOOK_COMMAND", Seq(""))
+       , ("RPM_PACKAGE_POST_HOOK_RUN", Seq("false"))
+       , ("RPM_PACKAGE_REDACTION", Seq("add"))
+       , ("RPM_PACKAGE_REDLIST", Seq(pkg))
+       , ("RPM_PACKAGE_VERSION", Seq(""))
+       , ("RPM_PACKAGE_VERSION_CRITERION", Seq("=="))
+       , ("RPM_PACKAGE_VERSION_DEFINITION", Seq("default"))
+      )
+    , id, "", None, ""
+  )
   lazy val rpm = {
     val id = PolicyId(RuleId("rule2"), DirectiveId("directive2"), TechniqueVersion("1.0"))
     draft(

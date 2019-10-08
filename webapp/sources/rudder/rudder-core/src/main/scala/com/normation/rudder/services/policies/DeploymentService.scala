@@ -634,6 +634,7 @@ class PromiseGenerationServiceImpl (
 ) extends PromiseGenerationService with
   PromiseGeneration_performeIO with
   PromiseGeneration_NodeCertificates with
+  PromiseGeneration_BuildNodeContext with
   PromiseGeneration_buildRuleVals with
   PromiseGeneration_buildNodeConfigurations with
   PromiseGeneration_updateAndWriteRule with
@@ -718,6 +719,12 @@ trait PromiseGeneration_performeIO extends PromiseGenerationService {
     }).map(_.id).toSet
 
   }
+}
+
+trait PromiseGeneration_BuildNodeContext {
+
+  def interpolatedValueCompiler: InterpolatedValueCompiler
+  def systemVarService: SystemVariableService
 
   /**
    * Build interpolation contexts.
@@ -729,7 +736,7 @@ trait PromiseGeneration_performeIO extends PromiseGenerationService {
    * It's also the place where parameters are looked for
    * local overrides.
    */
-  override def getNodeContexts(
+  def getNodeContexts(
       nodeIds               : Set[NodeId]
     , allNodeInfos          : Map[NodeId, NodeInfo]
     , allGroups             : FullNodeGroupCategory
