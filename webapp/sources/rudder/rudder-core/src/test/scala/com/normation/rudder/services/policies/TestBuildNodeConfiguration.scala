@@ -65,7 +65,7 @@ import scala.collection.SortedMap
 import scala.concurrent.duration._
 
 /*
- * This class test the JsEngine.
+ * This class test the JsEngine. 6.0
  * It must works identically on Java 7 and Java 8.
  *
  */
@@ -79,6 +79,8 @@ class TestBuildNodeConfiguration extends Specification {
 
   import NodeConfigData._
   val data = new TestNodeConfiguration()
+  val t0_1 = System.currentTimeMillis()
+  println(s"Test node configuration   : ${t0_1-t0} ms")
 
   def newNode(i: Int) = node1.copy(node = node1Node.copy(id = NodeId("node"+i), name = "node"+ i), hostname = s"node$i.localhost")
 

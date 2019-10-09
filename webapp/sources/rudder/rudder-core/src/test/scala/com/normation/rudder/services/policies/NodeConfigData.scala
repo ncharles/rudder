@@ -1,4 +1,4 @@
-/*
+/* 6.0
 *************************************************************************************
 * Copyright 2015 Normation SAS
 *************************************************************************************
@@ -461,6 +461,8 @@ z5VEb9yx2KikbWyChM1Akp82AV5BzqE80QIBIw==
 
 class TestNodeConfiguration() {
 
+  import org.joda.time.DateTime
+
   import com.normation.rudder.services.policies.NodeConfigData.{root, node1}
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // set up root node configuration
@@ -472,6 +474,7 @@ class TestNodeConfiguration() {
   implicit class PathString2(root: File) {
     def /(child: String) = new File(root, child)
   }
+  val t0 = System.currentTimeMillis()
 
   val abstractRoot = new File("/tmp/test-rudder-config-repo-" + DateTime.now.toString())
   abstractRoot.mkdirs()
@@ -483,17 +486,29 @@ class TestNodeConfiguration() {
   FileUtils.copyDirectory( new File("src/test/resources/configuration-repository") , configurationRepositoryRoot)
 
   val EXPECTED_SHARE = configurationRepositoryRoot/"expected-share"
+  val t1 = System.currentTimeMillis()
+  println(s"Paths inits             : ${t1-t0} ms")
 
   val repo = new GitRepositoryProviderImpl(configurationRepositoryRoot.getAbsolutePath)
+  val t2 = System.currentTimeMillis()
+  println(s"Git repo provider       : ${t2-t1} ms")
 
 
   val variableSpecParser = new VariableSpecParser
+  val t2bis = System.currentTimeMillis()
+  println(s"var Spec Parser        : ${t2bis-t2} ms")
   val systemVariableServiceSpec = new SystemVariableSpecServiceImpl()
+  val t3 = System.currentTimeMillis()
+  println(s"System Var Spec service : ${t3-t2bis} ms")
+
   val draftParser: TechniqueParser = new TechniqueParser(
       variableSpecParser
     , new SectionSpecParser(variableSpecParser)
     , systemVariableServiceSpec
   )
+  val t4 = System.currentTimeMillis()
+  println(s"Technique parser        : ${t4-t3} ms")
+
   val reader = new GitTechniqueReader(
                 draftParser
               , new SimpleGitRevisionProvider("refs/heads/master", repo)
@@ -503,13 +518,20 @@ class TestNodeConfiguration() {
               , Some("techniques")
               , "default-directive-names.conf"
             )
+  val t5 = System.currentTimeMillis()
+  println(s"Git tech reader         : ${t5-t4} ms")
 
   val techniqueRepository = new TechniqueRepositoryImpl(reader, Seq(), new StringUuidGeneratorImpl())
+  val t6 = System.currentTimeMillis()
+  println(s"Technique repository    : ${t6-t5} ms")
 
   val draftServerManagement = new PolicyServerManagementService() {
     override def setAuthorizedNetworks(policyServerId:NodeId, networks:Seq[String], modId: ModificationId, actor:EventActor) = ???
     override def getAuthorizedNetworks(policyServerId:NodeId) : Box[Seq[String]] = Full(List("192.168.49.0/24"))
   }
+  val t7 = System.currentTimeMillis()
+  println(s"Policy Server Management: ${t7-t6} ms")
+
   val systemVariableService = new SystemVariableServiceImpl(
       systemVariableServiceSpec
     , draftServerManagement
@@ -548,6 +570,9 @@ class TestNodeConfiguration() {
     , getReportProtocolDefault        = () => Full(AgentReportingSyslog)
     , getRudderVerifyCertificates     = () => Full(false)
   )
+
+  val t8 = System.currentTimeMillis()
+  println(s"System variable Service: ${t8-t7} ms")
 
   //a test node - CFEngine
   val nodeId = NodeId("c8813416-316f-4307-9b6a-ca9c109a9fb0")
@@ -614,6 +639,10 @@ class TestNodeConfiguration() {
   val globalComplianceMode = GlobalComplianceMode(FullCompliance, 15)
 
   val globalSystemVariables = systemVariableService.getGlobalSystemVariables(globalAgentRun).openOrThrowException("I should get global system variable in test!")
+
+  val t9 = System.currentTimeMillis()
+  println(s"Nodes & groupes         : ${t9-t8} ms")
+
 
   //
   //root has 4 system directive, let give them some variables
@@ -1016,6 +1045,10 @@ class TestNodeConfiguration() {
       , Some(PolicyMode.Enforce)
     )
   }
+
+  val t10 = System.currentTimeMillis()
+  println(s"Get techniques & directives: ${t10-t9} ms")
+
 
 
   /**
