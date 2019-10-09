@@ -83,6 +83,9 @@ class TestBuildNodeConfiguration extends Specification {
   import NodeConfigData._
   val data = new TestNodeConfiguration()
 
+  val t0_1 = System.currentTimeMillis()
+  println(s"Test node configuration   : ${t0_1-t0} ms")
+
   def newNode(i: Int) = node1.copy(node = node1Node.copy(id = NodeId("node"+i), name = "node"+ i), hostname = s"node$i.localhost")
 
   val allNodes                  = ((1 to 1000).map(newNode) :+ root).map(n => (n.id, n)).toMap
