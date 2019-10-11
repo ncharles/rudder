@@ -758,10 +758,10 @@ trait PromiseGeneration_BuildNodeContext {
      *   - to node info parameters: ok
      *   - to parameters : hello loops!
      */
-    def buildParams(parameters: Seq[GlobalParameter]): Box[Map[ParameterName, InterpolationContext => Box[String]]] = {
-      bestEffort(parameters) { param =>
+    def buildParams(parameters: Seq[GlobalParameter]): IOResult[Map[ParameterName, InterpolationContext => IOResult[String]]] = {
+      parameters.accumulate { param =>
         for {
-          p <- interpolatedValueCompiler.compile(param.value) ?~! s"Error when looking for interpolation variable in global parameter '${param.name}'"
+          p <- interpolatedValueCompiler.compile(param.value).chainError(s"Error when looking for interpolation variable in global parameter '${param.name}'")
         } yield {
           (param.name, p)
         }
@@ -770,7 +770,7 @@ trait PromiseGeneration_BuildNodeContext {
 
     for {
       globalSystemVariables <- systemVarService.getGlobalSystemVariables(globalAgentRun)
-      parameters            <- buildParams(globalParameters) ?~! "Can not parsed global parameter (looking for interpolated variables)"
+      parameters            <- buildParams(globalParameters).toBox ?~! "Can not parsed global parameter (looking for interpolated variables)"
     } yield {
       (nodeIds.flatMap { nodeId:NodeId =>
         (for {
@@ -892,7 +892,7 @@ object BuildNodeConfiguration extends Loggable {
 
     //step 1: from RuleVals to expanded rules vals
 
-    val t0 = System.currentTimeMillis()
+    val t0 = System.nanoTime()
     //group by nodes
     //no consistancy / unicity check is done here, it will be done
     //in an other phase. We are just switching to a node-first view.
@@ -905,16 +905,16 @@ object BuildNodeConfiguration extends Loggable {
       }
       byNodeDrafts.toMap
     }
-    val t1 = System.currentTimeMillis()
-    println(s"Policy draft bt Node          : ${t1-t0} ms")    
+    val t1 = System.nanoTime()
+    println(s"Policy draft bt Node1  : ${(t1-t0)/1000000} ms")
 
-// Counts and sum of ms over all threads 
+// Counts and sum of ms over all threads
 var count = 0
 var evalCost = 0L
 var expVar = 0L
 var draftCost = 0L
 var nodeContextCost = 0L
-var nodeConfigsCost = 0L 
+var nodeConfigsCost = 0L
     // 1.3: build node config, binding ${rudder./node.properties} parameters
     // open a scope for the JsEngine, because its init is long.
 
@@ -923,12 +923,12 @@ println(jsEngine)
       // here, we consider j
       val nodeConfigsProg = ZIO.foreachParN(maxParallelism)(nodeContexts.toSeq) { case (nodeId, context) =>
 
-        val t1_0 = System.currentTimeMillis()
-    
+        val t1_0 = System.nanoTime()
+
         (for {
             parsedDrafts  <- policyDraftByNode.get(nodeId).notOptional("Promise generation algorithm error: cannot find back the configuration information for a node")
-            t1_1           = System.currentTimeMillis()
-            _              = println(s"Policy draft bt Node          : ${t1_1-t1_0} ms") 
+            t1_1           = System.nanoTime()
+            _              = println(s"Policy draft bt Node2  : ${(t1_1-t1_0)/1000000} ms")
 
             // if a node is in state "emtpy policies", we only keep system policies + log
             filteredDrafts=  if(context.nodeInfo.state == NodeState.EmptyPolicies) {
@@ -944,7 +944,7 @@ println(jsEngine)
                               } else {
                                 parsedDrafts
                               }
-            t1_2           = System.currentTimeMillis()
+            t1_2           = System.nanoTime()
 
             /*
              * Clearly, here, we are evaluating parameters, and we are not using that just after in the
@@ -958,24 +958,27 @@ println(jsEngine)
              */
             parameters    <- context.parameters.accumulate { case (name, param) =>
                                for {
-                                 p <- param(context).toIO
+                                 p <- param(context)
                                } yield {
                                  (name, p)
                                }
                              }.mapError(_.deduplicate)
-            t1_3           = System.currentTimeMillis()
-            _              = println(s"parameters        : ${t1_3-t1_2} ms") 
+
+////////////////////////////////////////////  fboundedDraft ////////////////////////////////////////////
+
+            t1_3           = System.nanoTime()
+            _              = println(s"parameters             : ${(t1_3-t1_2)/1000000} ms")
 
             boundedDrafts <- filteredDrafts.accumulate { draft =>
-val t6_1           = System.currentTimeMillis()
+val t6_1           = System.nanoTime()
                                 (for {
                                   //bind variables with interpolated context
-                                  expandedVariables <- draft.variables(context).toIO
+                                  expandedVariables <- draft.variables(context)
 _ = (count = count + 1)
-_ = (expVar = expVar + (System.currentTimeMillis() - t6_1))
+_ = (expVar = expVar + (System.nanoTime() - t6_1))
                                   // And now, for each variable, eval - if needed - the result
                                   expandedVars      <- expandedVariables.accumulate { case (k, v) =>
-val t5_1           = System.currentTimeMillis()
+val t5_1           = System.nanoTime()
                                                           //js lib is specific to the node os, bind here to not leak eval between vars
                                                           val jsLib = context.nodeInfo.osDetails.os match {
                                                            case AixOS => JsRudderLibBinding.Aix
@@ -984,29 +987,31 @@ val t5_1           = System.currentTimeMillis()
 
                                                          val truc = jsEngine.eval(v, jsLib).map( x => (k, x) ).toIO
 
-evalCost = evalCost + (System.currentTimeMillis() - t5_1)
+evalCost = evalCost + (System.nanoTime() - t5_1)
                                                          truc
                                                        }.mapError(_.deduplicate)
                                   } yield {
-                                    val t7_1           = System.currentTimeMillis()
+                                    val t7_1           = System.nanoTime()
                                     val draftR = draft.toBoundedPolicyDraft(expandedVars.toMap)
-                                    draftCost = draftCost + System.currentTimeMillis() -t7_1 
+                                    draftCost = draftCost + System.nanoTime() -t7_1
                                     draftR
                                   }).chainError(s"When processing directive '${draft.directiveName}'")
                                 }.mapError(_.deduplicate)
-            t1_4           = System.currentTimeMillis()
-            _              = println(s"fboundedDraft         : ${t1_4-t1_3} ms") 
+            t1_4           = System.nanoTime()
+            _              = println(s"fboundedDraft          : ${(t1_4-t1_3)/1000000} ms")
+
+////////////////////////////////////////////  fboundedDraft ////////////////////////////////////////////
 
             // from policy draft, check and build the ordered seq of policy
             policies   <- MergePolicyService.buildPolicy(context.nodeInfo, globalPolicyMode, boundedDrafts).toIO
-            t1_5           = System.currentTimeMillis()
-            _              = println(s"merge policies         : ${t1_5-t1_4} ms") 
+            t1_5           = System.nanoTime()
+            _              = println(s"merge policies         : ${(t1_5-t1_4)/1000000} ms")
 
-      
+
           } yield {
             // we have the node mode
             val nodeModes = allNodeModes(context.nodeInfo.id)
-val t9_1 = System.currentTimeMillis()
+val t9_1 = System.nanoTime()
 nodeContextCost = nodeContextCost + t9_1-t1_0
 
 
@@ -1021,7 +1026,7 @@ nodeContextCost = nodeContextCost + t9_1-t1_0
               , isRootServer = context.nodeInfo.id == context.policyServerInfo.id
             )
 
-val t9_2 = System.currentTimeMillis()
+val t9_2 = System.nanoTime()
 nodeConfigsCost = nodeConfigsCost + t9_2 - t9_1
 
             nodeConfig
@@ -1029,34 +1034,40 @@ nodeConfigsCost = nodeConfigsCost + t9_2 - t9_1
           }).chainError(s"Error with parameters expansion for node '${context.nodeInfo.hostname}' (${context.nodeInfo.id.value})").either
       }
 
-      val t2 = System.currentTimeMillis()
-      println(s"JsEngine Evaluation         : ${t2-t1} ms")    
+      val t2 = System.nanoTime()
+      println(s"JsEngine Evaluation         : ${(t2-t1)/1000000} ms")
 
-      val nodeConfigs = nodeConfigsProg.runNow
+      val nodeConfigsTotal = for {
+        t0  <- UIO.effectTotal(System.nanoTime)
+        res <- nodeConfigsProg
+        _   <- UIO.effectTotal(println(s"Total run config: ${(System.nanoTime-t0)/1000000}"))
+      } yield res
 
-      val t3 = System.currentTimeMillis()
-      println(s"Run nodeconfigProg          : ${t3-t2} ms") 
+      val nodeConfigs = nodeConfigsTotal.runNow
 
-println(s"Total cost of jsEngine.eval is                 :     ${evalCost} ms")
+      val t3 = System.nanoTime()
+      println(s"Run nodeconfigProg          : ${(t3-t2)/1000000} ms")
+
+println(s"Total cost of jsEngine.eval is                 :     ${evalCost/1000000} ms")
 println(s"Total count of draft variables(context) cost is:     ${count}");
-println(s"Total cost of draft variables(context) cost is :     ${expVar} ms")
-println(s"Total cost of draft.toBoundedPolicyDraft is    :     ${draftCost} ms")
-println(s"Total cost of computing node Context is        :     ${nodeContextCost} ms")
-println(s"Total cost of nodeConfiguration object is      :     ${nodeConfigsCost} ms")
+println(s"Total cost of draft variables(context) cost is :     ${expVar/1000000} ms")
+println(s"Total cost of draft.toBoundedPolicyDraft is    :     ${draftCost/1000000} ms")
+println(s"Total cost of computing node Context is        :     ${nodeContextCost/1000000} ms")
+println(s"Total cost of nodeConfiguration object is      :     ${nodeConfigsCost/1000000} ms")
 
 
       val success = nodeConfigs.collect { case Right(c) => c }.toList
       val failures = nodeConfigs.collect { case Left(f) => f.fullMsg }.toSet
       val failedIds = nodeContexts.keySet -- success.map( _.nodeInfo.id )
 
-   
-      val t4 = System.currentTimeMillis()
-      println(s"Collection                  : ${t4-t3} ms") 
+
+      val t4 = System.nanoTime()
+      println(s"Collection                  : ${(t4-t3)/1000000} ms")
 
       val result = recFailNodes(failedIds, success, failures)
 
-      val t5 = System.currentTimeMillis()
-      println(s"recFailNodes                : ${t5-t4} ms") 
+      val t5 = System.nanoTime()
+      println(s"recFailNodes                : ${(t5-t4)/1000000} ms")
 
       failures.size match {
         case 0    => Full(result)
