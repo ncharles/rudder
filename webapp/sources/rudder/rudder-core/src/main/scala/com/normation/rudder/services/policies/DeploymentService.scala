@@ -923,8 +923,8 @@ var nodeConfigsCost = 0L
       val nodeConfigsProg = for {
         sum <- Ref.make((0L,0L,0L))
         nbJsEval <- Ref.make(0L)
-//        ncp <- ZIO.foreachParN(maxParallelism)(nodeContexts.toSeq) { case (nodeId, context) =>
-        ncp <- ZIO.foreach(nodeContexts.toSeq) { case (nodeId, context) =>
+        ncp <- ZIO.foreachParN(maxParallelism)(nodeContexts.toSeq) { case (nodeId, context) =>
+//        ncp <- ZIO.foreach(nodeContexts.toSeq) { case (nodeId, context) =>
 
         val t1_0 = System.nanoTime()
 
@@ -975,7 +975,7 @@ var nodeConfigsCost = 0L
             totalInDraft  <- Ref.make(0L)
             totalExpand   <- Ref.make(0L)
             outerInit     <- UIO.effectTotal(System.nanoTime())
-            boundedDrafts <- ZIO.foreach(filteredDrafts) { draft =>
+            boundedDrafts <- filteredDrafts.accumulate { draft =>
                                (for {
                                  innerInit <- UIO.effectTotal(System.nanoTime())
                                  t6_1       = System.nanoTime()
@@ -1017,7 +1017,7 @@ var nodeConfigsCost = 0L
                                } yield {
                                  ret
                                } )
-                              }//.mapError(_.deduplicate)
+                              }.mapError(_.deduplicate)
             outerEnd      <- UIO.effectTotal(System.nanoTime())
             totalInner    <- totalInDraft.get
             totalExp      <- totalExpand.get

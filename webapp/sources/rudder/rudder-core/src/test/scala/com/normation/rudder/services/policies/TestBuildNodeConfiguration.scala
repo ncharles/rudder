@@ -129,7 +129,7 @@ class TestBuildNodeConfiguration extends Specification {
 
     println(s"init   : ${System.currentTimeMillis-t0} ms")
 
-    for(i <- 0 until 1) {
+    for(i <- 0 until 10) {
       val t1 = System.currentTimeMillis()
       val ruleVal = ruleValService.buildRuleVal(rule, directiveLib, groupLib, allNodes)
       val ruleVals = Seq(ruleVal.getOrElse(throw new RuntimeException("oups")))
