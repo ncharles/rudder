@@ -906,7 +906,7 @@ object BuildNodeConfiguration extends Loggable {
       byNodeDrafts.toMap
     }
     val t1 = System.nanoTime()
-    println(s"Policy draft bt Node1  : ${(t1-t0)/1000000} ms")
+//    println(s"Policy draft bt Node1  : ${(t1-t0)/1000000} ms")
 
 // Counts and sum of ms over all threads
 var count = 0
@@ -921,14 +921,17 @@ var nodeConfigsCost = 0L
     JsEngineProvider.withNewEngine(scriptEngineEnabled, maxParallelism, jsTimeout) { jsEngine =>
 println(jsEngine)
       // here, we consider j
-      val nodeConfigsProg = ZIO.foreachParN(maxParallelism)(nodeContexts.toSeq) { case (nodeId, context) =>
+      val nodeConfigsProg = for {
+        sum <- Ref.make((0L,0L))
+//        ncp <- ZIO.foreachParN(maxParallelism)(nodeContexts.toSeq) { case (nodeId, context) =>
+        ncp <- ZIO.foreach(nodeContexts.toSeq) { case (nodeId, context) =>
 
         val t1_0 = System.nanoTime()
 
         (for {
             parsedDrafts  <- policyDraftByNode.get(nodeId).notOptional("Promise generation algorithm error: cannot find back the configuration information for a node")
             t1_1           = System.nanoTime()
-            _              = println(s"Policy draft bt Node2  : ${(t1_1-t1_0)/1000000} ms")
+//            _              = println(s"Policy draft bt Node2  : ${(t1_1-t1_0)/1000000} ms")
 
             // if a node is in state "emtpy policies", we only keep system policies + log
             filteredDrafts=  if(context.nodeInfo.state == NodeState.EmptyPolicies) {
@@ -966,46 +969,63 @@ println(jsEngine)
 
 ////////////////////////////////////////////  fboundedDraft ////////////////////////////////////////////
 
-            t1_3           = System.nanoTime()
-            _              = println(s"parameters             : ${(t1_3-t1_2)/1000000} ms")
+            t1_3          = System.nanoTime()
+//            _             <- UIO.effectTotal(println(s"parameters             : ${(t1_3-t1_2)/1000000} ms"))
+//            _             <- UIO.effectTotal(println("<<<<<"))
+            totalInDraft  <- Ref.make(0L)
+            outerInit     <- UIO.effectTotal(System.nanoTime())
+            boundedDrafts <- ZIO.foreach(filteredDrafts) { draft =>
+                               (for {
+                                 innerInit <- UIO.effectTotal(System.nanoTime())
+                                 t6_1       = System.nanoTime()
+                                 ret        <- (for {
+                                                 //bind variables with interpolated context
+                                                 expandedVariables <- draft.variables(context)
+                                                 _                 =  (count = count + 1)
+                                                 _                 =  (expVar = expVar + (System.nanoTime() - t6_1))
+                                                 // And now, for each variable, eval - if needed - the result
+                                                 expandedVars      <- expandedVariables.accumulate { case (k, v) =>
+                                                                         val t5_1           = System.nanoTime()
+                                                                         //js lib is specific to the node os, bind here to not leak eval between vars
+                                                                         val jsLib = context.nodeInfo.osDetails.os match {
+                                                                          case AixOS => JsRudderLibBinding.Aix
+                                                                          case _     => JsRudderLibBinding.Crypt
+                                                                        }
 
-            boundedDrafts <- filteredDrafts.accumulate { draft =>
-val t6_1           = System.nanoTime()
-                                (for {
-                                  //bind variables with interpolated context
-                                  expandedVariables <- draft.variables(context)
-_ = (count = count + 1)
-_ = (expVar = expVar + (System.nanoTime() - t6_1))
-                                  // And now, for each variable, eval - if needed - the result
-                                  expandedVars      <- expandedVariables.accumulate { case (k, v) =>
-val t5_1           = System.nanoTime()
-                                                          //js lib is specific to the node os, bind here to not leak eval between vars
-                                                          val jsLib = context.nodeInfo.osDetails.os match {
-                                                           case AixOS => JsRudderLibBinding.Aix
-                                                           case _     => JsRudderLibBinding.Crypt
-                                                         }
+                                                                        val truc = jsEngine.eval(v, jsLib).map( x => (k, x) ).toIO
 
-                                                         val truc = jsEngine.eval(v, jsLib).map( x => (k, x) ).toIO
-
-evalCost = evalCost + (System.nanoTime() - t5_1)
-                                                         truc
-                                                       }.mapError(_.deduplicate)
-                                  } yield {
-                                    val t7_1           = System.nanoTime()
-                                    val draftR = draft.toBoundedPolicyDraft(expandedVars.toMap)
-                                    draftCost = draftCost + System.nanoTime() -t7_1
-                                    draftR
-                                  }).chainError(s"When processing directive '${draft.directiveName}'")
-                                }.mapError(_.deduplicate)
-            t1_4           = System.nanoTime()
-            _              = println(s"fboundedDraft          : ${(t1_4-t1_3)/1000000} ms")
+                                                                        evalCost = evalCost + (System.nanoTime() - t5_1)
+                                                                        truc
+                                                                      }.mapError(_.deduplicate)
+                                                 } yield {
+                                                   val t7_1           = System.nanoTime()
+                                                   val draftR = draft.toBoundedPolicyDraft(expandedVars.toMap)
+                                                   draftCost = draftCost + System.nanoTime() -t7_1
+                                                   draftR
+                                                 }).chainError(s"When processing directive '${draft.directiveName}'")
+                                   innerEnd   <- UIO.effectTotal(System.nanoTime())
+                                   delta      =  innerEnd - innerInit
+//                                 UIO.effectTotal(println(s"one inner fboundedDraft: ${delta/1000} µs")) *>
+                                   _          <- totalInDraft.update(_+delta)
+                               } yield {
+                                 ret
+                               } )
+                              }//.mapError(_.deduplicate)
+            outerEnd      <- UIO.effectTotal(System.nanoTime())
+            totalInner    <- totalInDraft.get
+            totalOuter    =  outerEnd - outerInit
+            _             <- UIO.effectTotal(println(s">>>>>> total in ${filteredDrafts.size} fboundedDraft: ${totalInner/1000} µs"))
+            _             =  println(s">>>>>> fboundedDraft           : ${totalOuter/1000} µs")
+            superTotal    <- sum.update { case (ext, in) => (ext+totalOuter, in+totalInner)}
+            t1_4          =  System.nanoTime()
+//            _              <- UIO.effectTotal(println(">>>>>"))
 
 ////////////////////////////////////////////  fboundedDraft ////////////////////////////////////////////
 
             // from policy draft, check and build the ordered seq of policy
             policies   <- MergePolicyService.buildPolicy(context.nodeInfo, globalPolicyMode, boundedDrafts).toIO
             t1_5           = System.nanoTime()
-            _              = println(s"merge policies         : ${(t1_5-t1_4)/1000000} ms")
+//            _              = println(s"merge policies         : ${(t1_5-t1_4)/1000000} ms")
 
 
           } yield {
@@ -1033,6 +1053,11 @@ nodeConfigsCost = nodeConfigsCost + t9_2 - t9_1
 
           }).chainError(s"Error with parameters expansion for node '${context.nodeInfo.hostname}' (${context.nodeInfo.id.value})").either
       }
+      s <- sum.get
+      _ <- UIO.effectTotal(println(s"===> Total out: ${s._1 / 1000000} ms"))
+      _ <- UIO.effectTotal(println(s"===> Total in : ${s._2 / 1000000} ms"))
+      } yield ncp
+
 
       val t2 = System.nanoTime()
       println(s"JsEngine Evaluation         : ${(t2-t1)/1000000} ms")

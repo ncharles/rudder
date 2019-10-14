@@ -64,6 +64,7 @@ import org.specs2.runner._
 import scala.collection.SortedMap
 import scala.concurrent.duration._
 
+
 /*
  * This class test the JsEngine. 6.0
  * It must works identically on Java 7 and Java 8.
@@ -128,7 +129,7 @@ class TestBuildNodeConfiguration extends Specification {
 
     println(s"init   : ${System.currentTimeMillis-t0} ms")
 
-    for(i <- 0 until 10) {
+    for(i <- 0 until 1) {
       val t1 = System.currentTimeMillis()
       val ruleVal = ruleValService.buildRuleVal(rule, directiveLib, groupLib, allNodes)
       val ruleVals = Seq(ruleVal.getOrElse(throw new RuntimeException("oups")))
@@ -144,5 +145,42 @@ class TestBuildNodeConfiguration extends Specification {
       println(s"config : ${t4-t3} ms")
     }
     true === true
+  }
+}
+
+
+object FOO {
+
+  import zio._
+  import zio.syntax._
+  import com.normation.zio._
+  import com.normation.errors._
+
+  def main(args: Array[String]): Unit = {
+
+    def nano = UIO.effectTotal(System.nanoTime)
+    def log(s: String, t1: Long, t2: Long) = UIO.effectTotal(println(s + s"${(t2-t1)/1000} µs"))
+
+    val count = 0 until 1
+    val prog =
+      ZIO.foreachParN(8)(0 until 10) { j =>
+        for {
+        ref  <- Ref.make(0L)
+        t1   <- nano
+        loop <- ZIO.traverse(count) { i => // yes only one element
+                  for {
+                    t2  <- nano
+                    res <- i.succeed
+                    t3  <- nano
+                    _   <- ref.update(t => t + t3 - t2)
+                  } yield (i)
+                }
+        t4   <- nano
+        _    <- log(s"external $j : ", t1, t4)
+        _    <- ref.get.flatMap(t => UIO.effectTotal(println(s"inner sum $j: ${t/1000} µs")))
+      } yield ()
+    }
+    ZioRuntime.unsafeRun(prog)
+
   }
 }
