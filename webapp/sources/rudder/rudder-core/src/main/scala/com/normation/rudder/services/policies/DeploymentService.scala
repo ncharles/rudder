@@ -922,7 +922,7 @@ var nodeConfigsCost = 0L
 println(jsEngine)
       // here, we consider j
       val nodeConfigsProg = for {
-        sum <- Ref.make((0L,0L))
+        sum <- Ref.make((0L,0L,0L))
 //        ncp <- ZIO.foreachParN(maxParallelism)(nodeContexts.toSeq) { case (nodeId, context) =>
         ncp <- ZIO.foreach(nodeContexts.toSeq) { case (nodeId, context) =>
 
@@ -973,6 +973,7 @@ println(jsEngine)
 //            _             <- UIO.effectTotal(println(s"parameters             : ${(t1_3-t1_2)/1000000} ms"))
 //            _             <- UIO.effectTotal(println("<<<<<"))
             totalInDraft  <- Ref.make(0L)
+            totalExpand   <- Ref.make(0L)
             outerInit     <- UIO.effectTotal(System.nanoTime())
             boundedDrafts <- ZIO.foreach(filteredDrafts) { draft =>
                                (for {
@@ -992,9 +993,14 @@ println(jsEngine)
                                                                           case _     => JsRudderLibBinding.Crypt
                                                                         }
 
-                                                                        val truc = jsEngine.eval(v, jsLib).map( x => (k, x) ).toIO
+                                                                        val truc = for {
+                                                                          exp1 <- UIO.effectTotal(System.nanoTime())
+                                                                          t <- jsEngine.eval(v, jsLib).map( x => (k, x) ).toIO
+                                                                          _ <- totalExpand.update(_ + System.nanoTime() - exp1)
+                                                                        } yield t
 
                                                                         evalCost = evalCost + (System.nanoTime() - t5_1)
+
                                                                         truc
                                                                       }.mapError(_.deduplicate)
                                                  } yield {
@@ -1013,10 +1019,11 @@ println(jsEngine)
                               }//.mapError(_.deduplicate)
             outerEnd      <- UIO.effectTotal(System.nanoTime())
             totalInner    <- totalInDraft.get
+            totalExp      <- totalExpand.get
             totalOuter    =  outerEnd - outerInit
             _             <- UIO.effectTotal(println(s">>>>>> total in ${filteredDrafts.size} fboundedDraft: ${totalInner/1000} µs"))
             _             =  println(s">>>>>> fboundedDraft           : ${totalOuter/1000} µs")
-            superTotal    <- sum.update { case (ext, in) => (ext+totalOuter, in+totalInner)}
+            superTotal    <- sum.update { case (ext, in, exp) => (ext+totalOuter, in+totalInner, exp+totalExp)}
             t1_4          =  System.nanoTime()
 //            _              <- UIO.effectTotal(println(">>>>>"))
 
@@ -1056,6 +1063,7 @@ nodeConfigsCost = nodeConfigsCost + t9_2 - t9_1
       s <- sum.get
       _ <- UIO.effectTotal(println(s"===> Total out: ${s._1 / 1000000} ms"))
       _ <- UIO.effectTotal(println(s"===> Total in : ${s._2 / 1000000} ms"))
+      _ <- UIO.effectTotal(println(s"===> Total exp: ${s._3 / 1000000} ms"))
       } yield ncp
 
 
