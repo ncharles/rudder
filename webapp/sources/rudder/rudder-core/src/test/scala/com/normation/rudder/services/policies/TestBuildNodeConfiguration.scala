@@ -149,38 +149,38 @@ class TestBuildNodeConfiguration extends Specification {
 }
 
 
-object FOO {
-
-  import zio._
-  import zio.syntax._
-  import com.normation.zio._
-  import com.normation.errors._
-
-  def main(args: Array[String]): Unit = {
-
-    def nano = UIO.effectTotal(System.nanoTime)
-    def log(s: String, t1: Long, t2: Long) = UIO.effectTotal(println(s + s"${(t2-t1)/1000} µs"))
-
-    val count = 0 until 1
-    val prog =
-      ZIO.foreachParN(8)(0 until 10) { j =>
-        for {
-        ref  <- Ref.make(0L)
-        t1   <- nano
-        loop <- ZIO.traverse(count) { i => // yes only one element
-                  for {
-                    t2  <- nano
-                    res <- i.succeed
-                    t3  <- nano
-                    _   <- ref.update(t => t + t3 - t2)
-                  } yield (i)
-                }
-        t4   <- nano
-        _    <- log(s"external $j : ", t1, t4)
-        _    <- ref.get.flatMap(t => UIO.effectTotal(println(s"inner sum $j: ${t/1000} µs")))
-      } yield ()
-    }
-    ZioRuntime.unsafeRun(prog)
-
-  }
-}
+//object FOO {
+//
+//  import zio._
+//  import zio.syntax._
+//  import com.normation.zio._
+//  import com.normation.errors._
+//
+//  def main(args: Array[String]): Unit = {
+//
+//    def nano = UIO.effectTotal(System.nanoTime)
+//    def log(s: String, t1: Long, t2: Long) = UIO.effectTotal(println(s + s"${(t2-t1)/1000} µs"))
+//
+//    val count = 0 until 1
+//    val prog =
+//      ZIO.foreachParN(8)(0 until 10) { j =>
+//        for {
+//        ref  <- Ref.make(0L)
+//        t1   <- nano
+//        loop <- ZIO.traverse(count) { i => // yes only one element
+//                  for {
+//                    t2  <- nano
+//                    res <- i.succeed
+//                    t3  <- nano
+//                    _   <- ref.update(t => t + t3 - t2)
+//                  } yield (i)
+//                }
+//        t4   <- nano
+//        _    <- log(s"external $j : ", t1, t4)
+//        _    <- ref.get.flatMap(t => UIO.effectTotal(println(s"inner sum $j: ${t/1000} µs")))
+//      } yield ()
+//    }
+//    ZioRuntime.unsafeRun(prog)
+//
+//  }
+//}

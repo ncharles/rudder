@@ -74,7 +74,6 @@ import com.normation.rudder.domain.reports.NodeModeConfig
 import com.normation.rudder.reports.HeartbeatConfiguration
 import com.normation.rudder.hooks.RunHooks
 import com.normation.rudder.hooks.HookEnvPairs
-
 import com.normation.rudder.hooks.HooksImplicits
 import com.normation.rudder.domain.nodes.NodeState
 import com.normation.rudder.services.policies.nodeconfig.NodeConfigurationHashRepository
@@ -87,18 +86,18 @@ import cats.data.NonEmptyList
 import com.normation.rudder.domain.reports.OverridenPolicy
 import com.normation.rudder.hooks.Hooks
 import com.normation.rudder.hooks.HooksLogger
-
 import org.joda.time.Period
 import org.joda.time.format.ISODateTimeFormat
 import org.joda.time.format.PeriodFormatterBuilder
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
-
 import com.normation.box._
-import com.normation.zio._
 import com.normation.errors._
+import com.normation.rudder.domain.logger.GenerationLoggerPure
 import zio._
+import zio.syntax._
+import com.normation.zio._
 
 /**
  * A deployment hook is a class that accept callbacks.
@@ -350,7 +349,7 @@ trait PromiseGenerationService {
                                    PolicyLogger.warn(s"Nodes in errors (${errorNodes.size}): '${errorNodes.map(_.value).mkString("','")}'")
                                  }
                                }
-      allErrors             =  configsAndErrors.errors.map(_.messageChain)
+      allErrors             =  configsAndErrors.errors.map(_.fullMsg)
       result                <- if (allErrors.isEmpty) {
                                  Full(updatedNodes)
                                } else {
@@ -842,7 +841,7 @@ trait PromiseGeneration_buildNodeConfigurations extends PromiseGenerationService
 
 final case class NodeConfigurations(
     ok    : List[NodeConfiguration]
-  , errors: List[Failure]
+  , errors: List[RudderError]
 )
 
 object BuildNodeConfiguration extends Loggable {
@@ -919,10 +918,11 @@ var nodeConfigsCost = 0L
     // open a scope for the JsEngine, because its init is long.
 
     JsEngineProvider.withNewEngine(scriptEngineEnabled, maxParallelism, jsTimeout) { jsEngine =>
-println(jsEngine)
+
       // here, we consider j
       val nodeConfigsProg = for {
         sum <- Ref.make((0L,0L,0L))
+        nbJsEval <- Ref.make(0L)
 //        ncp <- ZIO.foreachParN(maxParallelism)(nodeContexts.toSeq) { case (nodeId, context) =>
         ncp <- ZIO.foreach(nodeContexts.toSeq) { case (nodeId, context) =>
 
@@ -994,8 +994,9 @@ println(jsEngine)
                                                                         }
 
                                                                         val truc = for {
+                                                                          _    <- nbJsEval.update(_+1)
                                                                           exp1 <- UIO.effectTotal(System.nanoTime())
-                                                                          t <- jsEngine.eval(v, jsLib).map( x => (k, x) ).toIO
+                                                                          t <- jsEngine.eval(v, jsLib).map( x => (k, x) )
                                                                           _ <- totalExpand.update(_ + System.nanoTime() - exp1)
                                                                         } yield t
 
@@ -1061,58 +1062,34 @@ nodeConfigsCost = nodeConfigsCost + t9_2 - t9_1
           }).chainError(s"Error with parameters expansion for node '${context.nodeInfo.hostname}' (${context.nodeInfo.id.value})").either
       }
       s <- sum.get
+      i <- nbJsEval.get
       _ <- UIO.effectTotal(println(s"===> Total out: ${s._1 / 1000000} ms"))
       _ <- UIO.effectTotal(println(s"===> Total in : ${s._2 / 1000000} ms"))
-      _ <- UIO.effectTotal(println(s"===> Total exp: ${s._3 / 1000000} ms"))
+      _ <- UIO.effectTotal(println(s"===> Total exp: ${s._3 / 1000000} ms"))  // ===> Total exp: 1390 ms (in 5.0: Total exp: 6 ms)
+      _ <- UIO.effectTotal(println(s"===> Total js eval : ${i}"))
       } yield ncp
 
 
-      val t2 = System.nanoTime()
-      println(s"JsEngine Evaluation         : ${(t2-t1)/1000000} ms")
-
-      val nodeConfigsTotal = for {
-        t0  <- UIO.effectTotal(System.nanoTime)
-        res <- nodeConfigsProg
-        _   <- UIO.effectTotal(println(s"Total run config: ${(System.nanoTime-t0)/1000000}"))
-      } yield res
-
-      val nodeConfigs = nodeConfigsTotal.runNow
-
-      val t3 = System.nanoTime()
-      println(s"Run nodeconfigProg          : ${(t3-t2)/1000000} ms")
-
-println(s"Total cost of jsEngine.eval is                 :     ${evalCost/1000000} ms")
-println(s"Total count of draft variables(context) cost is:     ${count}");
-println(s"Total cost of draft variables(context) cost is :     ${expVar/1000000} ms")
-println(s"Total cost of draft.toBoundedPolicyDraft is    :     ${draftCost/1000000} ms")
-println(s"Total cost of computing node Context is        :     ${nodeContextCost/1000000} ms")
-println(s"Total cost of nodeConfiguration object is      :     ${nodeConfigsCost/1000000} ms")
-
-
-      val success = nodeConfigs.collect { case Right(c) => c }.toList
-      val failures = nodeConfigs.collect { case Left(f) => f.fullMsg }.toSet
-      val failedIds = nodeContexts.keySet -- success.map( _.nodeInfo.id )
-
-
-      val t4 = System.nanoTime()
-      println(s"Collection                  : ${(t4-t3)/1000000} ms")
-
-      val result = recFailNodes(failedIds, success, failures)
-
-      val t5 = System.nanoTime()
-      println(s"recFailNodes                : ${(t5-t4)/1000000} ms")
-
-      failures.size match {
-        case 0    => Full(result)
-        case _ if generationContinueOnError
-                  =>  logger.error(s"Error while computing Node Configuration for nodes")
-          logger.error(s"Cause is ${failures.mkString(",")}")
-                     Full(result)
-        case _    => val allErrors = result.errors.map(_.messageChain)
-                     logger.error(s"Error while computing Node Configuration for nodes: ${allErrors.mkString(" ; ")}")
-                     Failure(s"Error while computing Node Configuration for nodes: ${allErrors.mkString(" ; ")}")
-      }
-    }
+      for {
+        t0        <- UIO.effectTotal(System.nanoTime)
+        res       <- nodeConfigsProg
+        _         <- UIO.effectTotal(println(s"Total run config: ${(System.nanoTime-t0)/1000000}"))
+        success   =  res.collect { case Right(c) => c }.toList
+        failures  =  res.collect { case Left(f) => f.fullMsg }.toSet
+        failedIds =  nodeContexts.keySet -- success.map( _.nodeInfo.id )
+        result    =  recFailNodes(failedIds, success, failures)
+        finalRes  <- failures.size match {
+                       case 0    => result.succeed
+                       case _ if generationContinueOnError =>
+                          GenerationLoggerPure.error(s"Error while computing Node Configuration for nodes") *>
+                          GenerationLoggerPure.error(s"Cause is ${failures.mkString(",")}") *>
+                          result.succeed
+                       case _    =>
+                         val allErrors = Chained(s"Error while computing Node Configuration for nodes: ", Accumulated(NonEmptyList.fromListUnsafe(result.errors)))
+                         GenerationLoggerPure.error(allErrors.fullMsg) *> allErrors.fail
+                     }
+      } yield finalRes
+    }.toBox
   }
 
   // we need to remove all nodes whose parent are failed, recursively
@@ -1125,7 +1102,7 @@ println(s"Total cost of nodeConfiguration object is      :     ${nodeConfigsCost
     }.toMap
 
     if(newFailed.isEmpty) { //ok, returns
-      NodeConfigurations(maybeSuccess, failures.toList.map(Failure(_)))
+      NodeConfigurations(maybeSuccess, failures.toList.map(Unexpected(_)))
     } else { // recurse
       val allFailed = failed ++ newFailed.keySet
       recFailNodes(allFailed, maybeSuccess.filter(cfg => !allFailed.contains(cfg.nodeInfo.id)), failures ++ newFailed.values)
