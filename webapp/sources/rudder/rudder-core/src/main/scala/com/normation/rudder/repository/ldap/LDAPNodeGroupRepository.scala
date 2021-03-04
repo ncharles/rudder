@@ -776,15 +776,19 @@ class WoLDAPNodeGroupRepository(
 
   protected def saveModifyNodeGroupDiff(existing: LDAPEntry, con: RwLDAPConnection, nodeGroup: NodeGroup, modId: ModificationId, actor:EventActor, reason:Option[String]): IOResult[Option[ModifyNodeGroupDiff]] = {
     val entry        =  mapper.nodeGroupToLdap(nodeGroup, existing.dn.getParent)
+    println("saveModifyNodeGroupDiff")
     for {
       result       <- groupLibMutex.writeLock { con.save(entry, true).chainError(s"Error when saving entry: ${entry}") }
+      _ =  println("con.savve ok")
       optDiff      <- diffMapper.modChangeRecords2NodeGroupDiff(existing, result).toIO.chainError(s"Error when mapping change record to a diff object: ${result}")
+      _ =  println("optDiff ok, and is  " + optDiff)
       loggedAction <- optDiff match {
                         case None => UIO.unit
                         case Some(diff) =>
                           actionlogEffect.saveModifyNodeGroup(modId, principal = actor, modifyDiff = diff, reason = reason).chainError( "Error when logging modification as an event")
                       }
-      autoArchive  <- (ZIO.when(autoExportOnModify && optDiff.isDefined && !nodeGroup.isSystem) { //only persists if modification are present
+      _ =  println("loggedAction ok " )
+    /*  autoArchive  <- (ZIO.when(autoExportOnModify && optDiff.isDefined && !nodeGroup.isSystem) { //only persists if modification are present
                         for {
                           parent   <- getNodeGroupCategory(nodeGroup.id)
                           parents  <- getParents_NodeGroupCategory(parent.id)
@@ -792,6 +796,7 @@ class WoLDAPNodeGroupRepository(
                           archived <- gitArchiver.archiveNodeGroup(nodeGroup, (parent :: parents).map( _.id), Some((modId, commiter, reason)))
                         } yield archived
                       }).chainError("Error when trying to archive automatically nodegroup change")
+    */
     } yield {
       optDiff
     }
