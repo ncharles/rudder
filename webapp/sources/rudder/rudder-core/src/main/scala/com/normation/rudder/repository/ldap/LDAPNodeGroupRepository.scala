@@ -741,7 +741,7 @@ class WoLDAPNodeGroupRepository(
   }
 
   private[this] def internalUpdate(nodeGroup:NodeGroup, modId: ModificationId, actor:EventActor, reason:Option[String], systemCall:Boolean, onlyUpdateNodes: Boolean): IOResult[Option[ModifyNodeGroupDiff]] = {
-    groupLibMutex.readLock(
+    groupLibMutex.writeLock(
       for {
         con          <- ldap
         existing     <- getSGEntry(con, nodeGroup.id).notOptional("Error when trying to check for existence of group with id %s. Can not update".format(nodeGroup.id))
