@@ -13,6 +13,14 @@ try:
     import ConfigParser as configparser
 except Exception:
     import configparser
+try:
+    import rpm
+except:
+
+try:
+    import apt
+except:
+
 
 logger = logging.getLogger("rudder-pkg")
 
@@ -307,7 +315,38 @@ def install_dependencies(metadata):
             logger.warning("The binary " + executable + " was not found on the system, you must install it before installing " + metadata['name'])
             return False
       else:
-        has_depends = True
+        # detect the distribution type
+        is_apt = False
+        is_rpm = False
+        if distutils.spawn.find_executable("apt") is not None:
+          is_apt = True
+        if distutils.spawn.find_executable("rpm") is not None:
+          is_rpm = True
+        try:
+          if is_apt:
+            cache = apt.Cache()
+            for package in metadata["depends"]["apt"]:
+              if not cache[package].is_installed:
+                logger.warning("The apt package " + package + " was not found on the system, you must install it before installing " + metadata['name'])
+                return False
+
+          if is_rpm:
+            ts = rpm.TransactionSet()
+            for package in metadata["depends"]["rpm"]:
+              mi = ts.dbMatch( 'name', package)
+              try :
+                h = mi.next()
+              except StopIteration:
+                logger.warning("The apt package " + package + " was not found on the system, you must install it before installing " + metadata['name'])
+                return False
+        except Exception e:
+          logger.error("Could not query rpm or apt package repository to check dependencies for this plugin.")
+            
+        if not is_apt and not is_rpm:
+          logger.warning("Neither rpm nor apt are detected on this sytem - cannot check the dependencies for this plugin. ")
+
+          
+        
         if not depends_printed:
           logger.info("This package depends on the following")
           depends_printed = True
