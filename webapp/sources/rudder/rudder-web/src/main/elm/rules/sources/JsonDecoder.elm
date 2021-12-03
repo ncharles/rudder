@@ -29,6 +29,16 @@ decodeCategory idIdentifier categoryIdentifier elemIdentifier elemDecoder =
     |> required categoryIdentifier (D.map SubCategories  (D.list (D.lazy (\_ -> (decodeCategory idIdentifier categoryIdentifier elemIdentifier elemDecoder)))))
     |> required elemIdentifier      (D.list elemDecoder)
 
+decodeGroupCategory : String -> String -> String -> String -> Decoder a -> Decoder (Category a)
+decodeGroupCategory idIdentifier categoryIdentifier elemGroupIdentifier elemTargetIdentifier elemDecoder =
+  succeed Category
+    |> required idIdentifier  D.string
+    |> required "name"        D.string
+    |> required "description" D.string
+    |> required categoryIdentifier (D.map SubCategories  (D.list (D.lazy (\_ -> (decodeGroupCategory idIdentifier categoryIdentifier  elemGroupIdentifier elemTargetIdentifier elemDecoder)))))
+    |> required elemGroupIdentifier      (D.list elemDecoder)
+    |> optional elemTargetIdentifier     (D.list elemDecoder)
+
 decodeCategoryDetails : Decoder (Category Rule)
 decodeCategoryDetails =
   succeed Category
@@ -198,7 +208,7 @@ decodeTechnique =
 -- GROUPS TAB
 decodeGetGroupsTree : Decoder (Category Group)
 decodeGetGroupsTree =
-  D.at ["data", "groupCategories"] (decodeCategory "id" "categories" "groups" decodeGroup)
+  D.at ["data", "groupCategories"] (decodeGroupCategory "id" "categories" "groups" "targets" decodeGroup)
 
 decodeGroup : Decoder Group
 decodeGroup =
@@ -206,8 +216,8 @@ decodeGroup =
     |> required "id"          D.string
     |> required "displayName" D.string
     |> required "description" D.string
-    |> required "nodeIds"    (D.list D.string)
-    |> required "dynamic"     D.bool
+    |> optional "nodeIds"    (D.list D.string) []
+    |> optional "dynamic"     D.bool True
     |> required "enabled"     D.bool
 
 decodeComposition : Decoder RuleTarget
