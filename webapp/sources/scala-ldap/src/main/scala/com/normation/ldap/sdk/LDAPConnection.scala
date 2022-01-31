@@ -215,7 +215,10 @@ trait WriteOnlyEntryLDAPConnection {
    */
   def save(entry: LDAPEntry, removeMissingAttributes: Boolean = false, forceKeepMissingAttributes: Seq[String] = Seq()): LDAPIOResult[LDIFChangeRecord]
 
-  /**
+  def replaceAttribute(entry : LDAPEntry, forceKeepMissingAttributes:Seq[String] = Seq()) : LDAPIOResult[LDIFChangeRecord]
+
+
+    /**
    * Delete entry at the given DN
    * If recurse is set to true (default), delete all entry's children before
    * deleting entry.
@@ -629,6 +632,28 @@ class RwLDAPConnection(
       }
     }
   }
+
+  override def replaceAttribute(entry : LDAPEntry, forceKeepMissingAttributes:Seq[String] = Seq()) : LDAPIOResult[LDIFChangeRecord] = {
+    val attributes = Seq("objectClass")
+   println(s"************ attributes are ${attributes}")
+    synchronized {
+      get(entry.dn, attributes:_*) flatMap {  //TODO if removeMissing is false, only get attribute in entry (we don't care of others)
+        case None =>
+          applyAdd(new AddRequest(entry.backed))
+        case Some(existing) =>
+          // create missing attributes on the existing
+          // so that it is not dropped when doing the replace
+          entry.attributes.map( x => existing += (x.getName, ""))
+
+          val mods = LDAPEntry.merge(existing,entry, false, false, forceKeepMissingAttributes)
+          if(!mods.isEmpty) {
+            println(mods)
+            applyModify(new ModifyRequest(entry.dn.toString, mods.asJava))
+          } else LDIFNoopChangeRecord(entry.dn).succeed
+      }
+    }
+  }
+
 
   override def delete(dn:DN, recurse:Boolean = true) : LDAPIOResult[Seq[LDIFChangeRecord]] = {
     if(recurse) {

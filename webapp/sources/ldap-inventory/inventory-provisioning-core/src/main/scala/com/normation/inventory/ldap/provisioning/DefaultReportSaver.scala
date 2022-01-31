@@ -84,7 +84,7 @@ class DefaultReportSaver(
         t3  <- currentTimeMillis
         _   <- InventoryProcessingLogger.timing.trace(s"Saving node: ${t3 - t2} ms")
 
-        d3  <- con.save(mapper.processesFromNode(report.node), removeMissingAttributes = false).map(x => Seq(x)).catchAll(err => // we don't want to fail because we tried to compensate
+        d3  <- con.replaceAttribute(mapper.processesFromNode(report.node)).map(x => Seq(x)).catchAll(err => // we don't want to fail because we tried to compensate
                  InventoryProcessingLogger.error(s"Couldn't update the processes for node ${report.node.main.id.value}, Error is: ${err.fullMsg}") *> Seq().succeed
               )
         t4  <- currentTimeMillis
